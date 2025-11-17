@@ -3,6 +3,7 @@
         "*.alang": "chatagent",
         "functional": "cpp",
         "xstring": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "mutex": "cpp"
     }
 }

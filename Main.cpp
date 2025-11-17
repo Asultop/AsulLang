@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 		if (!in) { std::cerr << "Cannot open file: " << argv[1] << std::endl; return 1; }
 		std::ostringstream ss; ss << in.rdbuf(); code = ss.str();
 	} else {
-		// 示例脚本（含原生类 Math 的调用）
+		// 示例脚本（含原生类 Math 的调用；await/sleep；async/go/then 示例）
 		code = R"( 
 			// 示例：求和并打印
 			function add(a, b) { return a + b; }
@@ -53,16 +53,37 @@ int main(int argc, char* argv[]) {
 			let m = new Math();
 			print("math sum 3+4:", m.sum(3,4));
 			print("math abs -5:", m.abs(-5));
+
+			// await/sleep 测试（阻塞等待 300ms）
+			print("before sleep");
+			await sleep(300);
+			print("after sleep");
+
+			// async 函数与 then/catch
+			async function task(v) {
+				print("task start", v);
+				await sleep(200);
+				print("task done", v);
+				return v * 2;
+			}
+			function onTask(r) { print("task result", r); }
+			let p = task(21);
+			p.then(onTask);
+
+			// go 语句：将调用放入事件循环执行
+			go task(5);
 		)";
 	}
 
 	try {
 		engine.execute(code);
 		// 从 C++ 调用脚本函数：add(1, 2)
-		auto r = engine.callFunction("add", { 1.0, 2.0 });
-		if (std::holds_alternative<double>(r)) {
-			std::cout << "host add(1,2): " << std::get<double>(r) << std::endl;
-		}
+		// auto r = engine.callFunction("add", { 1.0, 2.0 });
+		// if (std::holds_alternative<double>(r)) {
+		// 	std::cout << "host add(1,2): " << std::get<double>(r) << std::endl;
+		// }
+		// 驱动事件循环，处理 then/catch 与 go 任务
+		engine.runEventLoopUntilIdle();
 	} catch (...) {
 		return 1;
 	}

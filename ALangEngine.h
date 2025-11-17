@@ -36,6 +36,9 @@ public:
         const std::string& functionName,
         const std::vector<NativeValue>& args
     );
+
+    // 运行事件循环直到空闲（处理 then/catch、go 任务）
+    void runEventLoopUntilIdle();
 private:
     struct Impl;
     Impl* impl; // PImpl以隐藏实现细节，减少头文件依赖

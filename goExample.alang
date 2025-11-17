@@ -1,0 +1,12 @@
+async function task(v) {
+				print("task start", v);
+				await sleep(200);
+				print("task done", v);
+				return v * 2;
+			}
+			function onTask(r) { print("task result", r); }
+			let p = task(21);
+			p.then(onTask);
+
+			// go 语句：将调用放入事件循环执行
+			go task(5);

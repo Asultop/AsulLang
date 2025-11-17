@@ -7,6 +7,10 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <chrono>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -14,6 +18,7 @@
 #include <utility>
 #include <variant>
 #include <vector>
+#include <queue>
 
 namespace {
 
@@ -31,7 +36,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go,
 	EndOfFile
 };
 
@@ -101,6 +106,9 @@ private:
 			{"for", TokenType::For}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
 			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
 			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
+			{"await", TokenType::Await},
+			{"async", TokenType::Async},
+			{"go", TokenType::Go},
 		};
 		auto it = keywords.find(text);
 		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line});
@@ -175,6 +183,7 @@ private:
 // ----------- Runtime Values and Environment -----------
 
 struct Function;
+struct PromiseState;
 
 using Array = std::vector<struct ValueTag>;
 using Object = std::unordered_map<std::string, struct ValueTag>;
@@ -183,7 +192,7 @@ struct ClassInfo;
 struct Instance;
 
 // forward for variant recursive types
-struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>,std::shared_ptr<ClassInfo>,std::shared_ptr<Instance>> {
+struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>,std::shared_ptr<ClassInfo>,std::shared_ptr<Instance>,std::shared_ptr<PromiseState>> {
 	using variant::variant;
 };
 
@@ -200,6 +209,7 @@ inline std::string typeOf(const Value& v) {
 	case 6: return "object";
 	case 7: return "class";
 	case 8: return "instance";
+	case 9: return "promise";
 	default: return "unknown";
 	}
 }
@@ -244,6 +254,7 @@ inline std::string toString(const Value& v) {
 	}
 	if (std::holds_alternative<std::shared_ptr<ClassInfo>>(v)) return "[Class]";
 	if (std::holds_alternative<std::shared_ptr<Instance>>(v)) return "[Object]";
+	if (std::holds_alternative<std::shared_ptr<PromiseState>>(v)) return "[Promise]";
 	return "unknown";
 }
 
@@ -275,6 +286,7 @@ struct Function {
 	std::vector<StmtPtr> body;
 	std::shared_ptr<Environment> closure;
 	bool isBuiltin{false};
+	bool isAsync{false};
 	std::function<Value(const std::vector<Value>&, std::shared_ptr<Environment>)> builtin;
 };
 
@@ -287,6 +299,19 @@ struct ClassInfo {
 struct Instance {
 	std::shared_ptr<ClassInfo> klass;
 	std::unordered_map<std::string, Value> fields;
+};
+
+// Promise 状态：用于 await 等待
+struct PromiseState {
+	std::mutex mtx;
+	std::condition_variable cv;
+	bool settled{false};
+	bool rejected{false};
+	Value result{std::monostate{}};
+	// 简单事件循环指针，用于 then/catch 回调分发
+	void* loopPtr{nullptr};
+	std::vector<std::shared_ptr<Function>> thenCallbacks;
+	std::vector<std::shared_ptr<Function>> catchCallbacks;
 };
 
 // ----------- AST Nodes -----------
@@ -306,6 +331,7 @@ struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; Set
 struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v): object(std::move(o)), index(std::move(i)), value(std::move(v)){} };
 struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
 struct ObjectLiteralExpr : Expr { std::vector<std::pair<std::string, ExprPtr>> props; explicit ObjectLiteralExpr(std::vector<std::pair<std::string, ExprPtr>> p): props(std::move(p)){} };
+struct AwaitExpr : Expr { ExprPtr expr; explicit AwaitExpr(ExprPtr e): expr(std::move(e)){} };
 
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
@@ -314,12 +340,13 @@ struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(st
 struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b): name(std::move(n)), params(std::move(p)), body(std::move(b)){} };
+struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; bool isAsync{false}; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b, bool a=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
+struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
 
 // ----------- Parser -----------
 
@@ -351,7 +378,8 @@ private:
 	}
 
 	StmtPtr declaration() {
-		if (match({TokenType::Function})) return functionDecl("function");
+		if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true); }
+		if (match({TokenType::Function})) return functionDecl(false);
 		if (match({TokenType::Class})) return classDeclaration();
 		if (match({TokenType::Extends})) return extendsDeclaration();
 		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration();
@@ -375,6 +403,7 @@ private:
 		}
 		if (match({TokenType::LeftBrace})) {
 			while (!check(TokenType::RightBrace) && !isAtEnd()) {
+				bool isAsync = match({TokenType::Async});
 				(void)match({TokenType::Function});
 				auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 				consume(TokenType::LeftParen, "Expect '('");
@@ -384,7 +413,7 @@ private:
 				}
 				consume(TokenType::RightParen, "Expect ')'");
 				auto body = statement();
-				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body));
+				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
 			}
 			consume(TokenType::RightBrace, "Expect '}' after class body");
 		}
@@ -398,6 +427,7 @@ private:
 		auto ext = std::make_shared<ExtendStmt>();
 		ext->name = nameTok.lexeme;
 		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			bool isAsync = match({TokenType::Async});
 			(void)match({TokenType::Function});
 			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 			consume(TokenType::LeftParen, "Expect '('");
@@ -407,13 +437,13 @@ private:
 			}
 			consume(TokenType::RightParen, "Expect ')'");
 			auto body = statement();
-			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body));
+			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after extension body");
 		return ext;
 	}
 
-	StmtPtr functionDecl(const std::string&) {
+	StmtPtr functionDecl(bool isAsync) {
 		auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
 		std::vector<std::string> params;
@@ -424,7 +454,7 @@ private:
 		}
 		consume(TokenType::RightParen, "Expect ')'");
 		auto body = statement();
-		return std::make_shared<FunctionStmt>(name, params, body);
+		return std::make_shared<FunctionStmt>(name, params, body, isAsync);
 	}
 
 	StmtPtr varDeclaration() {
@@ -440,6 +470,7 @@ private:
 		if (match({TokenType::While})) return whileStatement();
 		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::Return})) return returnStatement();
+		if (match({TokenType::Go})) { auto expr = expression(); consume(TokenType::Semicolon, "Expect ';' after go call"); return std::make_shared<GoStmt>(expr); }
 		if (match({TokenType::Break})) { consume(TokenType::Semicolon, "Expect ';' after break"); return std::make_shared<BreakStmt>(); }
 		if (match({TokenType::Continue})) { consume(TokenType::Semicolon, "Expect ';' after continue"); return std::make_shared<ContinueStmt>(); }
 		if (match({TokenType::LeftBrace})) return std::make_shared<BlockStmt>(block());
@@ -591,6 +622,10 @@ private:
 			auto right = unary();
 			return std::make_shared<UnaryExpr>(op, right);
 		}
+		if (match({TokenType::Await})) {
+			auto inner = unary();
+			return std::make_shared<AwaitExpr>(inner);
+		}
 		return call();
 	}
 
@@ -677,6 +712,26 @@ public:
 
 	void execute(const std::vector<StmtPtr>& stmts) {
 		for (auto& s : stmts) execute(s);
+	}
+
+	// 事件循环：用于分发 then/catch 与 go 任务
+	void postTask(std::function<void()> fn) {
+		{
+			std::lock_guard<std::mutex> lk(loopMutex);
+			taskQueue.push(std::move(fn));
+		}
+		loopCv.notify_one();
+	}
+	void runEventLoopUntilIdle() {
+		for (;;) {
+			std::function<void()> fn;
+			{
+				std::unique_lock<std::mutex> lk(loopMutex);
+				if (taskQueue.empty()) break;
+				fn = std::move(taskQueue.front()); taskQueue.pop();
+			}
+			if (fn) fn();
+		}
 	}
 
 	Value evaluate(const ExprPtr& expr) {
@@ -787,6 +842,18 @@ public:
 			if (lg->op.type == TokenType::OrOr) return isTruthy(l) ? l : evaluate(lg->right);
 			else return !isTruthy(l) ? l : evaluate(lg->right);
 		}
+		if (auto aw = std::dynamic_pointer_cast<AwaitExpr>(expr)) {
+			Value v = evaluate(aw->expr);
+			if (!std::holds_alternative<std::shared_ptr<PromiseState>>(v)) {
+				throw std::runtime_error("await expects a Promise");
+			}
+			auto p = std::get<std::shared_ptr<PromiseState>>(v);
+			if (!p) return Value{std::monostate{}};
+			std::unique_lock<std::mutex> lk(p->mtx);
+			p->cv.wait(lk, [&]{ return p->settled; });
+			if (p->rejected) throw std::runtime_error("Promise rejected");
+			return p->result;
+		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			Value cal = evaluate(call->callee);
 			if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) throw std::runtime_error("Can only call functions");
@@ -794,6 +861,46 @@ public:
 			std::vector<Value> args; args.reserve(call->args.size());
 			for (auto& a : call->args) args.push_back(evaluate(a));
 			if (fn->isBuiltin) return fn->builtin(args, fn->closure);
+			if (fn->isAsync) {
+				// 返回一个 Promise，并将函数体作为任务投递
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+				postTask([this, fn, args, p]{
+					// 在闭包环境基础上创建局部环境并执行
+					auto local = std::make_shared<Environment>(fn->closure);
+					if (args.size() != fn->params.size()) {
+						for (size_t i=0;i<fn->params.size() && i<args.size();++i) local->define(fn->params[i], args[i]);
+					} else {
+						for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
+					}
+					Value ret{std::monostate{}};
+					try {
+						executeBlock(fn->body, local);
+					} catch (const ReturnSignal& rs) {
+						ret = rs.value;
+					}
+					{
+						std::lock_guard<std::mutex> lk(p->mtx);
+						p->settled = true; p->rejected = false; p->result = ret;
+					}
+					p->cv.notify_all();
+					// 分发 then
+					if (p->loopPtr) {
+						for (auto& cb : p->thenCallbacks) {
+							auto self = this;
+							postTask([cb, p, self]{
+								std::vector<Value> a{ p->result };
+								if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
+									auto local2 = std::make_shared<Environment>(cb->closure);
+									if (a.size() != cb->params.size()) local2->define(cb->params.size() ? cb->params[0] : "_", p->result); else { for (size_t i=0;i<a.size();++i) local2->define(cb->params[i], a[i]); }
+									try { self->executeBlock(cb->body, local2); } catch (const ReturnSignal&) {}
+								}
+							});
+						}
+					}
+				});
+				return Value{p};
+			}
 			if (args.size() != fn->params.size()) throw std::runtime_error("Arity mismatch");
 			auto local = std::make_shared<Environment>(fn->closure);
 			for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
@@ -874,6 +981,7 @@ public:
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(f->body)) fn->body = innerBlock->statements;
 			else fn->body = { f->body };
 			fn->closure = env;
+			fn->isAsync = f->isAsync;
 			env->define(f->name, fn);
 			return;
 		}
@@ -906,8 +1014,21 @@ public:
 				fn->params = m->params;
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
+				fn->isAsync = m->isAsync;
 				klass->methods[m->name] = fn; // 覆盖或新增
 			}
+			return;
+		}
+		if (auto go = std::dynamic_pointer_cast<GoStmt>(stmt)) {
+			// 调度一个任务在事件循环中执行表达式（通常为调用表达式）
+			auto exprCopy = go->call;
+			auto envSnap = env;
+			postTask([this, exprCopy, envSnap]{
+				auto prev = env;
+				env = envSnap;
+				try { (void) evaluate(exprCopy); } catch (...) { /* 丢弃 go 任务中的异常 */ }
+				env = prev;
+			});
 			return;
 		}
 		throw std::runtime_error("Unknown statement type");
@@ -948,6 +1069,9 @@ public:
 private:
 	std::shared_ptr<Environment> globals;
 	std::shared_ptr<Environment> env;
+	std::mutex loopMutex;
+	std::condition_variable loopCv;
+	std::queue<std::function<void()>> taskQueue;
 
 	static bool isEqual(const Value& a, const Value& b) {
 		if (a.index() != b.index()) {
@@ -964,6 +1088,7 @@ private:
 		if (std::holds_alternative<std::shared_ptr<Object>>(a)) return std::get<std::shared_ptr<Object>>(a).get() == std::get<std::shared_ptr<Object>>(b).get();
 		if (std::holds_alternative<std::shared_ptr<ClassInfo>>(a)) return std::get<std::shared_ptr<ClassInfo>>(a).get() == std::get<std::shared_ptr<ClassInfo>>(b).get();
 		if (std::holds_alternative<std::shared_ptr<Instance>>(a)) return std::get<std::shared_ptr<Instance>>(a).get() == std::get<std::shared_ptr<Instance>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<PromiseState>>(a)) return std::get<std::shared_ptr<PromiseState>>(a).get() == std::get<std::shared_ptr<PromiseState>>(b).get();
 		return false;
 	}
 
@@ -1035,6 +1160,71 @@ private:
 		// String synthetic methods
 		if (auto ps = std::get_if<std::string>(&obj)) {
 			if (name == "len") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(s.size()) }; }; return fn; }
+			return Value{std::monostate{}};
+		}
+		// Promise synthetic methods: then/catch
+		if (auto p = std::get_if<std::shared_ptr<PromiseState>>(&obj)) {
+			if (name == "then") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				auto ps = *p;
+				fn->builtin = [ps](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("then expects a function");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					{
+						std::lock_guard<std::mutex> lk(ps->mtx);
+						if (ps->settled && !ps->rejected) {
+							// settled: 立即调度
+							if (ps->loopPtr) {
+								auto loop = static_cast<Interpreter*>(ps->loopPtr);
+								loop->postTask([ps, cb, loop]{
+									std::vector<Value> a{ ps->result };
+									if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
+										auto local = std::make_shared<Environment>(cb->closure);
+										if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", ps->result); else {
+											for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+										}
+										try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
+									}
+								});
+							}
+						} else {
+							ps->thenCallbacks.push_back(cb);
+						}
+					}
+					return Value{ps};
+				};
+				return fn;
+			}
+			if (name == "catch") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				auto ps = *p;
+				fn->builtin = [ps](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("catch expects a function");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					{
+						std::lock_guard<std::mutex> lk(ps->mtx);
+						if (ps->settled && ps->rejected) {
+							if (ps->loopPtr) {
+								auto loop = static_cast<Interpreter*>(ps->loopPtr);
+								loop->postTask([ps, cb, loop]{
+									std::vector<Value> a{ ps->result };
+									if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
+										auto local = std::make_shared<Environment>(cb->closure);
+										if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", ps->result); else {
+											for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+										}
+										try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
+									}
+								});
+							}
+						} else {
+							ps->catchCallbacks.push_back(cb);
+						}
+					}
+					return Value{ps};
+				};
+				return fn;
+			}
 			return Value{std::monostate{}};
 		}
 		// Class / others: no properties
@@ -1130,6 +1320,44 @@ private:
 			return Value{ static_cast<double>(vec.size()) };
 		};
 		globals->define("push", pushFn);
+
+		// sleep(ms): 返回一个 Promise，在 ms 毫秒后 resolve(null)
+		auto sleepFn = std::make_shared<Function>();
+		sleepFn->isBuiltin = true;
+		sleepFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
+			if (args.size() != 1) throw std::runtime_error("sleep expects 1 argument (ms)");
+			double ms = getNumber(args[0], "sleep ms");
+			auto p = std::make_shared<PromiseState>();
+			p->loopPtr = this; // 指向当前解释器以便派发回调
+			std::thread([p, this, ms]{
+				std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(ms)));
+				{
+					std::lock_guard<std::mutex> lk(p->mtx);
+					p->settled = true;
+					p->rejected = false;
+					p->result = Value{std::monostate{}};
+				}
+				p->cv.notify_all();
+				// 分发 then 回调
+				if (p->loopPtr) {
+					auto loop = static_cast<Interpreter*>(p->loopPtr);
+					for (auto& cb : p->thenCallbacks) {
+						loop->postTask([cb, p, loop]{
+							std::vector<Value> a{ p->result };
+							if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
+								auto local = std::make_shared<Environment>(cb->closure);
+								if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", p->result); else {
+									for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+								}
+								try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
+							}
+						});
+					}
+				}
+			}).detach();
+			return Value{p};
+		};
+		globals->define("sleep", sleepFn);
 	}
 };
 
@@ -1267,5 +1495,9 @@ ALangEngine::NativeValue ALangEngine::callFunction(
 		std::cerr << "[ALang Error] callFunction: " << ex.what() << std::endl;
 		throw;
 	}
+}
+
+void ALangEngine::runEventLoopUntilIdle() {
+	impl->interpreter.runEventLoopUntilIdle();
 }
 
