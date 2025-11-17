@@ -1,6 +1,8 @@
 {
     "files.associations": {
+        "*.alang": "chatagent",
         "functional": "cpp",
-        "xstring": "cpp"
+        "xstring": "cpp",
+        "variant": "cpp"
     }
 }

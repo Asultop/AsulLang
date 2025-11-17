@@ -37,4 +37,31 @@ for (let k = 0; k < 10; k = k + 1) {
 }
 print("sum for:", s);
 
+// 类与继承
+class Base {
+    function constructor(v) { this.value = v; }
+    function get() { return this.value; }
+}
+// 使用 '<-' 继承语法
+class Test <- Base {
+    function inc() { this.value = this.value + 1; }
+}
+let t = new Test(5);
+print("t.get():", t.get());
+t.inc();
+print("t after inc:", t.get());
+print("t.value:", t.value);
+
+// 方法式 len/push
+let s2 = "hello"; print("s2.len():", s2.len());
+let a2 = [1,2]; a2.push(3); print("a2:", a2, "a2.len():", a2.len());
+
+// 扩展已有类方法：extends Name { ... }
+extends Test {
+    function twice() { this.value = this.value * 2; }
+}
+let t2 = new Test(10);
+t2.twice();
+print("t2:", t2.value);
+
 print("a","b","c",123,1,796);

@@ -26,12 +26,12 @@ enum class TokenType {
 	Plus, Minus, Star, Slash, Percent,
 	Bang, Equal, Less, Greater,
 	// One or two char
-	BangEqual, EqualEqual, LessEqual, GreaterEqual,
+	BangEqual, EqualEqual, LessEqual, GreaterEqual, LeftArrow,
 	AndAnd, OrOr,
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, True, False, Null,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null,
 	EndOfFile
 };
 
@@ -99,6 +99,7 @@ private:
 			{"function", TokenType::Function}, {"return", TokenType::Return},
 			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While},
 			{"for", TokenType::For}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
 			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
 		};
 		auto it = keywords.find(text);
@@ -152,7 +153,12 @@ private:
 		case '%': add(TokenType::Percent); break;
 		case '!': add(match('=') ? TokenType::BangEqual : TokenType::Bang); break;
 		case '=': add(match('=') ? TokenType::EqualEqual : TokenType::Equal); break;
-		case '<': add(match('=') ? TokenType::LessEqual : TokenType::Less); break;
+		case '<': {
+			if (match('-')) { add(TokenType::LeftArrow); }
+			else if (match('=')) { add(TokenType::LessEqual); }
+			else { add(TokenType::Less); }
+			break;
+		}
 		case '>': add(match('=') ? TokenType::GreaterEqual : TokenType::Greater); break;
 		case '&': if (match('&')) add(TokenType::AndAnd); else throw std::runtime_error("Unexpected '&' at line " + std::to_string(line)); break;
 		case '|': if (match('|')) add(TokenType::OrOr); else throw std::runtime_error("Unexpected '|' at line " + std::to_string(line)); break;
@@ -173,8 +179,11 @@ struct Function;
 using Array = std::vector<struct ValueTag>;
 using Object = std::unordered_map<std::string, struct ValueTag>;
 
+struct ClassInfo;
+struct Instance;
+
 // forward for variant recursive types
-struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>> {
+struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>,std::shared_ptr<ClassInfo>,std::shared_ptr<Instance>> {
 	using variant::variant;
 };
 
@@ -189,6 +198,8 @@ inline std::string typeOf(const Value& v) {
 	case 4: return "function";
 	case 5: return "array";
 	case 6: return "object";
+	case 7: return "class";
+	case 8: return "instance";
 	default: return "unknown";
 	}
 }
@@ -231,6 +242,8 @@ inline std::string toString(const Value& v) {
 		}
 		oss << "}"; return oss.str();
 	}
+	if (std::holds_alternative<std::shared_ptr<ClassInfo>>(v)) return "[Class]";
+	if (std::holds_alternative<std::shared_ptr<Instance>>(v)) return "[Object]";
 	return "unknown";
 }
 
@@ -262,7 +275,18 @@ struct Function {
 	std::vector<StmtPtr> body;
 	std::shared_ptr<Environment> closure;
 	bool isBuiltin{false};
-	std::function<Value(const std::vector<Value>&)> builtin;
+	std::function<Value(const std::vector<Value>&, std::shared_ptr<Environment>)> builtin;
+};
+
+struct ClassInfo {
+	std::string name;
+	std::vector<std::shared_ptr<ClassInfo>> supers; // 多继承支持，按声明顺序线性查找
+	std::unordered_map<std::string, std::shared_ptr<Function>> methods;
+};
+
+struct Instance {
+	std::shared_ptr<ClassInfo> klass;
+	std::unordered_map<std::string, Value> fields;
 };
 
 // ----------- AST Nodes -----------
@@ -275,6 +299,7 @@ struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r)
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; CallExpr(ExprPtr c, std::vector<ExprPtr> a): callee(std::move(c)), args(std::move(a)){} };
+struct NewExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; NewExpr(ExprPtr c, std::vector<ExprPtr> a): callee(std::move(c)), args(std::move(a)){} };
 struct GetPropExpr : Expr { ExprPtr object; std::string name; GetPropExpr(ExprPtr o, std::string n): object(std::move(o)), name(std::move(n)){} };
 struct IndexExpr : Expr { ExprPtr object; ExprPtr index; IndexExpr(ExprPtr o, ExprPtr i): object(std::move(o)), index(std::move(i)){} };
 struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; SetPropExpr(ExprPtr o, std::string n, ExprPtr v): object(std::move(o)), name(std::move(n)), value(std::move(v)){} };
@@ -290,6 +315,8 @@ struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPt
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
 struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b): name(std::move(n)), params(std::move(p)), body(std::move(b)){} };
+struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
+struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
@@ -325,8 +352,65 @@ private:
 
 	StmtPtr declaration() {
 		if (match({TokenType::Function})) return functionDecl("function");
+		if (match({TokenType::Class})) return classDeclaration();
+		if (match({TokenType::Extends})) return extendsDeclaration();
 		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration();
 		return statement();
+	}
+
+	StmtPtr classDeclaration() {
+		auto nameTok = consume(TokenType::Identifier, "Expect class name");
+		auto cls = std::make_shared<ClassStmt>();
+		cls->name = nameTok.lexeme;
+		// 支持三种：class Name ; | class Name <- Supers | class Name [<- Supers] { ... }
+		if (match({TokenType::Semicolon})) return cls; // 空类声明
+		if (match({TokenType::LeftArrow}) || match({TokenType::Extends})) {
+			// 解析父类：单个或 (A,B,...)
+			if (match({TokenType::LeftParen})) {
+				do { cls->superNames.push_back(consume(TokenType::Identifier, "Expect base class name").lexeme); } while (match({TokenType::Comma}));
+				consume(TokenType::RightParen, "Expect ')' after base list");
+			} else {
+				cls->superNames.push_back(consume(TokenType::Identifier, "Expect base class name").lexeme);
+			}
+		}
+		if (match({TokenType::LeftBrace})) {
+			while (!check(TokenType::RightBrace) && !isAtEnd()) {
+				(void)match({TokenType::Function});
+				auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+				consume(TokenType::LeftParen, "Expect '('");
+				std::vector<std::string> params;
+				if (!check(TokenType::RightParen)) {
+					do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+				}
+				consume(TokenType::RightParen, "Expect ')'");
+				auto body = statement();
+				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body));
+			}
+			consume(TokenType::RightBrace, "Expect '}' after class body");
+		}
+		return cls;
+	}
+
+	StmtPtr extendsDeclaration() {
+		// 语法：extends Name { methods }
+		auto nameTok = consume(TokenType::Identifier, "Expect class name after 'extends'");
+		consume(TokenType::LeftBrace, "Expect '{' before extension body");
+		auto ext = std::make_shared<ExtendStmt>();
+		ext->name = nameTok.lexeme;
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			(void)match({TokenType::Function});
+			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+			consume(TokenType::LeftParen, "Expect '('");
+			std::vector<std::string> params;
+			if (!check(TokenType::RightParen)) {
+				do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightParen, "Expect ')'");
+			auto body = statement();
+			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body));
+		}
+		consume(TokenType::RightBrace, "Expect '}' after extension body");
+		return ext;
 	}
 
 	StmtPtr functionDecl(const std::string&) {
@@ -538,6 +622,14 @@ private:
 	}
 
 	ExprPtr primary() {
+		if (match({TokenType::New})) {
+			auto nameTok = consume(TokenType::Identifier, "Expect class name after 'new'");
+			consume(TokenType::LeftParen, "Expect '('");
+			std::vector<ExprPtr> args;
+			if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma})); }
+			consume(TokenType::RightParen, "Expect ')'");
+			return std::make_shared<NewExpr>(std::make_shared<VariableExpr>(nameTok.lexeme), args);
+		}
 		if (match({TokenType::False})) return std::make_shared<LiteralExpr>(Value{false});
 		if (match({TokenType::True})) return std::make_shared<LiteralExpr>(Value{true});
 		if (match({TokenType::Null})) return std::make_shared<LiteralExpr>(Value{std::monostate{}});
@@ -618,8 +710,14 @@ public:
 		if (auto sp = std::dynamic_pointer_cast<SetPropExpr>(expr)) {
 			Value& ov = ensureObjectRef(sp->object);
 			Value v = evaluate(sp->value);
-			auto& obj = *std::get<std::shared_ptr<Object>>(ov);
-			obj[sp->name] = v;
+			if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
+				(**pobj)[sp->name] = v;
+				return v;
+			}
+			if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
+				(**pins).fields[sp->name] = v;
+				return v;
+			}
 			return v;
 		}
 		if (auto si = std::dynamic_pointer_cast<SetIndexExpr>(expr)) {
@@ -635,6 +733,10 @@ public:
 			if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
 				std::string key = keyFromValue(idxv);
 				(**pobj)[key] = v; return v;
+			}
+			if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
+				std::string key = keyFromValue(idxv);
+				(*pins)->fields[key] = v; return v;
 			}
 			throw std::runtime_error("Index assignment on non-array/object");
 		}
@@ -691,7 +793,7 @@ public:
 			auto fn = std::get<std::shared_ptr<Function>>(cal);
 			std::vector<Value> args; args.reserve(call->args.size());
 			for (auto& a : call->args) args.push_back(evaluate(a));
-			if (fn->isBuiltin) return fn->builtin(args);
+			if (fn->isBuiltin) return fn->builtin(args, fn->closure);
 			if (args.size() != fn->params.size()) throw std::runtime_error("Arity mismatch");
 			auto local = std::make_shared<Environment>(fn->closure);
 			for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
@@ -699,6 +801,31 @@ public:
 				executeBlock(fn->body, local);
 			} catch (const ReturnSignal& rs) { return rs.value; }
 			return Value{std::monostate{}};
+		}
+		if (auto nw = std::dynamic_pointer_cast<NewExpr>(expr)) {
+			Value cal = evaluate(nw->callee);
+			if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(cal)) throw std::runtime_error("new: target is not a class");
+			auto klass = std::get<std::shared_ptr<ClassInfo>>(cal);
+			auto inst = std::make_shared<Instance>();
+			inst->klass = klass;
+			// constructor (lookup super chain)
+			auto ctor = findMethod(klass, "constructor");
+			if (ctor) {
+				std::vector<Value> args; args.reserve(nw->args.size());
+				for (auto& a : nw->args) args.push_back(evaluate(a));
+				// bind this
+				auto bound = std::make_shared<Function>(*ctor);
+				auto thisEnv = std::make_shared<Environment>(bound->closure);
+				thisEnv->define("this", inst);
+				bound->closure = thisEnv;
+				if (bound->isBuiltin) (void)bound->builtin(args, bound->closure); else {
+					if (args.size() != bound->params.size()) throw std::runtime_error("Arity mismatch");
+					auto local = std::make_shared<Environment>(bound->closure);
+					for (size_t i=0;i<args.size();++i) local->define(bound->params[i], args[i]);
+					try { executeBlock(bound->body, local); } catch (const ReturnSignal&) {}
+				}
+			}
+			return inst;
 		}
 		throw std::runtime_error("Unknown expression type");
 	}
@@ -750,6 +877,39 @@ public:
 			env->define(f->name, fn);
 			return;
 		}
+		if (auto c = std::dynamic_pointer_cast<ClassStmt>(stmt)) {
+			auto klass = std::make_shared<ClassInfo>();
+			klass->name = c->name;
+			// 解析多父类
+			for (auto& sname : c->superNames) {
+				Value sv = env->get(sname);
+				if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(sv)) throw std::runtime_error("Base must be a class: " + sname);
+				klass->supers.push_back(std::get<std::shared_ptr<ClassInfo>>(sv));
+			}
+			// methods
+			for (auto& m : c->methods) {
+				auto fn = std::make_shared<Function>();
+				fn->params = m->params;
+				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
+				fn->closure = env;
+				klass->methods[m->name] = fn;
+			}
+			env->define(c->name, klass);
+			return;
+		}
+		if (auto ext = std::dynamic_pointer_cast<ExtendStmt>(stmt)) {
+			Value cv = env->get(ext->name);
+			if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(cv)) throw std::runtime_error("extends: target is not a class: " + ext->name);
+			auto klass = std::get<std::shared_ptr<ClassInfo>>(cv);
+			for (auto& m : ext->methods) {
+				auto fn = std::make_shared<Function>();
+				fn->params = m->params;
+				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
+				fn->closure = env;
+				klass->methods[m->name] = fn; // 覆盖或新增
+			}
+			return;
+		}
 		throw std::runtime_error("Unknown statement type");
 	}
 
@@ -765,6 +925,25 @@ public:
 	}
 
 	std::shared_ptr<Environment> globalsEnv() const { return globals; }
+
+	// 供宿主侧调用全局函数的便捷方法
+	Value callFunction(const std::string& name, const std::vector<Value>& args) {
+		Value cal = globals->get(name);
+		if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) throw std::runtime_error("callFunction: target is not a function: " + name);
+		auto fn = std::get<std::shared_ptr<Function>>(cal);
+		if (fn->isBuiltin) {
+			return fn->builtin(args, fn->closure);
+		}
+		if (args.size() != fn->params.size()) throw std::runtime_error("callFunction: arity mismatch");
+		auto local = std::make_shared<Environment>(fn->closure);
+		for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
+		try {
+			executeBlock(fn->body, local);
+		} catch (const ReturnSignal& rs) {
+			return rs.value;
+		}
+		return Value{std::monostate{}};
+	}
 
 private:
 	std::shared_ptr<Environment> globals;
@@ -783,6 +962,8 @@ private:
 		if (std::holds_alternative<std::shared_ptr<Function>>(a)) return std::get<std::shared_ptr<Function>>(a).get() == std::get<std::shared_ptr<Function>>(b).get();
 		if (std::holds_alternative<std::shared_ptr<Array>>(a)) return std::get<std::shared_ptr<Array>>(a).get() == std::get<std::shared_ptr<Array>>(b).get();
 		if (std::holds_alternative<std::shared_ptr<Object>>(a)) return std::get<std::shared_ptr<Object>>(a).get() == std::get<std::shared_ptr<Object>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<ClassInfo>>(a)) return std::get<std::shared_ptr<ClassInfo>>(a).get() == std::get<std::shared_ptr<ClassInfo>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<Instance>>(a)) return std::get<std::shared_ptr<Instance>>(a).get() == std::get<std::shared_ptr<Instance>>(b).get();
 		return false;
 	}
 
@@ -794,14 +975,70 @@ private:
 		throw std::runtime_error(std::string("Expected number at ") + where);
 	}
 
-	// Helpers for object/array access
+	// Helpers for object/array/class/instance access
+	static std::shared_ptr<Function> findMethod(std::shared_ptr<ClassInfo> k, const std::string& name) {
+		if (!k) return nullptr;
+		auto it = k->methods.find(name);
+		if (it != k->methods.end()) return it->second;
+		// 多继承：按声明顺序递归线性查找
+		for (auto& s : k->supers) {
+			auto f = findMethod(s, name);
+			if (f) return f;
+		}
+		return nullptr;
+	}
 	static Value getProperty(const Value& obj, const std::string& name) {
+		// Instance: fields then methods
+		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
+			if (*pins) {
+				auto fit = (*pins)->fields.find(name);
+				if (fit != (*pins)->fields.end()) return fit->second;
+				if ((*pins)->klass) {
+					auto m = findMethod((*pins)->klass, name);
+					if (m) {
+						auto bound = std::make_shared<Function>(*m);
+						auto thisEnv = std::make_shared<Environment>(bound->closure);
+						thisEnv->define("this", obj);
+						bound->closure = thisEnv;
+						return bound;
+					}
+				}
+				return Value{std::monostate{}};
+			}
+		}
+		// Object
 		if (auto po = std::get_if<std::shared_ptr<Object>>(&obj)) {
 			auto it = (**po).find(name);
-			if (it == (**po).end()) return Value{std::monostate{}}; // undefined -> null
-			return it->second;
+			if (it != (**po).end()) return it->second;
+			// synthetic len()
+			if (name == "len") {
+				auto lenFn = std::make_shared<Function>(); lenFn->isBuiltin = true;
+				auto o = *po; lenFn->builtin = [o](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(o ? o->size() : 0) }; };
+				return lenFn;
+			}
+			return Value{std::monostate{}};
 		}
-		throw std::runtime_error("Property access on non-object");
+		// Array synthetic methods
+		if (auto parr = std::get_if<std::shared_ptr<Array>>(&obj)) {
+			if (name == "len") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [a](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(a ? a->size() : 0) }; };
+				return fn;
+			}
+			if (name == "push") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!a) return Value{0.0}; for (auto& v: args) a->push_back(v); return Value{ static_cast<double>(a->size()) }; };
+				return fn;
+			}
+			return Value{std::monostate{}};
+		}
+		// String synthetic methods
+		if (auto ps = std::get_if<std::string>(&obj)) {
+			if (name == "len") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(s.size()) }; }; return fn; }
+			return Value{std::monostate{}};
+		}
+		// Class / others: no properties
+		return Value{std::monostate{}};
 	}
 	static Value getIndex(const Value& obj, const Value& key) {
 		if (auto parr = std::get_if<std::shared_ptr<Array>>(&obj)) {
@@ -809,6 +1046,12 @@ private:
 			auto& vec = **parr;
 			if (idx >= vec.size()) throw std::runtime_error("Array index out of range");
 			return vec[idx];
+		}
+		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
+			std::string k = keyFromValue(key);
+			auto it = (*pins)->fields.find(k);
+			if (it != (*pins)->fields.end()) return it->second;
+			return Value{std::monostate{}};
 		}
 		if (auto pobj = std::get_if<std::shared_ptr<Object>>(&obj)) {
 			std::string k = keyFromValue(key);
@@ -836,12 +1079,12 @@ private:
 	// Evaluate to a reference-like concept: here we just ensure object is object and return Value& by storing object evaluated value back? For simplicity, we evaluate then require it's object/array and return a reference to the held shared_ptr so we can mutate its contents.
 	Value& ensureObjectRef(const ExprPtr& objExpr) {
 		tempStorage = evaluate(objExpr);
-		if (!std::holds_alternative<std::shared_ptr<Object>>(tempStorage)) throw std::runtime_error("Target is not an object");
+		if (!std::holds_alternative<std::shared_ptr<Object>>(tempStorage) && !std::holds_alternative<std::shared_ptr<Instance>>(tempStorage)) throw std::runtime_error("Target is not an object");
 		return tempStorage;
 	}
 	Value& evaluateRef(const ExprPtr& objExpr) {
 		tempStorage = evaluate(objExpr);
-		if (std::holds_alternative<std::shared_ptr<Array>>(tempStorage) || std::holds_alternative<std::shared_ptr<Object>>(tempStorage)) return tempStorage;
+		if (std::holds_alternative<std::shared_ptr<Array>>(tempStorage) || std::holds_alternative<std::shared_ptr<Object>>(tempStorage) || std::holds_alternative<std::shared_ptr<Instance>>(tempStorage)) return tempStorage;
 		throw std::runtime_error("Target is not indexable");
 	}
 
@@ -850,7 +1093,7 @@ private:
 	void installBuiltins() {
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
-		printFn->builtin = [](const std::vector<Value>& args)->Value{
+		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
 			for (size_t i=0;i<args.size();++i) {
 				std::cout << toString(args[i]);
 				if (i+1<args.size()) std::cout << " ";
@@ -859,6 +1102,34 @@ private:
 			return Value{std::monostate{}};
 		};
 		globals->define("print", printFn);
+
+		// len(x): string/array/object长度
+		auto lenFn = std::make_shared<Function>();
+		lenFn->isBuiltin = true;
+		lenFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
+			if (args.size() != 1) throw std::runtime_error("len expects 1 argument");
+			const Value& v = args[0];
+			if (auto s = std::get_if<std::string>(&v)) return Value{ static_cast<double>(s->size()) };
+			if (auto a = std::get_if<std::shared_ptr<Array>>(&v)) return Value{ static_cast<double>((*a) ? (*a)->size() : 0) };
+			if (auto o = std::get_if<std::shared_ptr<Object>>(&v)) return Value{ static_cast<double>((*o) ? (*o)->size() : 0) };
+			if (std::holds_alternative<std::monostate>(v)) return Value{ 0.0 };
+			throw std::runtime_error("len: unsupported type: " + typeOf(v));
+		};
+		globals->define("len", lenFn);
+
+		// push(arr, ...values): 追加元素，返回新长度
+		auto pushFn = std::make_shared<Function>();
+		pushFn->isBuiltin = true;
+		pushFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
+			if (args.empty()) throw std::runtime_error("push expects at least 1 argument");
+			const Value& target = args[0];
+			auto parr = std::get_if<std::shared_ptr<Array>>(&target);
+			if (!parr || !(*parr)) throw std::runtime_error("push: first argument must be array");
+			auto& vec = **parr;
+			for (size_t i=1;i<args.size();++i) vec.push_back(args[i]);
+			return Value{ static_cast<double>(vec.size()) };
+		};
+		globals->define("push", pushFn);
 	}
 };
 
@@ -900,5 +1171,101 @@ void ALangEngine::execute(const std::string& code) {
 
 void ALangEngine::registerModule(const char* /*moduleName*/, std::function<void()> initFunc) {
 	if (initFunc) initFunc();
+}
+
+// 宿主类注册：使用内置Function包装，将NativeValue与内部Value互转
+static Value nativeToValue(const ALangEngine::NativeValue& nv) {
+	switch (nv.index()) {
+		case 0: return Value{std::monostate{}};
+		case 1: return Value{std::get<double>(nv)};
+		case 2: return Value{std::get<std::string>(nv)};
+		case 3: return Value{std::get<bool>(nv)};
+	}
+	return Value{std::monostate{}};
+}
+static ALangEngine::NativeValue valueToNative(const Value& v) {
+	if (std::holds_alternative<std::monostate>(v)) return ALangEngine::NativeValue{std::monostate{}};
+	if (auto d = std::get_if<double>(&v)) return ALangEngine::NativeValue{*d};
+	if (auto s = std::get_if<std::string>(&v)) return ALangEngine::NativeValue{*s};
+	if (auto b = std::get_if<bool>(&v)) return ALangEngine::NativeValue{*b};
+	// 非基元类型一律视作 null
+	return ALangEngine::NativeValue{std::monostate{}};
+}
+
+void ALangEngine::registerClass(
+	const std::string& className,
+	NativeFunc constructor,
+	const std::unordered_map<std::string, NativeFunc>& methods,
+	const std::vector<std::string>& baseClasses
+) {
+	// 构造ClassInfo
+	auto& interp = impl->interpreter;
+	// 访问私有类型：此处位于同一翻译单元，直接构建ClassInfo
+	auto klass = std::make_shared<ClassInfo>();
+	klass->name = className;
+	for (auto& bn : baseClasses) {
+		try {
+			Value bv = interp.globalsEnv()->get(bn);
+			if (std::holds_alternative<std::shared_ptr<ClassInfo>>(bv)) {
+				klass->supers.push_back(std::get<std::shared_ptr<ClassInfo>>(bv));
+			}
+		} catch (...) { /* 忽略缺失的基类 */ }
+	}
+
+	// 构造器
+	if (constructor) {
+		auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+		fn->builtin = [constructor](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+			std::vector<NativeValue> na; na.reserve(args.size());
+			for (auto& a : args) na.push_back(valueToNative(a));
+			void* thisHandle = nullptr;
+			if (clos) {
+				try {
+					Value tv = clos->get("this");
+					if (auto pins = std::get_if<std::shared_ptr<Instance>>(&tv)) thisHandle = pins->get();
+				} catch (...) {}
+			}
+			auto ret = constructor(na, thisHandle);
+			return nativeToValue(ret);
+		};
+		klass->methods["constructor"] = fn;
+	}
+	// 方法
+	for (auto& kv : methods) {
+		auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+		auto native = kv.second;
+		fn->builtin = [native](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+			std::vector<NativeValue> na; na.reserve(args.size());
+			for (auto& a : args) na.push_back(valueToNative(a));
+			void* thisHandle = nullptr;
+			if (clos) {
+				try {
+					Value tv = clos->get("this");
+					if (auto pins = std::get_if<std::shared_ptr<Instance>>(&tv)) thisHandle = pins->get();
+				} catch (...) {}
+			}
+			auto ret = native(na, thisHandle);
+			return nativeToValue(ret);
+		};
+		klass->methods[kv.first] = fn;
+	}
+
+	// 注入全局
+	impl->interpreter.globalsEnv()->define(className, klass);
+}
+
+ALangEngine::NativeValue ALangEngine::callFunction(
+	const std::string& functionName,
+	const std::vector<NativeValue>& args
+) {
+	try {
+		std::vector<Value> va; va.reserve(args.size());
+		for (auto& a : args) va.push_back(nativeToValue(a));
+		Value ret = impl->interpreter.callFunction(functionName, va);
+		return valueToNative(ret);
+	} catch (const std::exception& ex) {
+		std::cerr << "[ALang Error] callFunction: " << ex.what() << std::endl;
+		throw;
+	}
 }
 

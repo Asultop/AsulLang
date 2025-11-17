@@ -4,6 +4,9 @@
 
 #include <functional>
 #include <string>
+#include <unordered_map>
+#include <variant>
+#include <vector>
 
 class ALangEngine {
 public:
@@ -17,6 +20,22 @@ public:
     // 加载源码（供execute()无参调用）
     void setSource(const std::string& code);
     void registerModule(const char* moduleName, std::function<void()> initFunc);
+
+    // 宿主原生类注册（简化版）：仅支持基本类型（null/number/string/bool）参数与返回
+    using NativeValue = std::variant<std::monostate,double,std::string,bool>;
+    using NativeFunc = std::function<NativeValue(const std::vector<NativeValue>&, void* thisHandle)>;
+    void registerClass(
+        const std::string& className,
+        NativeFunc constructor,
+        const std::unordered_map<std::string, NativeFunc>& methods,
+        const std::vector<std::string>& baseClasses = {}
+    );
+
+    // 从宿主侧调用脚本中的全局函数（仅基元参数与返回值）
+    NativeValue callFunction(
+        const std::string& functionName,
+        const std::vector<NativeValue>& args
+    );
 private:
     struct Impl;
     Impl* impl; // PImpl以隐藏实现细节，减少头文件依赖

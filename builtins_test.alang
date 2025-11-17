@@ -1,0 +1,9 @@
+// 验证内置函数 len / push
+let s = "hello";
+print("len(s)=", len(s));
+let a = [1,2,3];
+print("len(a)=", len(a));
+push(a, 4, 5);
+print("a=", a, "len(a)=", len(a));
+let o = { x: 1, y: 2 };
+print("len(o)=", len(o));
