@@ -1,0 +1,19 @@
+// 示例：求和并打印
+function add(a, b) { 
+    return a + b; 
+}
+
+let x = 10; let y = 90;
+print("sum:", add(x, y));
+
+let i = 0; let acc = 0;
+let cc=9;
+while (i < 5) { 
+    acc = acc + i; i = i + 1; 
+}
+if (acc >= 10) {
+    print("acc:", acc); 
+} else {
+    print("small", acc); 
+}
+print(cc);
