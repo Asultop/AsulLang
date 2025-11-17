@@ -1,4 +1,4 @@
-﻿#include "ALangEngine.h"
+#include "ALangEngine.h"
 
 #include <cctype>
 #include <cmath>
@@ -21,7 +21,8 @@ namespace {
 
 enum class TokenType {
 	// Single-char
-	LeftParen, RightParen, LeftBrace, RightBrace, Comma, Semicolon,
+	LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
+	Comma, Semicolon, Colon, Dot,
 	Plus, Minus, Star, Slash, Percent,
 	Bang, Equal, Less, Greater,
 	// One or two char
@@ -30,7 +31,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, True, False, Null,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, True, False, Null,
 	EndOfFile
 };
 
@@ -97,6 +98,7 @@ private:
 			{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
 			{"function", TokenType::Function}, {"return", TokenType::Return},
 			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While},
+			{"for", TokenType::For}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
 			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
 		};
 		auto it = keywords.find(text);
@@ -138,8 +140,12 @@ private:
 		case ')': add(TokenType::RightParen); break;
 		case '{': add(TokenType::LeftBrace); break;
 		case '}': add(TokenType::RightBrace); break;
+		case '[': add(TokenType::LeftBracket); break;
+		case ']': add(TokenType::RightBracket); break;
 		case ',': add(TokenType::Comma); break;
 		case ';': add(TokenType::Semicolon); break;
+		case ':': add(TokenType::Colon); break;
+		case '.': add(TokenType::Dot); break;
 		case '+': add(TokenType::Plus); break;
 		case '-': add(TokenType::Minus); break;
 		case '*': add(TokenType::Star); break;
@@ -164,7 +170,15 @@ private:
 
 struct Function;
 
-using Value = std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>>;
+using Array = std::vector<struct ValueTag>;
+using Object = std::unordered_map<std::string, struct ValueTag>;
+
+// forward for variant recursive types
+struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>> {
+	using variant::variant;
+};
+
+using Value = ValueTag;
 
 inline std::string typeOf(const Value& v) {
 	switch (v.index()) {
@@ -173,6 +187,8 @@ inline std::string typeOf(const Value& v) {
 	case 2: return "string";
 	case 3: return "boolean";
 	case 4: return "function";
+	case 5: return "array";
+	case 6: return "object";
 	default: return "unknown";
 	}
 }
@@ -182,6 +198,8 @@ inline bool isTruthy(const Value& v) {
 	if (auto b = std::get_if<bool>(&v)) return *b;
 	if (auto n = std::get_if<double>(&v)) return *n != 0.0;
 	if (auto s = std::get_if<std::string>(&v)) return !s->empty();
+	if (std::holds_alternative<std::shared_ptr<Array>>(v)) return true;
+	if (std::holds_alternative<std::shared_ptr<Object>>(v)) return true;
 	return true;
 }
 
@@ -192,7 +210,28 @@ inline std::string toString(const Value& v) {
 	}
 	if (auto s = std::get_if<std::string>(&v)) return *s;
 	if (auto b = std::get_if<bool>(&v)) return *b ? "true" : "false";
-	return "[Function]";
+	if (std::holds_alternative<std::shared_ptr<Function>>(v)) return "[Function]";
+	if (auto arr = std::get_if<std::shared_ptr<Array>>(&v)) {
+		std::ostringstream oss; oss << "[";
+		if (*arr) {
+			for (size_t i=0;i<(*arr)->size();++i) {
+				if (i) oss << ", ";
+				oss << toString((**arr)[i]);
+			}
+		}
+		oss << "]"; return oss.str();
+	}
+	if (auto obj = std::get_if<std::shared_ptr<Object>>(&v)) {
+		std::ostringstream oss; oss << "{"; bool first=true;
+		if (*obj) {
+			for (auto& kv : **obj) {
+				if (!first) oss << ", "; first=false;
+				oss << kv.first << ": " << toString(kv.second);
+			}
+		}
+		oss << "}"; return oss.str();
+	}
+	return "unknown";
 }
 
 struct Environment : std::enable_shared_from_this<Environment> {
@@ -236,6 +275,12 @@ struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r)
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; CallExpr(ExprPtr c, std::vector<ExprPtr> a): callee(std::move(c)), args(std::move(a)){} };
+struct GetPropExpr : Expr { ExprPtr object; std::string name; GetPropExpr(ExprPtr o, std::string n): object(std::move(o)), name(std::move(n)){} };
+struct IndexExpr : Expr { ExprPtr object; ExprPtr index; IndexExpr(ExprPtr o, ExprPtr i): object(std::move(o)), index(std::move(i)){} };
+struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; SetPropExpr(ExprPtr o, std::string n, ExprPtr v): object(std::move(o)), name(std::move(n)), value(std::move(v)){} };
+struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v): object(std::move(o)), index(std::move(i)), value(std::move(v)){} };
+struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
+struct ObjectLiteralExpr : Expr { std::vector<std::pair<std::string, ExprPtr>> props; explicit ObjectLiteralExpr(std::vector<std::pair<std::string, ExprPtr>> p): props(std::move(p)){} };
 
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
@@ -245,6 +290,9 @@ struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPt
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
 struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b): name(std::move(n)), params(std::move(p)), body(std::move(b)){} };
+struct BreakStmt : Stmt {};
+struct ContinueStmt : Stmt {};
+struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
 
 // ----------- Parser -----------
 
@@ -306,9 +354,32 @@ private:
 	StmtPtr statement() {
 		if (match({TokenType::If})) return ifStatement();
 		if (match({TokenType::While})) return whileStatement();
+		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::Return})) return returnStatement();
+		if (match({TokenType::Break})) { consume(TokenType::Semicolon, "Expect ';' after break"); return std::make_shared<BreakStmt>(); }
+		if (match({TokenType::Continue})) { consume(TokenType::Semicolon, "Expect ';' after continue"); return std::make_shared<ContinueStmt>(); }
 		if (match({TokenType::LeftBrace})) return std::make_shared<BlockStmt>(block());
 		return expressionStatement();
+	}
+
+	StmtPtr forStatement() {
+		consume(TokenType::LeftParen, "Expect '('");
+		StmtPtr init;
+		if (match({TokenType::Semicolon})) {
+			init = nullptr;
+		} else if (match({TokenType::Let, TokenType::Var, TokenType::Const})) {
+			init = varDeclaration();
+		} else {
+			init = expressionStatement();
+		}
+		ExprPtr cond = nullptr;
+		if (!check(TokenType::Semicolon)) cond = expression();
+		consume(TokenType::Semicolon, "Expect ';' after loop condition");
+		ExprPtr post = nullptr;
+		if (!check(TokenType::RightParen)) post = expression();
+		consume(TokenType::RightParen, "Expect ')' after for clauses");
+		auto body = statement();
+		return std::make_shared<ForStmt>(init, cond, post, body);
 	}
 
 	StmtPtr returnStatement() {
@@ -358,6 +429,12 @@ private:
 			auto value = assignment();
 			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
 				return std::make_shared<AssignExpr>(var->name, value);
+			}
+			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+				return std::make_shared<SetPropExpr>(getp->object, getp->name, value);
+			}
+			if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+				return std::make_shared<SetIndexExpr>(idx->object, idx->index, value);
 			}
 			throw std::runtime_error("Invalid assignment target at line " + std::to_string(previous().line));
 		}
@@ -446,6 +523,15 @@ private:
 		auto expr = primary();
 		for (;;) {
 			if (match({TokenType::LeftParen})) expr = finishCall(expr);
+			else if (match({TokenType::Dot})) {
+				auto name = consume(TokenType::Identifier, "Expect property name after '.'").lexeme;
+				expr = std::make_shared<GetPropExpr>(expr, name);
+			}
+			else if (match({TokenType::LeftBracket})) {
+				auto idx = expression();
+				consume(TokenType::RightBracket, "Expect ']' after index");
+				expr = std::make_shared<IndexExpr>(expr, idx);
+			}
 			else break;
 		}
 		return expr;
@@ -458,6 +544,30 @@ private:
 		if (match({TokenType::Number})) return std::make_shared<LiteralExpr>(Value{std::stod(previous().lexeme)});
 		if (match({TokenType::String})) return std::make_shared<LiteralExpr>(Value{previous().lexeme});
 		if (match({TokenType::Identifier})) return std::make_shared<VariableExpr>(previous().lexeme);
+		if (match({TokenType::LeftBracket})) {
+			std::vector<ExprPtr> elems;
+			if (!check(TokenType::RightBracket)) {
+				do { elems.push_back(expression()); } while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightBracket, "Expect ']' after array literal");
+			return std::make_shared<ArrayLiteralExpr>(elems);
+		}
+		if (match({TokenType::LeftBrace})) {
+			std::vector<std::pair<std::string, ExprPtr>> props;
+			if (!check(TokenType::RightBrace)) {
+				do {
+					std::string key;
+					if (match({TokenType::Identifier})) key = previous().lexeme;
+					else if (match({TokenType::String})) key = previous().lexeme;
+					else throw std::runtime_error("Expect property name in object literal");
+					consume(TokenType::Colon, "Expect ':' after property name");
+					auto val = expression();
+					props.emplace_back(std::move(key), val);
+				} while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightBrace, "Expect '}' after object literal");
+			return std::make_shared<ObjectLiteralExpr>(props);
+		}
 		if (match({TokenType::LeftParen})) { auto e = expression(); consume(TokenType::RightParen, "Expect ')'"); return e; }
 		throw std::runtime_error("Expect expression at line " + std::to_string(peek().line));
 	}
@@ -466,6 +576,8 @@ private:
 // ----------- Interpreter -----------
 
 struct ReturnSignal { Value value; };
+struct BreakSignal {};
+struct ContinueSignal {};
 
 class Interpreter {
 public:
@@ -482,6 +594,49 @@ public:
 			Value v = evaluate(asg->value);
 			if (!env->assign(asg->name, v)) throw std::runtime_error("Undefined variable '" + asg->name + "'");
 			return v;
+		}
+		if (auto arr = std::dynamic_pointer_cast<ArrayLiteralExpr>(expr)) {
+			auto av = std::make_shared<Array>();
+			av->reserve(arr->elements.size());
+			for (auto& e : arr->elements) av->push_back(evaluate(e));
+			return Value{std::shared_ptr<Array>(av)};
+		}
+		if (auto obj = std::dynamic_pointer_cast<ObjectLiteralExpr>(expr)) {
+			auto ov = std::make_shared<Object>();
+			for (auto& p : obj->props) (*ov)[p.first] = evaluate(p.second);
+			return Value{std::shared_ptr<Object>(ov)};
+		}
+		if (auto gp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+			Value o = evaluate(gp->object);
+			return getProperty(o, gp->name);
+		}
+		if (auto ix = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+			Value o = evaluate(ix->object);
+			Value k = evaluate(ix->index);
+			return getIndex(o, k);
+		}
+		if (auto sp = std::dynamic_pointer_cast<SetPropExpr>(expr)) {
+			Value& ov = ensureObjectRef(sp->object);
+			Value v = evaluate(sp->value);
+			auto& obj = *std::get<std::shared_ptr<Object>>(ov);
+			obj[sp->name] = v;
+			return v;
+		}
+		if (auto si = std::dynamic_pointer_cast<SetIndexExpr>(expr)) {
+			Value& ov = evaluateRef(si->object);
+			Value idxv = evaluate(si->index);
+			Value v = evaluate(si->value);
+			if (auto parr = std::get_if<std::shared_ptr<Array>>(&ov)) {
+				size_t idx = indexFromValue(idxv);
+				auto& vec = **parr;
+				if (idx >= vec.size()) throw std::runtime_error("Array index out of range");
+				vec[idx] = v; return v;
+			}
+			if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
+				std::string key = keyFromValue(idxv);
+				(**pobj)[key] = v; return v;
+			}
+			throw std::runtime_error("Index assignment on non-array/object");
 		}
 		if (auto un = std::dynamic_pointer_cast<UnaryExpr>(expr)) {
 			Value r = evaluate(un->right);
@@ -561,13 +716,30 @@ public:
 			return;
 		}
 		if (auto w = std::dynamic_pointer_cast<WhileStmt>(stmt)) {
-			while (isTruthy(evaluate(w->cond))) execute(w->body);
+			while (isTruthy(evaluate(w->cond))) {
+				try { execute(w->body); }
+				catch (const ContinueSignal&) { /* continue loop */ }
+				catch (const BreakSignal&) { break; }
+			}
+			return;
+		}
+		if (auto f = std::dynamic_pointer_cast<ForStmt>(stmt)) {
+			if (f->init) execute(f->init);
+			for (;;) {
+				if (f->cond) { if (!isTruthy(evaluate(f->cond))) break; }
+				try { execute(f->body); }
+				catch (const ContinueSignal&) { /* go to post */ }
+				catch (const BreakSignal&) { break; }
+				if (f->post) (void)evaluate(f->post);
+			}
 			return;
 		}
 		if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
 			Value val = r->value ? evaluate(r->value) : Value{std::monostate{}};
 			throw ReturnSignal{val};
 		}
+		if (std::dynamic_pointer_cast<BreakStmt>(stmt)) { throw BreakSignal{}; }
+		if (std::dynamic_pointer_cast<ContinueStmt>(stmt)) { throw ContinueSignal{}; }
 		if (auto f = std::dynamic_pointer_cast<FunctionStmt>(stmt)) {
 			auto fn = std::make_shared<Function>();
 			fn->params = f->params;
@@ -600,7 +772,7 @@ private:
 
 	static bool isEqual(const Value& a, const Value& b) {
 		if (a.index() != b.index()) {
-			// number vs string etc.: try JS-like weak equality? Here keep strict by type.
+			//keep strict by type. NOT ALLOWED JAVA-SCRIPT STYLE TYPE COERCION
 			return false;
 		}
 		if (std::holds_alternative<std::monostate>(a)) return true;
@@ -608,7 +780,10 @@ private:
 		if (auto sa = std::get_if<std::string>(&a)) return *sa == std::get<std::string>(b);
 		if (auto ba = std::get_if<bool>(&a)) return *ba == std::get<bool>(b);
 		// functions compare by pointer
-		return std::get<std::shared_ptr<Function>>(a).get() == std::get<std::shared_ptr<Function>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<Function>>(a)) return std::get<std::shared_ptr<Function>>(a).get() == std::get<std::shared_ptr<Function>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<Array>>(a)) return std::get<std::shared_ptr<Array>>(a).get() == std::get<std::shared_ptr<Array>>(b).get();
+		if (std::holds_alternative<std::shared_ptr<Object>>(a)) return std::get<std::shared_ptr<Object>>(a).get() == std::get<std::shared_ptr<Object>>(b).get();
+		return false;
 	}
 
 	static double getNumber(const Value& v, const char* where) {
@@ -618,6 +793,59 @@ private:
 		}
 		throw std::runtime_error(std::string("Expected number at ") + where);
 	}
+
+	// Helpers for object/array access
+	static Value getProperty(const Value& obj, const std::string& name) {
+		if (auto po = std::get_if<std::shared_ptr<Object>>(&obj)) {
+			auto it = (**po).find(name);
+			if (it == (**po).end()) return Value{std::monostate{}}; // undefined -> null
+			return it->second;
+		}
+		throw std::runtime_error("Property access on non-object");
+	}
+	static Value getIndex(const Value& obj, const Value& key) {
+		if (auto parr = std::get_if<std::shared_ptr<Array>>(&obj)) {
+			size_t idx = indexFromValue(key);
+			auto& vec = **parr;
+			if (idx >= vec.size()) throw std::runtime_error("Array index out of range");
+			return vec[idx];
+		}
+		if (auto pobj = std::get_if<std::shared_ptr<Object>>(&obj)) {
+			std::string k = keyFromValue(key);
+			auto it = (**pobj).find(k);
+			if (it == (**pobj).end()) return Value{std::monostate{}};
+			return it->second;
+		}
+		throw std::runtime_error("Index access on non-array/object");
+	}
+	static size_t indexFromValue(const Value& v) {
+		double d = getNumber(v, "array index");
+		if (d < 0) throw std::runtime_error("Negative index");
+		size_t idx = static_cast<size_t>(d);
+		if (static_cast<double>(idx) != d) throw std::runtime_error("Index must be integer");
+		return idx;
+	}
+	static std::string keyFromValue(const Value& v) {
+		if (auto s = std::get_if<std::string>(&v)) return *s;
+		if (auto n = std::get_if<double>(&v)) { std::ostringstream oss; oss << *n; return oss.str(); }
+		if (auto b = std::get_if<bool>(&v)) return *b ? "true" : "false";
+		if (std::holds_alternative<std::monostate>(v)) return "null";
+		throw std::runtime_error("Unsupported key type");
+	}
+
+	// Evaluate to a reference-like concept: here we just ensure object is object and return Value& by storing object evaluated value back? For simplicity, we evaluate then require it's object/array and return a reference to the held shared_ptr so we can mutate its contents.
+	Value& ensureObjectRef(const ExprPtr& objExpr) {
+		tempStorage = evaluate(objExpr);
+		if (!std::holds_alternative<std::shared_ptr<Object>>(tempStorage)) throw std::runtime_error("Target is not an object");
+		return tempStorage;
+	}
+	Value& evaluateRef(const ExprPtr& objExpr) {
+		tempStorage = evaluate(objExpr);
+		if (std::holds_alternative<std::shared_ptr<Array>>(tempStorage) || std::holds_alternative<std::shared_ptr<Object>>(tempStorage)) return tempStorage;
+		throw std::runtime_error("Target is not indexable");
+	}
+
+	Value tempStorage; // used to hold temporary during Set* operations
 
 	void installBuiltins() {
 		auto printFn = std::make_shared<Function>();
