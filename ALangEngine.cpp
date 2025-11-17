@@ -310,8 +310,9 @@ struct PromiseState {
 	Value result{std::monostate{}};
 	// 简单事件循环指针，用于 then/catch 回调分发
 	void* loopPtr{nullptr};
-	std::vector<std::shared_ptr<Function>> thenCallbacks;
-	std::vector<std::shared_ptr<Function>> catchCallbacks;
+	// then/catch 回调以及链式的下一 Promise
+	std::vector<std::pair<std::shared_ptr<Function>, std::shared_ptr<PromiseState>>> thenCallbacks;
+	std::vector<std::pair<std::shared_ptr<Function>, std::shared_ptr<PromiseState>>> catchCallbacks;
 };
 
 // ----------- AST Nodes -----------
@@ -332,6 +333,7 @@ struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; SetIn
 struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
 struct ObjectLiteralExpr : Expr { std::vector<std::pair<std::string, ExprPtr>> props; explicit ObjectLiteralExpr(std::vector<std::pair<std::string, ExprPtr>> p): props(std::move(p)){} };
 struct AwaitExpr : Expr { ExprPtr expr; explicit AwaitExpr(ExprPtr e): expr(std::move(e)){} };
+struct FunctionExpr : Expr { std::vector<std::string> params; StmtPtr body; explicit FunctionExpr(std::vector<std::string> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
 
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
@@ -657,6 +659,22 @@ private:
 	}
 
 	ExprPtr primary() {
+		// 支持匿名函数：[](x, y){ ... }
+		if (check(TokenType::LeftBracket)) {
+			// 仅当模式为 [] ( 开始时，识别为 lambda；否则按数组字面量
+			if (current + 2 < tokens.size() && tokens[current].type == TokenType::LeftBracket && tokens[current+1].type == TokenType::RightBracket && tokens[current+2].type == TokenType::LeftParen) {
+				advance(); // [
+				advance(); // ]
+				advance(); // (
+				std::vector<std::string> params;
+				if (!check(TokenType::RightParen)) {
+					do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+				}
+				consume(TokenType::RightParen, "Expect ')' after lambda parameters");
+				auto body = statement();
+				return std::make_shared<FunctionExpr>(params, body);
+			}
+		}
 		if (match({TokenType::New})) {
 			auto nameTok = consume(TokenType::Identifier, "Expect class name after 'new'");
 			consume(TokenType::LeftParen, "Expect '('");
@@ -861,6 +879,7 @@ public:
 			std::vector<Value> args; args.reserve(call->args.size());
 			for (auto& a : call->args) args.push_back(evaluate(a));
 			if (fn->isBuiltin) return fn->builtin(args, fn->closure);
+			// 支持调用由 FunctionExpr 生成的普通函数
 			if (fn->isAsync) {
 				// 返回一个 Promise，并将函数体作为任务投递
 				auto p = std::make_shared<PromiseState>();
@@ -879,25 +898,7 @@ public:
 					} catch (const ReturnSignal& rs) {
 						ret = rs.value;
 					}
-					{
-						std::lock_guard<std::mutex> lk(p->mtx);
-						p->settled = true; p->rejected = false; p->result = ret;
-					}
-					p->cv.notify_all();
-					// 分发 then
-					if (p->loopPtr) {
-						for (auto& cb : p->thenCallbacks) {
-							auto self = this;
-							postTask([cb, p, self]{
-								std::vector<Value> a{ p->result };
-								if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
-									auto local2 = std::make_shared<Environment>(cb->closure);
-									if (a.size() != cb->params.size()) local2->define(cb->params.size() ? cb->params[0] : "_", p->result); else { for (size_t i=0;i<a.size();++i) local2->define(cb->params[i], a[i]); }
-									try { self->executeBlock(cb->body, local2); } catch (const ReturnSignal&) {}
-								}
-							});
-						}
-					}
+					settlePromise(p, false, ret);
 				});
 				return Value{p};
 			}
@@ -908,6 +909,13 @@ public:
 				executeBlock(fn->body, local);
 			} catch (const ReturnSignal& rs) { return rs.value; }
 			return Value{std::monostate{}};
+		}
+		if (auto fexpr = std::dynamic_pointer_cast<FunctionExpr>(expr)) {
+			auto fn = std::make_shared<Function>();
+			fn->params = fexpr->params;
+			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(fexpr->body)) fn->body = innerBlock->statements; else fn->body = { fexpr->body };
+			fn->closure = env; // 关闭环境捕获
+			return Value{fn};
 		}
 		if (auto nw = std::dynamic_pointer_cast<NewExpr>(expr)) {
 			Value cal = evaluate(nw->callee);
@@ -1073,6 +1081,112 @@ private:
 	std::condition_variable loopCv;
 	std::queue<std::function<void()>> taskQueue;
 
+	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) {
+		{
+			std::lock_guard<std::mutex> lk(p->mtx);
+			p->settled = true; p->rejected = rejected; p->result = result;
+		}
+		p->cv.notify_all();
+		dispatchPromiseCallbacks(p);
+	}
+
+	void dispatchPromiseCallbacks(std::shared_ptr<PromiseState> p) {
+		if (!p->loopPtr) return;
+		auto loop = static_cast<Interpreter*>(p->loopPtr);
+		if (!p->rejected) {
+			for (auto& pair : p->thenCallbacks) {
+				auto cb = pair.first; auto nextP = pair.second;
+				loop->postTask([this, cb, nextP, p]() {
+					try {
+						std::vector<Value> a{ p->result };
+						Value ret{std::monostate{}};
+						if (cb->isBuiltin) ret = cb->builtin(a, cb->closure);
+						else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (a.size() != cb->params.size()) {
+								if (!cb->params.empty()) local->define(cb->params[0], p->result);
+							} else {
+								for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+							}
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
+						}
+						if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
+							auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
+							// 链接：inner 完成后再 settle nextP
+							{
+								std::lock_guard<std::mutex> lk(inner->mtx);
+								inner->loopPtr = this;
+								inner->thenCallbacks.push_back({ makeResolver(), nextP });
+								inner->catchCallbacks.push_back({ makeRejecter(), nextP });
+							}
+							if (inner->settled) dispatchPromiseCallbacks(inner);
+						} else {
+							settlePromise(nextP, false, ret);
+						}
+					} catch (const std::exception& ex) {
+						settlePromise(nextP, true, Value{ std::string(ex.what()) });
+					}
+				});
+			}
+		} else {
+			for (auto& pair : p->catchCallbacks) {
+				auto cb = pair.first; auto nextP = pair.second;
+				loop->postTask([this, cb, nextP, p]() {
+					try {
+						std::vector<Value> a{ p->result };
+						Value ret{std::monostate{}};
+						if (cb->isBuiltin) ret = cb->builtin(a, cb->closure);
+						else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (a.size() != cb->params.size()) {
+								if (!cb->params.empty()) local->define(cb->params[0], p->result);
+							} else {
+								for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+							}
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
+						}
+						if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
+							auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
+							{
+								std::lock_guard<std::mutex> lk(inner->mtx);
+								inner->loopPtr = this;
+								inner->thenCallbacks.push_back({ makeResolver(), nextP });
+								inner->catchCallbacks.push_back({ makeRejecter(), nextP });
+							}
+							if (inner->settled) dispatchPromiseCallbacks(inner);
+						} else {
+							settlePromise(nextP, false, ret);
+						}
+					} catch (const std::exception& ex) {
+						settlePromise(nextP, true, Value{ std::string(ex.what()) });
+					}
+				});
+			}
+		}
+	}
+
+	// 生成一个 resolver/rejecter 回调函数（形如 x => x 或 e => throw e）用于链接
+	std::shared_ptr<Function> makeResolver() {
+		auto f = std::make_shared<Function>();
+		f->isBuiltin = true;
+		f->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.empty()) return Value{std::monostate{}};
+			return args[0];
+		};
+		return f;
+	}
+	std::shared_ptr<Function> makeRejecter() {
+		auto f = std::make_shared<Function>();
+		f->isBuiltin = true;
+		f->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			// 通过抛异常传播拒绝
+			if (args.empty()) throw std::runtime_error("Promise rejected");
+			std::string msg = toString(args[0]);
+			throw std::runtime_error(msg);
+		};
+		return f;
+	}
+
 	static bool isEqual(const Value& a, const Value& b) {
 		if (a.index() != b.index()) {
 			//keep strict by type. NOT ALLOWED JAVA-SCRIPT STYLE TYPE COERCION
@@ -1170,28 +1284,45 @@ private:
 				fn->builtin = [ps](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("then expects a function");
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					auto nextP = std::make_shared<PromiseState>();
+					nextP->loopPtr = ps->loopPtr;
 					{
 						std::lock_guard<std::mutex> lk(ps->mtx);
 						if (ps->settled && !ps->rejected) {
-							// settled: 立即调度
 							if (ps->loopPtr) {
 								auto loop = static_cast<Interpreter*>(ps->loopPtr);
-								loop->postTask([ps, cb, loop]{
-									std::vector<Value> a{ ps->result };
-									if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
-										auto local = std::make_shared<Environment>(cb->closure);
-										if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", ps->result); else {
-											for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+								loop->postTask([ps, cb, nextP, loop]{
+									try {
+										std::vector<Value> a{ ps->result };
+										Value ret{std::monostate{}};
+										if (cb->isBuiltin) ret = cb->builtin(a, cb->closure); else {
+											auto local = std::make_shared<Environment>(cb->closure);
+											if (a.size() != cb->params.size()) { if (!cb->params.empty()) local->define(cb->params[0], ps->result); }
+											else { for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]); }
+											try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
 										}
-										try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
+										if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
+											auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
+											{
+												std::lock_guard<std::mutex> lk2(inner->mtx);
+												inner->loopPtr = loop;
+												inner->thenCallbacks.push_back({ loop->makeResolver(), nextP });
+												inner->catchCallbacks.push_back({ loop->makeRejecter(), nextP });
+											}
+											if (inner->settled) loop->dispatchPromiseCallbacks(inner);
+										} else {
+											loop->settlePromise(nextP, false, ret);
+										}
+									} catch (const std::exception& ex) {
+										loop->settlePromise(nextP, true, Value{ std::string(ex.what()) });
 									}
 								});
 							}
 						} else {
-							ps->thenCallbacks.push_back(cb);
+							ps->thenCallbacks.push_back({ cb, nextP });
 						}
 					}
-					return Value{ps};
+					return Value{nextP};
 				};
 				return fn;
 			}
@@ -1201,27 +1332,45 @@ private:
 				fn->builtin = [ps](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("catch expects a function");
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					auto nextP = std::make_shared<PromiseState>();
+					nextP->loopPtr = ps->loopPtr;
 					{
 						std::lock_guard<std::mutex> lk(ps->mtx);
 						if (ps->settled && ps->rejected) {
 							if (ps->loopPtr) {
 								auto loop = static_cast<Interpreter*>(ps->loopPtr);
-								loop->postTask([ps, cb, loop]{
-									std::vector<Value> a{ ps->result };
-									if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
-										auto local = std::make_shared<Environment>(cb->closure);
-										if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", ps->result); else {
-											for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
+								loop->postTask([ps, cb, nextP, loop]{
+									try {
+										std::vector<Value> a{ ps->result };
+										Value ret{std::monostate{}};
+										if (cb->isBuiltin) ret = cb->builtin(a, cb->closure); else {
+											auto local = std::make_shared<Environment>(cb->closure);
+											if (a.size() != cb->params.size()) { if (!cb->params.empty()) local->define(cb->params[0], ps->result); }
+											else { for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]); }
+											try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
 										}
-										try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
+										if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
+											auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
+											{
+												std::lock_guard<std::mutex> lk2(inner->mtx);
+												inner->loopPtr = loop;
+												inner->thenCallbacks.push_back({ loop->makeResolver(), nextP });
+												inner->catchCallbacks.push_back({ loop->makeRejecter(), nextP });
+											}
+											if (inner->settled) loop->dispatchPromiseCallbacks(inner);
+										} else {
+											loop->settlePromise(nextP, false, ret);
+										}
+									} catch (const std::exception& ex) {
+										loop->settlePromise(nextP, true, Value{ std::string(ex.what()) });
 									}
 								});
 							}
 						} else {
-							ps->catchCallbacks.push_back(cb);
+							ps->catchCallbacks.push_back({ cb, nextP });
 						}
 					}
-					return Value{ps};
+					return Value{nextP};
 				};
 				return fn;
 			}
@@ -1331,33 +1480,39 @@ private:
 			p->loopPtr = this; // 指向当前解释器以便派发回调
 			std::thread([p, this, ms]{
 				std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(ms)));
-				{
-					std::lock_guard<std::mutex> lk(p->mtx);
-					p->settled = true;
-					p->rejected = false;
-					p->result = Value{std::monostate{}};
-				}
-				p->cv.notify_all();
-				// 分发 then 回调
-				if (p->loopPtr) {
-					auto loop = static_cast<Interpreter*>(p->loopPtr);
-					for (auto& cb : p->thenCallbacks) {
-						loop->postTask([cb, p, loop]{
-							std::vector<Value> a{ p->result };
-							if (cb->isBuiltin) (void)cb->builtin(a, cb->closure); else {
-								auto local = std::make_shared<Environment>(cb->closure);
-								if (a.size() != cb->params.size()) local->define(cb->params.size() ? cb->params[0] : "_", p->result); else {
-									for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
-								}
-								try { loop->executeBlock(cb->body, local); } catch (const ReturnSignal&) {}
-							}
-						});
-					}
-				}
+				settlePromise(p, false, Value{std::monostate{}});
 			}).detach();
 			return Value{p};
 		};
 		globals->define("sleep", sleepFn);
+
+		// Promise 对象：resolve / reject
+		auto promiseObj = std::make_shared<Object>();
+		// Promise.resolve(value)
+		{
+			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+			fn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+				Value v = args.empty() ? Value{std::monostate{}} : args[0];
+				settlePromise(p, false, v);
+				return Value{p};
+			};
+			(*promiseObj)["resolve"] = fn;
+		}
+		// Promise.reject(reason)
+		{
+			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+			fn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+				Value v = args.empty() ? Value{std::string("Promise rejected")} : args[0];
+				settlePromise(p, true, v);
+				return Value{p};
+			};
+			(*promiseObj)["reject"] = fn;
+		}
+		globals->define("Promise", Value{promiseObj});
 	}
 };
 

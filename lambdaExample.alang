@@ -1,0 +1,11 @@
+// Lambda 使用示例
+// 当前版本暂不支持匿名函数表达式（lambda）。
+// 下面先给出“目标语法”的注释示例，以及“等价可运行”的命名函数写法。
+
+// 目标语法（已支持匿名函数表达式）：
+let inc = [](x){ return x + 1; };
+Promise.resolve(1)
+  .then([](v){ return v + 10; })
+  .then([](v){ print("v2", v); return v; })
+  .catch([](e){ print("err", e); return 0; });
+print("lambda-like examples scheduled; drain event loop on host.");
