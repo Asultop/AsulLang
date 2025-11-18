@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Continue'; 
 if (Get-Command g++ -ErrorAction SilentlyContinue) { 
     Write-Host "Using g++ to build...";
-    g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang.exe;
+    g++ -std=c++17 -fexec-charset=GBK -O2 Main.cpp ALangEngine.cpp -o alang.exe ;
 } elseif (Get-Command cl -ErrorAction SilentlyContinue) { 
     Write-Host "Using cl to build...";
     cl /std:c++17 /O2 Main.cpp ALangEngine.cpp /Fe:alang.exe; 

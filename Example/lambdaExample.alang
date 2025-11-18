@@ -1,19 +1,41 @@
-// Lambda（匿名函数表达式）示例：从简单到链式复杂
-println("== Lambda examples ==");
-let inc = [](x){ return x + 1; };
+// Lambda（匿名函数表达式）示例：从简单用法到链式复杂场景
+println("== Lambda 示例 ==");
+let inc = [](x) {
+    return x + 1;
+};
 println("inc(11): ${inc(11)}");
 
-// 简单：单次 then 回调
+// 简单场景：单次 then 回调（Lambda 作为回调函数）
 Promise.resolve(1)
-  .then([](v){ return v + 10; })
-  .then([](v){ println("v2 ${v}"); return v; })
-  .catch([](e){ println("err ${e}"); return 0; });
+    .then([](v) {
+        return v + 10;
+    })
+    .then([](v) {
+        println("v2 ${v}");
+        return v;
+    })
+    .catch([](e) {
+        println("err ${e}");
+        return 0;
+    });
 
-// 复杂：内联 lambda 立即调用 + then 链 + catch
-let r = ([](a,b){ return a*b + 3; })(2, 6);
-println("inline IIFE result: ${r}");
+// 复杂场景：内联 Lambda 立即调用 + then 链式调用 + 异常捕获
+let r = ([](a, b) {
+    return a * b + 3;
+})(2, 6);
+println("内联立即调用函数结果: ${r}");
+
 Promise.resolve(r)
-  .then([](v){ return v * 2; })
-  .then([](v){ println("v3 ${v}"); return v - 5; })
-  .catch([](e){ println("err chain ${e}"); return 0; });
-println("(host should drain event loop to see outputs)");
+    .then([](v) {
+        return v * 2;
+    })
+    .then([](v) {
+        println("v3 ${v}");
+        return v - 5;
+    })
+    .catch([](e) {
+        println("链式调用异常 ${e}");
+        return 0;
+    });
+
+println("(宿主需排空事件循环以查看异步输出结果)");

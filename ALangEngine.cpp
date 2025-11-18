@@ -26,8 +26,118 @@
 #include <fstream>
 #include <optional>
 #include "AsulFormatString/AsulFormatString.h"
+#include <locale>
+#include <clocale>
+#include <codecvt>
 
 namespace {
+
+// Encoding helpers: validate UTF-8 and convert between multibyte locale encodings and UTF-8
+
+static bool isValidUtf8(const std::string& s) {
+	const unsigned char* bytes = (const unsigned char*)s.c_str();
+	size_t len = s.size();
+	size_t i = 0;
+	while (i < len) {
+		unsigned char c = bytes[i];
+		if (c <= 0x7F) { i++; continue; }
+		if ((c >> 5) == 0x6) {
+			// 2-byte
+			if (i + 1 >= len) return false;
+			if ((bytes[i+1] & 0xC0) != 0x80) return false;
+			i += 2; continue;
+		}
+		if ((c >> 4) == 0xE) {
+			// 3-byte
+			if (i + 2 >= len) return false;
+			if ((bytes[i+1] & 0xC0) != 0x80) return false;
+			if ((bytes[i+2] & 0xC0) != 0x80) return false;
+			i += 3; continue;
+		}
+		if ((c >> 3) == 0x1E) {
+			// 4-byte
+			if (i + 3 >= len) return false;
+			if ((bytes[i+1] & 0xC0) != 0x80) return false;
+			if ((bytes[i+2] & 0xC0) != 0x80) return false;
+			if ((bytes[i+3] & 0xC0) != 0x80) return false;
+			i += 4; continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+static std::string convertMbToUtf8UsingLocale(const std::string& in, const char* localeName) {
+	// Temporarily set C locale LC_CTYPE
+	const char* prev = std::setlocale(LC_CTYPE, nullptr);
+	std::string prevStr = prev ? prev : "";
+	if (!std::setlocale(LC_CTYPE, localeName)) return std::string();
+	// mbsrtowcs to wide
+	const char* src = in.c_str();
+	mbstate_t st{};
+	size_t wlen = mbsrtowcs(nullptr, &src, 0, &st);
+	if (wlen == (size_t)-1) { std::setlocale(LC_CTYPE, prevStr.c_str()); return std::string(); }
+	std::wstring w; w.resize(wlen);
+	src = in.c_str();
+	mbstate_t st2{};
+	mbsrtowcs(&w[0], &src, wlen+1, &st2);
+	// convert wstring to utf8
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+	std::string out = conv.to_bytes(w);
+	std::setlocale(LC_CTYPE, prevStr.c_str());
+	return out;
+}
+
+static std::string tryConvertLocaleToUtf8(const std::string& in) {
+	if (in.empty()) return in;
+	if (isValidUtf8(in)) return in;
+	// try a set of likely locale names (order: empty(default), common GBK names)
+	const char* candidates[] = {"", "zh_CN.GBK", "zh_CN.936", ".936", "Chinese_China.936", "chs", nullptr};
+	for (int i = 0; candidates[i]; ++i) {
+		std::string out = convertMbToUtf8UsingLocale(in, candidates[i]);
+		if (!out.empty() && isValidUtf8(out)) return out;
+	}
+	// fallback: return input unchanged
+	return in;
+}
+
+static std::string convertUtf8ToLocalMb(const std::string& utf8) {
+	if (utf8.empty()) return utf8;
+	// convert utf8 -> wide
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+	std::wstring w;
+	try { w = conv.from_bytes(utf8); } catch(...) { return utf8; }
+	// narrow using current C locale (LC_CTYPE)
+	const wchar_t* pw = w.c_str();
+	mbstate_t st{};
+	size_t len = wcsrtombs(nullptr, &pw, 0, &st);
+	if (len == (size_t)-1) return utf8;
+	std::string out; out.resize(len);
+	pw = w.c_str();
+	mbstate_t st2{};
+	wcsrtombs(&out[0], &pw, len+1, &st2);
+	return out;
+}
+
+static bool consolePrefersUtf8() {
+	// Check environment variables commonly used to indicate UTF-8 locales
+	const char* names[] = {"LC_ALL", "LC_CTYPE", "LANG", nullptr};
+	for (int i = 0; names[i]; ++i) {
+		const char* v = std::getenv(names[i]);
+		if (!v) continue;
+		std::string s = v;
+		for (auto &c : s) c = static_cast<char>(std::toupper((unsigned char)c));
+		if (s.find("UTF-8") != std::string::npos || s.find("UTF8") != std::string::npos) return true;
+		if (s.find("UTF8") != std::string::npos) return true;
+	}
+	// On Windows, developers often use chcp 65001 to enable UTF-8; detect TERM/WT_SESSION as hints
+	const char* term = std::getenv("TERM");
+	if (term && std::string(term).find("xterm") != std::string::npos) return true;
+	const char* wt = std::getenv("WT_SESSION");
+	if (wt) return true;
+	return false;
+}
+
 
 // ----------- Lexer -----------
 
@@ -36,6 +146,7 @@ enum class TokenType {
 	LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
 	Comma, Semicolon, Colon, Dot,
 	Plus, Minus, Star, Slash, Percent,
+	Tilde,
 	Bang, Equal, Less, Greater,
 	// One or two char
 	BangEqual, EqualEqual, LessEqual, GreaterEqual, LeftArrow,
@@ -244,6 +355,7 @@ private:
 		start = current;
 		char c = advance();
 		switch (c) {
+		case '~': add(TokenType::Tilde); break;
 		case '(': add(TokenType::LeftParen); break;
 		case ')': add(TokenType::RightParen); break;
 		case '{': add(TokenType::LeftBrace); break;
@@ -479,16 +591,18 @@ struct ObjectLiteralExpr : Expr {
 	explicit ObjectLiteralExpr(std::vector<Prop> p): props(std::move(p)){}
 };
 struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
-struct FunctionExpr : Expr { std::vector<std::string> params; StmtPtr body; explicit FunctionExpr(std::vector<std::string> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
+struct Param { std::string name; std::optional<std::string> type; Param(std::string n, std::optional<std::string> t = std::nullopt): name(std::move(n)), type(std::move(t)) {} };
+
+struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; explicit FunctionExpr(std::vector<Param> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
 
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
-struct VarDecl : Stmt { std::string name; ExprPtr init; VarDecl(std::string n, ExprPtr i): name(std::move(n)), init(std::move(i)){} };
+struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr init; VarDecl(std::string n, std::optional<std::string> t, ExprPtr i): name(std::move(n)), type(std::move(t)), init(std::move(i)){} };
 struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
 struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; bool isAsync{false}; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b, bool a=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a){} };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; };
@@ -656,7 +770,11 @@ private:
 			consume(TokenType::LeftParen, "Expect '('");
 			// 跳过参数列表
 			if (!check(TokenType::RightParen)) {
-				do { (void)consume(TokenType::Identifier, "Expect parameter name"); } while (match({TokenType::Comma}));
+				do {
+					(void)consume(TokenType::Identifier, "Expect parameter name");
+					// optional type annotation after parameter name
+					if (match({TokenType::Colon})) { (void)consume(TokenType::Identifier, "Expect type name after ':'"); }
+				} while (match({TokenType::Comma}));
 			}
 			consume(TokenType::RightParen, "Expect ')'");
 			consume(TokenType::Semicolon, "Expect ';' after interface method signature");
@@ -689,13 +807,21 @@ private:
 				(void)match({TokenType::Function});
 				auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 				consume(TokenType::LeftParen, "Expect '('");
-				std::vector<std::string> params;
+				std::vector<Param> params;
 				if (!check(TokenType::RightParen)) {
-					do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+					do {
+						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+						std::optional<std::string> ptype = std::nullopt;
+						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+						params.emplace_back(pname, ptype);
+					} while (match({TokenType::Comma}));
 				}
 				consume(TokenType::RightParen, "Expect ')'");
+				// optional return type
+				std::optional<std::string> retType = std::nullopt;
+				if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 				auto body = statement();
-				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
+				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
 			}
 			consume(TokenType::RightBrace, "Expect '}' after class body");
 			// 可选分号：class Name { ... };
@@ -715,13 +841,21 @@ private:
 			(void)match({TokenType::Function});
 			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 			consume(TokenType::LeftParen, "Expect '('");
-			std::vector<std::string> params;
+			std::vector<Param> params;
 			if (!check(TokenType::RightParen)) {
-				do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+				do {
+					auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+					std::optional<std::string> ptype = std::nullopt;
+					if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+					params.emplace_back(pname, ptype);
+				} while (match({TokenType::Comma}));
 			}
 			consume(TokenType::RightParen, "Expect ')'");
+			// optional return type
+			std::optional<std::string> retType = std::nullopt;
+			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 			auto body = statement();
-			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
+			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after extension body");
 		// 可选分号：extends Name { ... };
@@ -732,23 +866,31 @@ private:
 	StmtPtr functionDecl(bool isAsync) {
 		auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
-		std::vector<std::string> params;
+		std::vector<Param> params;
 		if (!check(TokenType::RightParen)) {
 			do {
-				params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme);
+				auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+				std::optional<std::string> ptype = std::nullopt;
+				if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+				params.emplace_back(pname, ptype);
 			} while (match({TokenType::Comma}));
 		}
 		consume(TokenType::RightParen, "Expect ')'");
+		// optional return type
+		std::optional<std::string> retType = std::nullopt;
+		if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 		auto body = statement();
-		return std::make_shared<FunctionStmt>(name, params, body, isAsync);
+		return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType);
 	}
 
 	StmtPtr varDeclaration() {
 		auto name = consume(TokenType::Identifier, "Expect variable name").lexeme;
+		std::optional<std::string> type = std::nullopt;
+		if (match({TokenType::Colon})) type = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
 		ExprPtr init;
 		if (match({TokenType::Equal})) init = expression();
 		consume(TokenType::Semicolon, "Expect ';' after variable declaration");
-		return std::make_shared<VarDecl>(name, init);
+		return std::make_shared<VarDecl>(name, type, init);
 	}
 
 	StmtPtr statement() {
@@ -893,7 +1035,7 @@ private:
 
 	ExprPtr comparison() {
 		auto expr = term();
-		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual})) {
+		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual, TokenType::Tilde})) {
 			Token op = previous();
 			auto right = term();
 			expr = std::make_shared<BinaryExpr>(expr, op, right);
@@ -980,9 +1122,14 @@ private:
 				advance(); // [
 				advance(); // ]
 				advance(); // (
-				std::vector<std::string> params;
+				std::vector<Param> params;
 				if (!check(TokenType::RightParen)) {
-					do { params.push_back(consume(TokenType::Identifier, "Expect parameter name").lexeme); } while (match({TokenType::Comma}));
+					do {
+						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+						std::optional<std::string> ptype = std::nullopt;
+						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+						params.emplace_back(pname, ptype);
+					} while (match({TokenType::Comma}));
 				}
 				consume(TokenType::RightParen, "Expect ')' after lambda parameters");
 				auto body = statement();
@@ -1187,6 +1334,8 @@ public:
 			if (!in) throw std::runtime_error(std::string("Cannot open import file: ") + key);
 			std::ostringstream ss; ss << in.rdbuf();
 			std::string code = ss.str();
+			// If file isn't valid UTF-8, try converting from common local encodings (e.g., GBK)
+			code = tryConvertLocaleToUtf8(code);
 			ctxCode = code;
 
 			// push import chain
@@ -1375,6 +1524,34 @@ public:
 				case TokenType::LessEqual: return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
 				case TokenType::EqualEqual: return Value{isEqual(l, r)};
 				case TokenType::BangEqual: return Value{!isEqual(l, r)};
+				case TokenType::Tilde: {
+					// Adapter/interface matching: right operand must be a ClassInfo (interface or class descriptor)
+					if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(r)) {
+						throw std::runtime_error("'~' right-hand side must be an interface/class descriptor");
+					}
+					auto target = std::get<std::shared_ptr<ClassInfo>>(r);
+					// If left is an instance, check its class (and supers) for presence of all required methods
+					if (auto pins = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (!*pins || !(*pins)->klass) return Value{false};
+						for (auto &kv : target->methods) {
+							const std::string& mname = kv.first;
+							auto f = findMethod((*pins)->klass, mname);
+							if (!f) return Value{false};
+						}
+						return Value{true};
+					}
+					// If left is a plain object, check it has the named properties (functions or values)
+					if (auto po = std::get_if<std::shared_ptr<Object>>(&l)) {
+						if (!*po) return Value{false};
+						for (auto &kv : target->methods) {
+							const std::string& mname = kv.first;
+							if ((**po).find(mname) == (**po).end()) return Value{false};
+						}
+						return Value{true};
+					}
+					// Otherwise, no match
+					return Value{false};
+				}
 				default: break;
 				}
 			} catch (const std::exception& ex) {
@@ -1478,7 +1655,9 @@ public:
 		}
 		if (auto fexpr = std::dynamic_pointer_cast<FunctionExpr>(expr)) {
 			auto fn = std::make_shared<Function>();
-			fn->params = fexpr->params;
+			// extract parameter names (ignore optional types at runtime)
+			fn->params.clear();
+			for (auto &p : fexpr->params) fn->params.push_back(p.name);
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(fexpr->body)) fn->body = innerBlock->statements; else fn->body = { fexpr->body };
 			fn->closure = env; // 关闭环境捕获
 			return Value{fn};
@@ -1617,7 +1796,9 @@ public:
 		if (std::dynamic_pointer_cast<ContinueStmt>(stmt)) { throw ContinueSignal{}; }
 		if (auto f = std::dynamic_pointer_cast<FunctionStmt>(stmt)) {
 			auto fn = std::make_shared<Function>();
-			fn->params = f->params;
+			// extract parameter names (ignore optional types at runtime)
+			fn->params.clear();
+			for (auto &p : f->params) fn->params.push_back(p.name);
 			// 将语句体包装成块：函数体如果是单个语句，处理成block便于复用
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(f->body)) fn->body = innerBlock->statements;
 			else fn->body = { f->body };
@@ -1638,7 +1819,7 @@ public:
 			// methods
 			for (auto& m : c->methods) {
 				auto fn = std::make_shared<Function>();
-				fn->params = m->params;
+				fn->params.clear(); for (auto &p : m->params) fn->params.push_back(p.name);
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				klass->methods[m->name] = fn;
@@ -1652,7 +1833,7 @@ public:
 			auto klass = std::get<std::shared_ptr<ClassInfo>>(cv);
 			for (auto& m : ext->methods) {
 				auto fn = std::make_shared<Function>();
-				fn->params = m->params;
+				fn->params.clear(); for (auto &p : m->params) fn->params.push_back(p.name);
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
@@ -2111,7 +2292,11 @@ public:
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
 		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			for (auto& v : args) std::cout << toString(v);
+			for (auto& v : args) {
+				std::string s = toString(v);
+				std::string out = convertUtf8ToLocalMb(s);
+				std::cout << out;
+			}
 			// no newline, no separators (flat output)
 			return Value{std::monostate{}};
 		};
@@ -2120,7 +2305,11 @@ public:
 		auto printlnFn = std::make_shared<Function>();
 		printlnFn->isBuiltin = true;
 		printlnFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			for (auto& v : args) std::cout << toString(v);
+			for (auto& v : args) {
+				std::string s = toString(v);
+				std::string out = convertUtf8ToLocalMb(s);
+				std::cout << out;
+			}
 			std::cout << std::endl;
 			return Value{std::monostate{}};
 		};

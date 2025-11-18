@@ -1,19 +1,30 @@
-// 内置函数与方法：len / push 简明示例
-println("== Builtins: len / push ==");
+// 内置函数与方法：len（长度计算）/ push（数组添加）简明示例
+println("== 内置功能：len / push ==");
+
+// 字符串：len 函数与 len 方法两种调用方式（结果一致）
 let s = "hello";
-println("len(s): ${len(s)} | s.len(): ${s.len()}");
+println("字符串长度：len(s): ${len(s)} | s.len(): ${s.len()}");
 
-let a = [1,2,3];
-println("len(a): ${len(a)} | a.len(): ${a.len()} | a: ${a}");
+// 数组：len 长度计算 + push 元素添加（两种调用形式）
+let a = [1, 2, 3];
+println("数组初始状态：len(a): ${len(a)} | a.len(): ${a.len()} | 数组内容: ${a}");
+
+// 方式1：数组实例方法 push（添加单个元素）
 a.push(4);
-println("after push(4): len=${len(a)} | a: ${a}");
+println("调用 a.push(4) 后：长度=${len(a)} | 数组内容: ${a}");
+
+// 方式2：全局内置函数 push（支持添加多个元素）
 push(a, 4, 5);
-println("after push(a,4,5): len=${len(a)} | a: ${a}");
+println("调用 push(a,4,5) 后：长度=${len(a)} | 数组内容: ${a}");
 
+// 对象：len 函数计算对象的属性个数
 let o = { x: 1, y: 2 };
-println("len(o): ${len(o)} | o: ${o}");
+println("对象属性个数：len(o): ${len(o)} | 对象内容: ${o}");
 
-// 复杂：字符串/数组/对象混合
-let mix = { s: s, arr: a, o: o };
-println("mix sizes => s:${len(mix.s)}, arr:${len(mix.arr)}, o:${len(mix.o)}");
-
+// 复杂场景：字符串/数组/对象混合结构的长度计算
+let mix = {
+    s: s,    // 嵌套字符串
+    arr: a,  // 嵌套数组（已添加多个元素）
+    o: o     // 嵌套对象
+};
+println("混合结构各成员长度 => 字符串:${len(mix.s)}, 数组:${len(mix.arr)}, 对象:${len(mix.o)}");

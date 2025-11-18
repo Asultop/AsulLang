@@ -1,39 +1,51 @@
-// 异常：throw / try...catch 与 Promise/await 行为
-println("== throw / try-catch ==");
+// 异常处理：throw / try...catch 与 Promise/await 联动行为
+println("== 基础异常：throw / try-catch ==");
 try {
-	throw "bad";
-	println("unreached");
-} catch(e) {
-	println("caught:", e);
+    throw "错误信息：bad";
+    println("此语句不会执行（抛出异常后跳过）");
+} catch (e) {
+    println("捕获到异常:", e);
 }
 
-println("== throw object ==");
+println("== 抛出对象类型异常 ==");
 try {
-	throw {code: 123, msg: "x"};
-} catch(e) {
-	println("obj:", e);
+    throw { code: 123, msg: "自定义错误信息 x" };
+} catch (e) {
+    println("捕获到对象异常:", e);
 }
 
-println("== await reject -> catch inside async ==");
+println("== await 拒绝（reject）-> async 函数内 catch 捕获 ==");
 async function demo1() {
-	try {
-		await Promise.reject("oops");
-		println("unreached in demo1");
-	} catch(e) {
-		println("demo1 caught:", e);
-	}
-	return 42;
+    try {
+        await Promise.reject("错误信息：oops");
+        println("demo1 中此语句不会执行");
+    } catch (e) {
+        println("demo1 捕获到异常:", e);
+    }
+    return 42;
 }
-demo1().then([](v){ println("demo1 ret:", v); });
+demo1().then([](v) {
+    println("demo1 返回值:", v);
+});
 
-println("== then throw -> chain catch ==");
+println("== then 回调中抛出异常 -> 链式 catch 捕获 ==");
 Promise.resolve(1)
-	.then([](v){ println("then v:", v); throw "fail at then"; })
-	.catch([](e){ println("chain caught:", e); return 0; })
-	.then([](v){ println("after catch:", v); });
+    .then([](v) {
+        println("then 回调接收值:", v);
+        throw "then 回调中抛出异常：fail at then";
+    })
+    .catch([](e) {
+        println("链式捕获到异常:", e);
+        return 0;
+    })
+    .then([](v) {
+        println("捕获异常后继续执行:", v);
+    });
 
-println("== go swallow exception ==");
-function boom(){ throw "boom"; }
+println("== go 语句会吞掉异常（不影响主线程） ==");
+function boom() {
+    throw "错误信息：boom";
+}
 go boom();
 
-println("done; drain event loop in host");
+println("执行完成；宿主需排空事件循环以查看异步输出");

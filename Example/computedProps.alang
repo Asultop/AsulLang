@@ -1,31 +1,35 @@
-// 计算属性名示例：从基本到复杂
-println("== Computed Property Names ==");
+// 计算属性名示例：从基础用法到复杂场景
+println("== 计算属性名 ==");
 let key = "dyn";
 let o = {
-    [key]: 1, 
-    ["x"]: 2, 
-    y: 3 
+    [key]: 1,          // 变量作为属性名
+    ["x"]: 2,          // 字符串字面量作为属性名（等同于 x: 2，演示语法一致性）
+    y: 3               // 常规字面量属性名（作为对比）
 };
-println("o:\n o.dyn: ${o.dyn}\n o.x: ${o.x}\n o.y: ${o.y}");
+println("对象 o:\n o.dyn: ${o.dyn}\n o.x: ${o.x}\n o.y: ${o.y}");
 
-// 复杂：计算得到的键，作为对象属性名
-function f(a,b){ 
-    return a + b; 
+// 复杂场景：通过函数计算得到属性名
+function f(a, b) {
+    return a + b;
 }
-let k2 = f("a", "b"); // "ab"
-let k3 = f(1, 3); // 4
-let o2 = { 
-    [k2]: 10,
-    [k3]: k3 * 2
+let k2 = f("a", "b");  // 计算结果：字符串 "ab"
+let k3 = f(1, 3);      // 计算结果：数字 4
+let o2 = {
+    [k2]: 10,           // 函数计算的字符串作为属性名
+    [k3]: k3 * 2        // 函数计算的数字作为属性名，属性值也依赖计算
 };
 println("o2.ab:\t${o2.ab}");
-println("o2.4: \t${o2[4]}");
+println("o2.4: \t${o2[4]}");  // 数字属性名需通过下标语法访问
 
-// 终极：表达式键 + 嵌套对象
+// 终极场景：条件表达式动态生成属性名 + 嵌套对象结构
 let flag = true;
-let key3 = "on"; 
-if (!flag) { key3 = "off"; }
-let o3 = { 
-    [key3]: { inner: 7 } 
+let key3 = "on";
+if (!flag) {
+    key3 = "off";       // 根据条件动态切换属性名
+}
+let o3 = {
+    [key3]: {           // 条件计算的属性名，对应的值是嵌套对象
+        inner: 7
+    }
 };
 println("o3.on.inner: ${o3.on.inner}");

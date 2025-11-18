@@ -3,11 +3,15 @@
 println("after empties");
 
 class A {
-  function ping() { println("A.ping"); }
+    function ping() {
+        println("A.ping");
+    }
 }; // 类块后的可选分号
 
 extends A {
-  function pong() { println("A.pong"); }
+    function pong() {
+        println("A.pong");
+    }
 }; // extends 块后的可选分号
 
 let a = new A();

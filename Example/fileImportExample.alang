@@ -2,9 +2,9 @@
 // 基目录：主脚本目录（由宿主设置）
 
 import (
-  "./Module/modA" 
-  "./Module/modB"
-); // 后缀 .alang 可省略
+    "./Module/modA",  // 后缀 .alang 可省略
+    "./Module/modB"
+);
 
 println("A:", A, ", B:", B);
 let n1 = greetA("Asul");

@@ -1,0 +1,37 @@
+// Example: type annotations (optional) and '~' adapter/interface match
+
+// Define an interface with a method 'obj'
+interface objInter {
+    function obj();
+};
+
+// A class that implements objInter
+class Derived <- objInter {
+    function obj() {
+        println("Derived.obj called");
+    }
+};
+
+// A function that accepts a value annotated with type and returns annotated type
+function doWork(v: objInter) : None {
+    if (v ~ objInter) {
+        // safe to call obj()
+        v.obj();
+    } else {
+        println("v does not implement objInter");
+    }
+    return null; // None/null compatible
+}
+
+// Variable with optional type annotation
+let m_int : Int = 32;
+println("m_int:", m_int);
+
+let d = new Derived();
+doWork(d);
+
+// Also demonstrate plain object matching: object with method 'obj'
+let o = { obj: function() { println("o.obj called"); } };
+if (o ~ objInter) {
+    o.obj();
+}
