@@ -1,0 +1,19 @@
+println("=== interface & dispatch ===");
+
+interface Inter { 
+  function ping(a); 
+};
+
+class Base {
+  function ping(a) { println("Base.ping", a); }
+}
+
+class D <- (Base, Inter) {
+  function pong() { println("D.pong"); }
+}
+
+let d = new D();
+d.ping(7); // dynamic dispatch to Base.ping
+d.pong();
+
+println("done");

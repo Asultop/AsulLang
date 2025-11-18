@@ -1,0 +1,14 @@
+println("=== computed property names ===");
+let key = "dyn";
+let o = { [key]: 1, ["x"]: 2, y: 3 };
+println(o["dyn"]); // 1
+println(o.x);       // 2
+println(o.y);       // 3
+
+println("=== computed complex key ===");
+function f(a,b){ return a + b; }
+let k2 = f("a", "b"); // "ab"
+let o2 = { [k2]: 10 };
+println(o2["ab"]); // 10
+
+println("done");

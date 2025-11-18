@@ -13,6 +13,8 @@
 - 类系统：`class` 定义、`new` 实例化、构造器 `constructor`、多继承 `class A <- (B, C)`、扩展已有类 `extends Name { ... }`
 - 匿名函数（lambda）：`[](x, y){ ... }`，可直接作为回调传入
 - 异步模型：`await`、`async function`、事件循环（任务队列）、`go` 语句、Promise.then/catch 链式（返回新 Promise）、`Promise.resolve/reject`
+- 计算属性名：对象字面量支持 `{ [expr]: value }`
+- 接口：`interface Name { function sig(...); }`，可被 `class X <- (Base, Name)` 继承用于动态派发
 
 ## 快速开始
 
@@ -38,6 +40,10 @@ cl /std:c++17 /O2 Main.cpp ALangEngine.cpp /Fe:alang.exe
 .
 \alang.exe .\lambdaExample.alang
 .
+.
+\alang.exe .\Example\computedProps.alang
+.
+\alang.exe .\Example\interfaceExample.alang
 \alang.exe .\Example\builtins_test.alang
 ```
 
@@ -68,6 +74,18 @@ let obj = { a: 1, b: "hi" };
 println(obj.a);         // => 1
 obj["c"] = 7;
 println(obj);           // => {c: 7, b: hi, a: 1} （键顺序未定义）
+```
+
+## 计算属性名
+
+对象字面量支持计算属性名（方括号内为任意表达式，值将转为字符串用作键）：
+
+```js
+let key = "dyn";
+let o = { [key]: 1, ["x"]: 2, y: 3 };
+println(o["dyn"]); // 1
+println(o.x);       // 2
+println(o.y);       // 3
 ```
 
 ## for/break/continue
@@ -213,6 +231,27 @@ println(d.twice());   // 22
 ```
 
 方法解析顺序：实例字段 → 本类方法 → 依声明顺序线性查找父类方法。
+
+## 接口（interface）与动态派发
+
+- 声明：
+	- `interface Name;`
+	- `interface Name { function ping(a); function pong(); }`（仅签名，分号结尾）
+- 使用：可被类以多继承方式继承，如 `class D <- (Base, Name) { ... }`；接口本身不提供实现，但参与类型结构与方法查找。
+
+示例：
+
+```js
+interface Inter { function ping(a); };
+
+class Base { function ping(a) { println("Base.ping", a); } }
+
+class D <- (Base, Inter) { function pong() { println("D.pong"); } }
+
+let d = new D();
+d.ping(7); // 动态派发到 Base.ping
+d.pong();
+```
 
 ## 宿主原生类注册（C++）
 

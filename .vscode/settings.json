@@ -4,6 +4,7 @@
         "functional": "cpp",
         "xstring": "cpp",
         "variant": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "memory": "cpp"
     }
 }

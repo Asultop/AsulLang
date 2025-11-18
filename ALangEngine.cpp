@@ -36,7 +36,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface,
 	EndOfFile
 };
 
@@ -110,6 +110,7 @@ private:
 			{"async", TokenType::Async},
 			{"go", TokenType::Go},
 			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
+			{"interface", TokenType::Interface},
 		};
 		auto it = keywords.find(text);
 		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line});
@@ -332,7 +333,11 @@ struct IndexExpr : Expr { ExprPtr object; ExprPtr index; IndexExpr(ExprPtr o, Ex
 struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; SetPropExpr(ExprPtr o, std::string n, ExprPtr v): object(std::move(o)), name(std::move(n)), value(std::move(v)){} };
 struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v): object(std::move(o)), index(std::move(i)), value(std::move(v)){} };
 struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
-struct ObjectLiteralExpr : Expr { std::vector<std::pair<std::string, ExprPtr>> props; explicit ObjectLiteralExpr(std::vector<std::pair<std::string, ExprPtr>> p): props(std::move(p)){} };
+struct ObjectLiteralExpr : Expr {
+	struct Prop { bool computed; std::string name; ExprPtr keyExpr; ExprPtr value; };
+	std::vector<Prop> props;
+	explicit ObjectLiteralExpr(std::vector<Prop> p): props(std::move(p)){}
+};
 struct AwaitExpr : Expr { ExprPtr expr; explicit AwaitExpr(ExprPtr e): expr(std::move(e)){} };
 struct FunctionExpr : Expr { std::vector<std::string> params; StmtPtr body; explicit FunctionExpr(std::vector<std::string> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
 
@@ -346,6 +351,7 @@ struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, Exp
 struct FunctionStmt : Stmt { std::string name; std::vector<std::string> params; StmtPtr body; bool isAsync{false}; FunctionStmt(std::string n, std::vector<std::string> p, StmtPtr b, bool a=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
+struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; };
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
@@ -387,8 +393,33 @@ private:
 		if (match({TokenType::Function})) return functionDecl(false);
 		if (match({TokenType::Class})) return classDeclaration();
 		if (match({TokenType::Extends})) return extendsDeclaration();
+		if (match({TokenType::Interface})) return interfaceDeclaration();
 		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration();
 		return statement();
+	}
+	StmtPtr interfaceDeclaration() {
+		// 语法：interface Name ; | interface Name { function sig(...); ... }
+		auto nameTok = consume(TokenType::Identifier, "Expect interface name");
+		auto st = std::make_shared<InterfaceStmt>(); st->name = nameTok.lexeme;
+		if (match({TokenType::Semicolon})) return st;
+		consume(TokenType::LeftBrace, "Expect '{' before interface body");
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			(void)match({TokenType::Async}); // 忽略 async 关键字
+			(void)match({TokenType::Function});
+			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+			consume(TokenType::LeftParen, "Expect '('");
+			// 跳过参数列表
+			if (!check(TokenType::RightParen)) {
+				do { (void)consume(TokenType::Identifier, "Expect parameter name"); } while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightParen, "Expect ')'");
+			consume(TokenType::Semicolon, "Expect ';' after interface method signature");
+			st->methodNames.push_back(mname);
+		}
+		consume(TokenType::RightBrace, "Expect '}' after interface body");
+		// 允许可选分号：`interface Name { ... };`
+		(void)match({TokenType::Semicolon});
+		return st;
 	}
 
 	StmtPtr classDeclaration() {
@@ -717,16 +748,20 @@ private:
 			return std::make_shared<ArrayLiteralExpr>(elems);
 		}
 		if (match({TokenType::LeftBrace})) {
-			std::vector<std::pair<std::string, ExprPtr>> props;
+			std::vector<ObjectLiteralExpr::Prop> props;
 			if (!check(TokenType::RightBrace)) {
 				do {
-					std::string key;
-					if (match({TokenType::Identifier})) key = previous().lexeme;
-					else if (match({TokenType::String})) key = previous().lexeme;
+					ObjectLiteralExpr::Prop p{};
+					if (match({TokenType::Identifier})) { p.computed = false; p.name = previous().lexeme; }
+					else if (match({TokenType::String})) { p.computed = false; p.name = previous().lexeme; }
+					else if (match({TokenType::LeftBracket})) {
+						p.computed = true; p.keyExpr = expression();
+						consume(TokenType::RightBracket, "Expect ']' after computed key");
+					}
 					else throw std::runtime_error("Expect property name in object literal");
 					consume(TokenType::Colon, "Expect ':' after property name");
-					auto val = expression();
-					props.emplace_back(std::move(key), val);
+					p.value = expression();
+					props.push_back(std::move(p));
 				} while (match({TokenType::Comma}));
 			}
 			consume(TokenType::RightBrace, "Expect '}' after object literal");
@@ -794,7 +829,16 @@ public:
 		}
 		if (auto obj = std::dynamic_pointer_cast<ObjectLiteralExpr>(expr)) {
 			auto ov = std::make_shared<Object>();
-			for (auto& p : obj->props) (*ov)[p.first] = evaluate(p.second);
+			for (auto& pr : obj->props) {
+				std::string key;
+				if (pr.computed) {
+					Value kv = evaluate(pr.keyExpr);
+					key = keyFromValue(kv);
+				} else {
+					key = pr.name;
+				}
+				(*ov)[key] = evaluate(pr.value);
+			}
 			return Value{std::shared_ptr<Object>(ov)};
 		}
 		if (auto gp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
@@ -1073,6 +1117,19 @@ public:
 				fn->isAsync = m->isAsync;
 				klass->methods[m->name] = fn; // 覆盖或新增
 			}
+			return;
+		}
+		if (auto itf = std::dynamic_pointer_cast<InterfaceStmt>(stmt)) {
+			// 将 interface 作为空方法集合的 ClassInfo 注入环境，可作为多继承的父类使用
+			auto klass = std::make_shared<ClassInfo>();
+			klass->name = itf->name;
+			// 可选：记录方法名（不作校验）
+			for (auto& mn : itf->methodNames) {
+				if (klass->methods.find(mn) == klass->methods.end()) {
+					klass->methods[mn] = nullptr; // 占位
+				}
+			}
+			env->define(itf->name, klass);
 			return;
 		}
 		if (auto go = std::dynamic_pointer_cast<GoStmt>(stmt)) {
