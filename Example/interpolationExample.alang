@@ -9,5 +9,6 @@ println("${a}");
 // 前后有文本
 println("A:${a}B");
 
+println("A:${ {k: a}.k }");
 // 注意：对象字面量放在插值中可能与外层大括号冲突，建议写到变量后再插值
 // 例如：let obj = { k: a, y: 2 }; println("obj:${obj.k}");
