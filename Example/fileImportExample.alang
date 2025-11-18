@@ -2,8 +2,8 @@
 // Base dir: main script directory (set by host)
 
 import (
-  "modA" 
-  "modB"
+  "./Module/modA" 
+  "./Module/modB"
 ); // suffix .alang is optional
 
 println("A:", A, ", B:", B);

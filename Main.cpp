@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
 	// 配置错误配色：标题红色，代码行浅灰，插入符红色
 	engine.setErrorColorMap({
 		{"header", "RED"},
-		{"code", "LIGHT_GRAY"},
+		{"code", "DARK_GRAY"},
 		{"caret", "RED"},
 		{"token", "RED"},
 		{"lineLabel", "YELLOW"},

@@ -43,6 +43,14 @@ public:
 
     // 运行事件循环直到空闲（处理 then/catch、go 任务）
     void runEventLoopUntilIdle();
+
+    // --- Host registration APIs ---
+    // 设置全局变量（支持: null/number/string/bool）
+    void setGlobal(const std::string& name, const NativeValue& value);
+    // 注册全局函数（C++ 实现的内建函数）
+    void registerFunction(const std::string& name, NativeFunc func);
+    // 注册接口：仅声明方法名集合（无实现，作为多继承父类占位）
+    void registerInterface(const std::string& name, const std::vector<std::string>& methodNames);
 private:
     struct Impl;
     Impl* impl; // PImpl以隐藏实现细节，减少头文件依赖

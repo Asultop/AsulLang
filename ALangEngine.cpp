@@ -432,6 +432,9 @@ struct ImportStmt : Stmt {
 		// File import: when isFile == true, use filePath and ignore packageName/symbol
 		bool isFile{false};
 		std::string filePath; // may be relative or absolute; .alang suffix may be omitted
+		int line{0};
+		int column{1};
+		int length{1};
 	};
 	std::vector<Entry> entries;
 };
@@ -500,18 +503,19 @@ private:
 		auto imp = std::make_shared<ImportStmt>();
 		if (isFrom) {
 			// from Package import name | from Package import (name1 name2 ...)
-			auto pkg = consume(TokenType::Identifier, "Expect package name after 'from'").lexeme;
+			auto pkgTok = consume(TokenType::Identifier, "Expect package name after 'from'");
+			auto pkg = pkgTok.lexeme;
 			consume(TokenType::Import, "Expect 'import' after package name");
 			if (match({TokenType::LeftParen})) {
 				while (!check(TokenType::RightParen) && !isAtEnd()) {
-					auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-					ImportStmt::Entry e; e.packageName = pkg; e.symbol = name; e.isFile = false; imp->entries.push_back(e);
+					auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length; imp->entries.push_back(e);
 					(void)match({TokenType::Comma});
 				}
 				consume(TokenType::RightParen, "Expect ')' after import list");
 			} else {
-				auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-				ImportStmt::Entry e; e.packageName = pkg; e.symbol = name; e.isFile = false; imp->entries.push_back(e);
+				auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+				ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length; imp->entries.push_back(e);
 			}
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
@@ -524,12 +528,13 @@ private:
 				if (match({TokenType::String})) {
 					// file import entry from string literal
 					Token t = previous();
-					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; imp->entries.push_back(e);
+					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
 				} else {
-					auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
+					auto pkgTok = consume(TokenType::Identifier, "Expect package name");
+					auto pkg = pkgTok.lexeme;
 					consume(TokenType::Dot, "Expect '.' after package name");
-					auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-					ImportStmt::Entry e; e.packageName = pkg; e.symbol = sym; e.isFile = false; imp->entries.push_back(e);
+					auto symTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
 				}
 				(void)match({TokenType::Comma});
 			}
@@ -540,21 +545,23 @@ private:
 		// Support: import "file";  OR keep existing package import forms
 		if (match({TokenType::String})) {
 			Token t = previous();
-			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; imp->entries.push_back(e);
+			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
-		auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
+		auto pkgTok = consume(TokenType::Identifier, "Expect package name");
+		auto pkg = pkgTok.lexeme;
 		consume(TokenType::Dot, "Expect '.' after package name");
 		if (match({TokenType::Star})) {
-			ImportStmt::Entry e; e.packageName = pkg; e.symbol = std::string("*"); e.isFile = false; imp->entries.push_back(e);
+			Token starTok = previous();
+			ImportStmt::Entry e; e.packageName = pkg; e.symbol = std::string("*"); e.isFile = false; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
 		consume(TokenType::LeftParen, "Expect '(' after package '.' for symbol list");
 		while (!check(TokenType::RightParen) && !isAtEnd()) {
-			auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-			ImportStmt::Entry e; e.packageName = pkg; e.symbol = sym; e.isFile = false; imp->entries.push_back(e);
+			auto symTok = consume(TokenType::Identifier, "Expect symbol name");
+			ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
 			(void)match({TokenType::Comma});
 		}
 		consume(TokenType::RightParen, "Expect ')' after symbol list");
@@ -1068,6 +1075,8 @@ public:
 
 	// Import external file: resolve path, read, parse and execute in isolated env, then merge symbols
 	void importFilePath(const std::string& rawPath) {
+		// capture context for error pretty-printing + import chain
+		std::string ctxCode; std::string ctxFile;
 		try {
 			namespace fs = std::filesystem;
 			fs::path p(rawPath);
@@ -1095,6 +1104,7 @@ public:
 				throw std::runtime_error(std::string("Import file not found: ") + rawPath);
 			}
 			std::string key = finalPath.string();
+			ctxFile = key;
 			if (importedFiles.find(key) != importedFiles.end()) return; // already imported
 
 			// Read file content
@@ -1102,6 +1112,11 @@ public:
 			if (!in) throw std::runtime_error(std::string("Cannot open import file: ") + key);
 			std::ostringstream ss; ss << in.rdbuf();
 			std::string code = ss.str();
+			ctxCode = code;
+
+			// push import chain
+			importStack.push_back(key);
+			struct ImportGuard { std::vector<std::string>& st; ~ImportGuard(){ st.pop_back(); } } guard{importStack};
 
 			// Lex/parse
 			Lexer lx(code);
@@ -1123,8 +1138,23 @@ public:
 			// Mark imported
 			importedFiles.insert(key);
 		} catch (const ExceptionSignal& ex) {
-			// rethrow as std::exception so it can be surfaced with caret by caller
-			throw std::runtime_error(toString(ex.value));
+			// Record error source for upper-level pretty printing
+			lastErrorSource = ctxCode; lastErrorFilename = ctxFile;
+			// attach import chain
+			std::ostringstream oss; oss << toString(ex.value);
+			if (!importStack.empty()) {
+				oss << " | import chain: ";
+				for (size_t i=0;i<importStack.size();++i) { if (i) oss << " -> "; oss << importStack[i]; }
+			}
+			throw std::runtime_error(oss.str());
+		} catch (const std::exception& ex) {
+			lastErrorSource = ctxCode; lastErrorFilename = ctxFile;
+			std::ostringstream oss; oss << ex.what();
+			if (!importStack.empty()) {
+				oss << " | import chain: ";
+				for (size_t i=0;i<importStack.size();++i) { if (i) oss << " -> "; oss << importStack[i]; }
+			}
+			throw std::runtime_error(oss.str());
 		}
 	}
 
@@ -1294,7 +1324,18 @@ public:
 			return p->result;
 		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
-			Value cal = evaluate(call->callee);
+			// derive callee name for stack trace
+			auto deriveName = [&](const ExprPtr& e)->std::string{
+				if (auto v = std::dynamic_pointer_cast<VariableExpr>(e)) return v->name;
+				if (auto gp = std::dynamic_pointer_cast<GetPropExpr>(e)) return gp->name;
+				return std::string("call");
+			};
+			std::string calleeDesc = deriveName(call->callee);
+			// push call frame
+			callStack.push_back(calleeDesc + std::string(" at line ") + std::to_string(call->line));
+			struct FrameGuard { std::vector<std::string>& st; ~FrameGuard(){ st.pop_back(); } } _fg{callStack};
+			try {
+				Value cal = evaluate(call->callee);
 			if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) {
 				std::ostringstream oss; oss << "Can only call functions at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
 			}
@@ -1346,6 +1387,19 @@ public:
 				executeBlock(fn->body, local);
 			} catch (const ReturnSignal& rs) { return rs.value; }
 			return Value{std::monostate{}};
+			} catch (const ExceptionSignal&) { throw; }
+			catch (const std::exception& ex) {
+				// Attach call stack if not present
+				std::string msg = ex.what();
+				if (msg.find("Stack:") == std::string::npos && !callStack.empty()) {
+					std::ostringstream oss; oss << msg << "\n" << "Stack:";
+					for (int i = static_cast<int>(callStack.size()) - 1; i >= 0; --i) {
+						oss << "\n  -> " << callStack[static_cast<size_t>(i)];
+					}
+					throw std::runtime_error(oss.str());
+				}
+				throw;
+			}
 		}
 		if (auto fexpr = std::dynamic_pointer_cast<FunctionExpr>(expr)) {
 			auto fn = std::make_shared<Function>();
@@ -1401,18 +1455,32 @@ public:
 		if (auto imp = std::dynamic_pointer_cast<ImportStmt>(stmt)) {
 			for (auto& ent : imp->entries) {
 				if (ent.isFile) {
-					importFilePath(ent.filePath);
+					try { importFilePath(ent.filePath); }
+					catch (const std::exception& ex) {
+						std::ostringstream oss; oss << ex.what();
+						// 附加 import 语句位置
+						oss << " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
+						throw std::runtime_error(oss.str());
+					}
 					continue;
 				}
 				auto it = packages.find(ent.packageName);
-				if (it == packages.end()) throw std::runtime_error("Unknown package: " + ent.packageName);
+				if (it == packages.end()) {
+					std::ostringstream oss; oss << "Unknown package: " << ent.packageName
+						<< " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
+					throw std::runtime_error(oss.str());
+				}
 				auto pobj = it->second;
 				if (!pobj) continue;
 				if (ent.symbol == "*") {
 					for (auto& kv : *pobj) env->define(kv.first, kv.second);
 				} else {
 					auto fit = pobj->find(ent.symbol);
-					if (fit == pobj->end()) throw std::runtime_error("Package '" + ent.packageName + "' has no symbol '" + ent.symbol + "'");
+					if (fit == pobj->end()) {
+						std::ostringstream oss; oss << "Package '" << ent.packageName << "' has no symbol '" << ent.symbol << "'"
+							<< " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
+						throw std::runtime_error(oss.str());
+					}
 					env->define(ent.symbol, fit->second);
 				}
 			}
@@ -1586,6 +1654,19 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
 	std::unordered_set<std::string> importedFiles;
     std::filesystem::path importBaseDir;
+	// Error context for pretty printing from imported files
+	std::string lastErrorSource;
+	std::string lastErrorFilename;
+	std::vector<std::string> importStack;
+	std::vector<std::string> callStack;
+
+public:
+	bool takeErrorContext(std::string& outSrc, std::string& outFile) {
+		if (lastErrorSource.empty()) return false;
+		outSrc = lastErrorSource; outFile = lastErrorFilename;
+		lastErrorSource.clear(); lastErrorFilename.clear();
+		return true;
+	}
 
 	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) {
 		{
@@ -2125,36 +2206,36 @@ static std::string sanitizeHeaderMsg(const std::string& msg) {
 	return s;
 }
 
-static void printErrorWithContext(const std::string& src, const std::string& msg) {
-	// If message already contains a caret context, just print it (with colored header).
-	if (msg.find('\n') != std::string::npos && msg.find('^') != std::string::npos) {
-		std::string head = colorize("header", std::string("[ALang Error]"), "RED");
-		std::cerr << head << " " << sanitizeHeaderMsg(msg) << std::endl;
-		return;
-	}
-	// Try to extract line and column numbers: patterns like "line N, column M" or "at line N"
+static void printErrorWithContext(const std::string& src, const std::string& msg, const std::string& filename = std::string()) {
+    // Trim message body if it already embeds a caret block; keep only first line
+    std::string cleanMsg = msg;
+    if (cleanMsg.find('\n') != std::string::npos && cleanMsg.find('^') != std::string::npos) {
+        size_t nl = cleanMsg.find('\n');
+        if (nl != std::string::npos) cleanMsg = cleanMsg.substr(0, nl);
+    }
+    // Try to extract line and column numbers: patterns like "line N, column M" or "at line N"
 	int line = -1, col = 1, width = 1;
-	size_t p = msg.find("line ");
+	size_t p = cleanMsg.find("line ");
 	if (p != std::string::npos) {
 		p += 5;
 		size_t q = p;
-		while (q < msg.size() && isdigit(static_cast<unsigned char>(msg[q]))) q++;
+		while (q < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[q]))) q++;
 		if (q > p) {
-			line = std::stoi(msg.substr(p, q - p));
-			size_t cpos = msg.find("column ", q);
+			line = std::stoi(cleanMsg.substr(p, q - p));
+			size_t cpos = cleanMsg.find("column ", q);
 			if (cpos != std::string::npos) {
 				cpos += 7;
 				size_t r = cpos;
-				while (r < msg.size() && isdigit(static_cast<unsigned char>(msg[r]))) r++;
-				if (r > cpos) col = std::stoi(msg.substr(cpos, r - cpos));
+				while (r < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[r]))) r++;
+				if (r > cpos) col = std::stoi(cleanMsg.substr(cpos, r - cpos));
 			}
 			// try parse length
-			size_t lpos = msg.find("length ", q);
+			size_t lpos = cleanMsg.find("length ", q);
 			if (lpos != std::string::npos) {
 				lpos += 7;
 				size_t r2 = lpos;
-				while (r2 < msg.size() && isdigit(static_cast<unsigned char>(msg[r2]))) r2++;
-				if (r2 > lpos) width = std::max(1, std::stoi(msg.substr(lpos, r2 - lpos)));
+				while (r2 < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[r2]))) r2++;
+				if (r2 > lpos) width = std::max(1, std::stoi(cleanMsg.substr(lpos, r2 - lpos)));
 			}
 		}
 	}
@@ -2177,20 +2258,26 @@ static void printErrorWithContext(const std::string& src, const std::string& msg
 							 + colorize("token", mid, "RED")
 							 + colorize("code", after, "LIGHT_GRAY");
 		std::string caretStr = colorize("caret", std::string(width, '^'), "RED");
-		// line prefix (colored): e.g., "line 5: "
+		// line prefix (colored): optional filename + "line N: "
+		std::string filePrefix;
+		if (!filename.empty()) {
+			filePrefix = colorize("fileLabel", std::string("file "), "YELLOW")
+					   + colorize("fileValue", filename, "CYAN")
+					   + colorize("lineLabel", std::string(", "), "YELLOW");
+		}
 		std::string linePrefix = colorize("lineLabel", std::string("line "), "YELLOW")
 							   + colorize("lineValue", std::to_string(line), "CYAN")
 							   + colorize("lineLabel", std::string(": "), "YELLOW");
 		int prefixLen = 5 + static_cast<int>(std::to_string(line).size()) + 2; // "line " + digits + ": "
-		std::cerr << head << " " << sanitizeHeaderMsg(msg) << "\n"
-				  << linePrefix << codeLine << "\n"
-				  << std::string(prefixLen + (col > 1 ? col - 1 : 0), ' ') << caretStr
+		std::cerr << head << " " << sanitizeHeaderMsg(cleanMsg) << "\n"
+				  << (filePrefix.empty() ? std::string() : filePrefix) << linePrefix << codeLine << "\n"
+				  << std::string((int)(filePrefix.empty() ? 0 : 0) + prefixLen + (col > 1 ? col - 1 : 0), ' ') << caretStr
 				  << std::endl;
 		return;
 	}
 	// Fallback
 	std::string head = colorize("header", std::string("[ALang Error]"), "RED");
-	std::cerr << head << " " << sanitizeHeaderMsg(msg) << std::endl;
+	std::cerr << head << " " << sanitizeHeaderMsg(cleanMsg) << std::endl;
 }
 
 void ALangEngine::execute(const std::string& code) {
@@ -2201,10 +2288,21 @@ void ALangEngine::execute(const std::string& code) {
 		auto stmts = ps.parse();
 		impl->interpreter.execute(stmts);
 	} catch (const ExceptionSignal& ex) {
-		printErrorWithContext(code, toString(ex.value));
+		// Prefer imported-file context if any
+		std::string altSrc, altFile;
+		if (impl->interpreter.takeErrorContext(altSrc, altFile)) {
+			printErrorWithContext(altSrc, toString(ex.value), altFile);
+		} else {
+			printErrorWithContext(code, toString(ex.value));
+		}
 		throw;
 	} catch (const std::exception& ex) {
-		printErrorWithContext(code, ex.what());
+		std::string altSrc, altFile;
+		if (impl->interpreter.takeErrorContext(altSrc, altFile)) {
+			printErrorWithContext(altSrc, ex.what(), altFile);
+		} else {
+			printErrorWithContext(code, ex.what());
+		}
 		throw; // 也可选择吞掉错误，根据需要
 	}
 }
@@ -2315,5 +2413,41 @@ void ALangEngine::runEventLoopUntilIdle() {
 
 void ALangEngine::setImportBaseDir(const std::string& dir) {
 	impl->interpreter.setImportBaseDir(dir);
+}
+
+// --- Host registration APIs ---
+void ALangEngine::setGlobal(const std::string& name, const NativeValue& value) {
+	try {
+		Value v = nativeToValue(value);
+		impl->interpreter.globalsEnv()->define(name, v);
+	} catch (const std::exception& ex) {
+		printErrorWithContext(impl->source, std::string("setGlobal: ") + ex.what());
+		throw;
+	}
+}
+
+void ALangEngine::registerFunction(const std::string& name, NativeFunc func) {
+	if (!func) return;
+	auto fn = std::make_shared<Function>();
+	fn->isBuiltin = true;
+	fn->builtin = [func](const std::vector<Value>& args, std::shared_ptr<Environment> /*clos*/) -> Value {
+		std::vector<NativeValue> na; na.reserve(args.size());
+		for (auto& a : args) na.push_back(valueToNative(a));
+		auto ret = func(na, nullptr);
+		return nativeToValue(ret);
+	};
+	impl->interpreter.globalsEnv()->define(name, fn);
+}
+
+void ALangEngine::registerInterface(const std::string& name, const std::vector<std::string>& methodNames) {
+	// Interface is represented as a ClassInfo with method placeholders
+	auto klass = std::make_shared<ClassInfo>();
+	klass->name = name;
+	for (const auto& mn : methodNames) {
+		if (klass->methods.find(mn) == klass->methods.end()) {
+			klass->methods[mn] = nullptr; // placeholder
+		}
+	}
+	impl->interpreter.globalsEnv()->define(name, klass);
 }
 
