@@ -1,0 +1,14 @@
+;;; // 多个空语句应被忽略
+println("after empties");
+
+class A {
+  function ping() { println("A.ping"); }
+}; // 类块后的可选分号
+
+extends A {
+  function pong() { println("A.pong"); }
+}; // extends 块后的可选分号
+
+let a = new A();
+a.ping();
+;; // 末尾空语句

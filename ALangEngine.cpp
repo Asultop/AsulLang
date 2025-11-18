@@ -358,6 +358,7 @@ struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; 
 struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
 struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
 struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
+struct EmptyStmt : Stmt {};
 
 // ----------- Parser -----------
 
@@ -452,6 +453,8 @@ private:
 				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
 			}
 			consume(TokenType::RightBrace, "Expect '}' after class body");
+			// 可选分号：class Name { ... };
+			(void)match({TokenType::Semicolon});
 		}
 		return cls;
 	}
@@ -476,6 +479,8 @@ private:
 			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after extension body");
+		// 可选分号：extends Name { ... };
+		(void)match({TokenType::Semicolon});
 		return ext;
 	}
 
@@ -507,6 +512,8 @@ private:
 		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::Return})) return returnStatement();
 		if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
+		// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
+		if (match({TokenType::Semicolon})) { return std::make_shared<EmptyStmt>(); }
 		if (match({TokenType::Try})) {
 			// try 后接任意语句（通常为块）
 			auto tryB = statement();
@@ -1020,6 +1027,7 @@ public:
 
 	void execute(const StmtPtr& stmt) {
 		if (auto e = std::dynamic_pointer_cast<ExprStmt>(stmt)) { (void)evaluate(e->expr); return; }
+		if (std::dynamic_pointer_cast<EmptyStmt>(stmt)) { return; }
 		if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
 			Value init = v->init ? evaluate(v->init) : Value{std::monostate{}};
 			env->define(v->name, init);

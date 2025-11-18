@@ -5,7 +5,7 @@ interface Inter {
 };
 
 class Base {
-  function ping(a) { println("Base.ping", a); }
+  function ping(a) { println("Base.ping ", a); }
 }
 
 class D <- (Base, Inter) {
