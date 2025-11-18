@@ -744,7 +744,14 @@ private:
 		if (match({TokenType::True})) return std::make_shared<LiteralExpr>(Value{true});
 		if (match({TokenType::Null})) return std::make_shared<LiteralExpr>(Value{std::monostate{}});
 		if (match({TokenType::Number})) return std::make_shared<LiteralExpr>(Value{std::stod(previous().lexeme)});
-		if (match({TokenType::String})) return std::make_shared<LiteralExpr>(Value{previous().lexeme});
+		if (match({TokenType::String})) {
+			auto tok = previous();
+			const std::string& s = tok.lexeme;
+			if (s.find("${") == std::string::npos) {
+				return std::make_shared<LiteralExpr>(Value{s});
+			}
+			return parseInterpolatedString(s, tok.line);
+		}
 		if (match({TokenType::Identifier})) return std::make_shared<VariableExpr>(previous().lexeme, previous().line);
 		if (match({TokenType::LeftBracket})) {
 			std::vector<ExprPtr> elems;
@@ -776,6 +783,64 @@ private:
 		}
 		if (match({TokenType::LeftParen})) { auto e = expression(); consume(TokenType::RightParen, "Expect ')'"); return e; }
 		throw std::runtime_error("Expect expression at line " + std::to_string(peek().line));
+	}
+
+	// --- 插值字符串支持："hello ${expr} world" -> 通过'+'串联 ---
+	ExprPtr parseInterpolatedString(const std::string& s, int line) {
+		std::vector<ExprPtr> parts;
+		std::string raw;
+		auto flushRaw = [&](){ if (!raw.empty()) { parts.push_back(std::make_shared<LiteralExpr>(Value{raw})); raw.clear(); } };
+		for (size_t i=0;i<s.size();) {
+			if (s[i] == '$' && i+1 < s.size() && s[i+1] == '{') {
+				flushRaw();
+				i += 2; // skip ${
+				int depth = 1; bool inStr = false; bool esc = false;
+				std::string exprText;
+				for (; i < s.size(); ++i) {
+					char c = s[i];
+					if (inStr) {
+						if (esc) { esc = false; exprText.push_back(c); continue; }
+						if (c == '\\') { esc = true; exprText.push_back(c); continue; }
+						if (c == '"') { inStr = false; exprText.push_back(c); continue; }
+						exprText.push_back(c); continue;
+					}
+					if (c == '"') { inStr = true; exprText.push_back(c); continue; }
+					if (c == '{') { depth++; exprText.push_back(c); continue; }
+					if (c == '}') { depth--; if (depth == 0) { ++i; break; } exprText.push_back(c); continue; }
+					exprText.push_back(c);
+				}
+				// 解析 exprText 为表达式
+				parts.push_back(parseExprSnippet(exprText));
+				continue;
+			}
+			raw.push_back(s[i]);
+			++i;
+		}
+		flushRaw();
+		if (parts.empty()) return std::make_shared<LiteralExpr>(Value{std::string("")});
+		// 折叠为加号连接
+		ExprPtr acc = parts[0];
+		for (size_t i=1;i<parts.size();++i) {
+			Token plusTok{TokenType::Plus, "+", line};
+			acc = std::make_shared<BinaryExpr>(acc, plusTok, parts[i]);
+		}
+		return acc;
+	}
+
+	ExprPtr parseExprSnippet(const std::string& code) {
+		// 将子表达式封装为一个独立的解析： (expr);
+		// 使用括号避免以 '{' 开头被误判为块语句。
+		std::string snippet = "(";
+		snippet += code;
+		snippet += ")";
+		snippet.push_back(';');
+		Lexer lx(snippet);
+		auto toks = lx.scanTokens();
+		Parser sub(toks);
+		auto stmts = sub.parse();
+		if (stmts.empty()) throw std::runtime_error("Empty interpolation expression");
+		if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmts[0])) return es->expr;
+		throw std::runtime_error("Invalid interpolation expression");
 	}
 };
 

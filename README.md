@@ -15,6 +15,7 @@
 - 异步模型：`await`、`async function`、事件循环（任务队列）、`go` 语句、Promise.then/catch 链式（返回新 Promise）、`Promise.resolve/reject`
 - 计算属性名：对象字面量支持 `{ [expr]: value }`
 - 接口：`interface Name { function sig(...); }`，可被 `class X <- (Base, Name)` 继承用于动态派发
+- 字符串插值：`"Hello ${name}, v=${expr}"`
 
 ## 快速开始
 
@@ -86,6 +87,22 @@ let o = { [key]: 1, ["x"]: 2, y: 3 };
 println(o["dyn"]); // 1
 println(o.x);       // 2
 println(o.y);       // 3
+```
+
+## 字符串插值
+
+使用 `${...}` 在字符串字面量中内联表达式，按字符串拼接语义求值：
+
+```js
+let a = 42; let b = { x: 7 };
+println("a:${a}, b.x:${b.x}, sum:${a + b.x}");
+```
+
+注意：若插值表达式以对象字面量开头，可能与外层字符串的 `{`/`}` 冲突，建议先赋值到变量再插值：
+
+```js
+let obj = { k: a, y: 2 };
+println("obj.k:${obj.k}");
 ```
 
 ## for/break/continue

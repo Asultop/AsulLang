@@ -1,0 +1,13 @@
+let a = 42;
+let b = { x: 7 };
+let s = "value a:${a}, obj.x:${b.x}, math:${a + b.x}";
+println(s);
+
+// 只有表达式
+println("${a}");
+
+// 前后有文本
+println("A:${a}B");
+
+// 注意：对象字面量放在插值中可能与外层大括号冲突，建议写到变量后再插值
+// 例如：let obj = { k: a, y: 2 }; println("obj:${obj.k}");
