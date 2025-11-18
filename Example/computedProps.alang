@@ -1,17 +1,31 @@
 // 计算属性名示例：从基本到复杂
 println("== Computed Property Names ==");
 let key = "dyn";
-let o = { [key]: 1, ["x"]: 2, y: 3 };
-println("o.dyn: ${o.dyn}, o.x: ${o.x}, o.y: ${o.y}");
+let o = {
+    [key]: 1, 
+    ["x"]: 2, 
+    y: 3 
+};
+println("o:\n o.dyn: ${o.dyn}\n o.x: ${o.x}\n o.y: ${o.y}");
 
 // 复杂：计算得到的键，作为对象属性名
-function f(a,b){ return a + b; }
+function f(a,b){ 
+    return a + b; 
+}
 let k2 = f("a", "b"); // "ab"
-let o2 = { [k2]: 10 };
-println("o2.ab: ${o2.ab}");
+let k3 = f(1, 3); // 4
+let o2 = { 
+    [k2]: 10,
+    [k3]: k3 * 2
+};
+println("o2.ab:\t${o2.ab}");
+println("o2.4: \t${o2[4]}");
 
 // 终极：表达式键 + 嵌套对象
 let flag = true;
-let key3 = "on"; if (!flag) { key3 = "off"; }
-let o3 = { [key3]: { inner: 7 } };
+let key3 = "on"; 
+if (!flag) { key3 = "off"; }
+let o3 = { 
+    [key3]: { inner: 7 } 
+};
 println("o3.on.inner: ${o3.on.inner}");

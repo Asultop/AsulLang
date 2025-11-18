@@ -98,7 +98,31 @@ private:
 		}
 		if (isAtEnd()) throw std::runtime_error("Unterminated string at line " + std::to_string(line));
 		advance(); // closing quote
-		std::string value = source.substr(start + 1, current - start - 2);
+		std::string raw = source.substr(start + 1, current - start - 2);
+		// Unescape common sequences: \n, \t, \r, \\, \", \' and \0
+		auto unescape = [](const std::string& in)->std::string{
+			std::string out; out.reserve(in.size());
+			for (size_t i=0; i<in.size(); ++i) {
+				char c = in[i];
+				if (c == '\\' && i + 1 < in.size()) {
+					char n = in[++i];
+					switch (n) {
+					case 'n': out.push_back('\n'); break;
+					case 't': out.push_back('\t'); break;
+					case 'r': out.push_back('\r'); break;
+					case '\\': out.push_back('\\'); break;
+					case '"': out.push_back('"'); break;
+					case '\'': out.push_back('\''); break;
+					case '0': out.push_back('\0'); break;
+					default: out.push_back(n); break; // unknown escapes: keep the char
+					}
+				} else {
+					out.push_back(c);
+				}
+			}
+			return out;
+		};
+		std::string value = unescape(raw);
 		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
 		int len = static_cast<int>(current - start); // include quotes
 		tokens.push_back(Token{TokenType::String, value, line, col, len});
