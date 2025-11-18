@@ -1,67 +1,60 @@
-// 示例：求和并打印
-function add(a, b) { 
-    return a + b; 
-}
-
+println("== Variables, Functions, Math ==");
+function add(a, b) { return a + b; }
 let x = 10; let y = 90;
-print("sum:", add(x, y));
+println("sum: ${add(x, y)}");
 
+println(""); println("== Loops & Conditionals ==");
 let i = 0; let acc = 0;
-let cc=9;
-while (i < 5) { 
-    acc = acc + i; i = i + 1; 
-}
-if (acc >= 10) {
-    print("acc:", acc); 
-} else {
-    print("small", acc); 
-}
-print(cc);
+while (i < 5) { acc = acc + i; i = i + 1; }
+if (acc >= 10) { println("acc: ${acc}"); } else { println("small ${acc}"); }
 
-// 数组与对象、属性访问与下标赋值
-let arr = [1, 2, 3];
-arr[1] = 42;
-print("arr:", arr);
+println(""); println("== Arrays & Objects ==");
+let arr = [1, 2, 3]; arr[1] = 42; println("arr: ${arr}");
+let obj = { a: 1, b: "hi" }; println("obj.a: ${obj.a}"); obj["c"] = 7; println("obj: ${obj}");
+let key = "dyn"; let o2 = { [key]: 1, x: 2 }; println("computed: dyn=${o2.dyn}, x=${o2.x}");
 
-let obj = { a: 1, b: "hi" };
-print("obj.a:", obj.a);
-obj["c"] = 7;
-print("obj:", obj);
-
-// for/break/continue
+println(""); println("== for / break / continue ==");
 let s = 0;
-for (let k = 0; k < 10; k = k + 1) {
-    if (k == 3) continue;
-    if (k == 8) break;
-    s = s + k;
-}
-print("sum for:", s);
+for (let k = 0; k < 10; k = k + 1) { if (k == 3) continue; if (k == 8) break; s = s + k; }
+println("sum for: ${s}");
 
-// 类与继承
-class Base {
-    function constructor(v) { this.value = v; }
-    function get() { return this.value; }
-}
-// 使用 '<-' 继承语法
-class Test <- Base {
-    function inc() { this.value = this.value + 1; }
-}
+println(""); println("== Methods: len / push ==");
+let s2 = "hello"; println("s2.len(): ${s2.len()}");
+let a2 = [1,2]; a2.push(3); println("a2: ${a2}, a2.len(): ${a2.len()}");
+
+println(""); println("== Classes, Inheritance, Extends ==");
+class Base { function constructor(v) { this.value = v; } function get() { return this.value; } }
+class Test <- Base { function inc() { this.value = this.value + 1; } }
 let t = new Test(5);
-print("t.get():", t.get());
-t.inc();
-print("t after inc:", t.get());
-print("t.value:", t.value);
+println("t.get(): ${t.get()}"); t.inc(); println("t after inc: ${t.get()}"); println("t.value: ${t.value}");
+extends Test { function twice() { this.value = this.value * 2; } }
+let t2 = new Test(10); t2.twice(); println("t2: ${t2.value}");
 
-// 方法式 len/push
-let s2 = "hello"; print("s2.len():", s2.len());
-let a2 = [1,2]; a2.push(3); print("a2:", a2, "a2.len():", a2.len());
+println(""); println("== Interface & Dynamic Dispatch ==");
+interface Inter { function ping(a); };
+class Base2 { function ping(a) { println("Base2.ping ${a}"); } }
+class D <- (Base2, Inter) { function pong() { println("D.pong"); } }
+let d = new D(); d.ping(7); d.pong();
 
-// 扩展已有类方法：extends Name { ... }
-extends Test {
-    function twice() { this.value = this.value * 2; }
-}
-let t2 = new Test(10);
-t2.twice();
-print("t2:", t2.value);
+println(""); println("== Lambdas (Function Expressions) ==");
+let triple = [](n){ return n * 3; };
+println("triple(7): ${triple(7)}");
+println("inline call: ${([](x){ return x + 5; })(10)}");
 
-print("a","b","c",123,1,796);
+println(""); println("== Exceptions: throw / try...catch ==");
+try { throw "bad"; println("unreached"); } catch(e) { println("caught: ${e}"); }
+
+println(""); println("== String Interpolation ==");
+println("A:${x}, B:${y}, add:${add(x,y)}");
+println("inline obj: ${ {k: 1, y: 2}.k }");
+
+println(""); println("== Async / Await / Promise / go ==");
+async function task(v) { println("task start ${v}"); await sleep(50); println("task done ${v}"); return v * 2; }
+function onTask(r) { println("then got: ${r}"); }
+let p = task(21); p.then(onTask).catch([](e){ println("then error: ${e}"); return 0; });
+Promise.resolve(1)
+    .then([](v){ return v + 10; })
+    .then([](v){ println("chain v2 ${v}"); return v; })
+    .catch([](e){ println("chain err ${e}"); return 0; });
+go task(5);
+println("(end of script, event loop will flush pending tasks)");

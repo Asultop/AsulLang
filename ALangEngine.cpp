@@ -14,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <iomanip>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -64,6 +65,7 @@ private:
 	size_t start{0};
 	size_t current{0};
 	int line{1};
+	size_t lineStart{0};
 
 	bool isAtEnd() const { return current >= source.size(); }
 	char advance() { return source[current++]; }
@@ -78,7 +80,7 @@ private:
 
 	void string() {
 		while (!isAtEnd() && peek() != '"') {
-			if (peek() == '\n') line++;
+			if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
 			advance();
 		}
 		if (isAtEnd()) throw std::runtime_error("Unterminated string at line " + std::to_string(line));
@@ -122,14 +124,14 @@ private:
 			char c = peek();
 			switch (c) {
 			case ' ': case '\r': case '\t': advance(); break;
-			case '\n': line++; advance(); break;
+			case '\n': line++; advance(); lineStart = current; break;
 			case '/':
 				if (peekNext() == '/') {
 					while (!isAtEnd() && peek() != '\n') advance();
 				} else if (peekNext() == '*') {
 					advance(); advance();
 					while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) {
-						if (peek() == '\n') line++;
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
 						advance();
 					}
 					if (!isAtEnd()) { advance(); advance(); }
@@ -170,14 +172,57 @@ private:
 			break;
 		}
 		case '>': add(match('=') ? TokenType::GreaterEqual : TokenType::Greater); break;
-		case '&': if (match('&')) add(TokenType::AndAnd); else throw std::runtime_error("Unexpected '&' at line " + std::to_string(line)); break;
-		case '|': if (match('|')) add(TokenType::OrOr); else throw std::runtime_error("Unexpected '|' at line " + std::to_string(line)); break;
+		case '&': if (match('&')) add(TokenType::AndAnd); else {
+			// 详细错误：包含字符、行列与上下文
+			size_t pos = current - 1;
+			size_t ls = lineStart;
+			size_t le = pos;
+			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+			std::string lineStr = source.substr(ls, le - ls);
+			size_t col = (pos >= ls ? (pos - ls + 1) : 1);
+			std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
+			std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
+				<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
+			std::ostringstream oss;
+			oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
+				<< lineStr << "\n" << caret.str();
+			throw std::runtime_error(oss.str());
+		} break;
+		case '|': if (match('|')) add(TokenType::OrOr); else {
+			size_t pos = current - 1;
+			size_t ls = lineStart;
+			size_t le = pos;
+			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+			std::string lineStr = source.substr(ls, le - ls);
+			size_t col = (pos >= ls ? (pos - ls + 1) : 1);
+			std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
+			std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
+				<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
+			std::ostringstream oss;
+			oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
+				<< lineStr << "\n" << caret.str();
+			throw std::runtime_error(oss.str());
+		} break;
 		case '/': add(TokenType::Slash); break;
 		case '"': string(); break;
 		default:
 			if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line}); }
 			else if (std::isalpha(c) || c == '_') identifier();
-			else throw std::runtime_error("Unexpected character at line " + std::to_string(line));
+			else {
+				size_t pos = current - 1;
+				size_t ls = lineStart;
+				size_t le = pos;
+				while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+				std::string lineStr = source.substr(ls, le - ls);
+				size_t col = (pos >= ls ? (pos - ls + 1) : 1);
+				std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
+				std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
+					<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
+				std::ostringstream oss;
+				oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
+					<< lineStr << "\n" << caret.str();
+				throw std::runtime_error(oss.str());
+			}
 		}
 	}
 };
