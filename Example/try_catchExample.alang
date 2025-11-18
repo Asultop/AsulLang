@@ -1,0 +1,38 @@
+println("=== throw / try-catch ===");
+try {
+	throw "bad";
+	println("unreached");
+} catch(e) {
+	println("caught:", e);
+}
+
+println("=== throw object ===");
+try {
+	throw {code: 123, msg: "x"};
+} catch(e) {
+	println("obj:", e);
+}
+
+println("=== await reject -> catch inside async ===");
+async function demo1() {
+	try {
+		await Promise.reject("oops");
+		println("unreached in demo1");
+	} catch(e) {
+		println("demo1 caught:", e);
+	}
+	return 42;
+}
+demo1().then([](v){ println("demo1 ret:", v); });
+
+println("=== then throw -> chain catch ===");
+Promise.resolve(1)
+	.then([](v){ println("then v:", v); throw "fail at then"; })
+	.catch([](e){ println("chain caught:", e); return 0; })
+	.then([](v){ println("after catch:", v); });
+
+println("=== go swallow exception ===");
+function boom(){ throw "boom"; }
+go boom();
+
+println("done; drain event loop in host");

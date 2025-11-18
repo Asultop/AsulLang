@@ -8,4 +8,6 @@ Promise.resolve(1)
   .then([](v){ return v + 10; })
   .then([](v){ print("v2", v); return v; })
   .catch([](e){ print("err", e); return 0; });
+
+print("inc:",inc(11));
 print("lambda-like examples scheduled; drain event loop on host.");

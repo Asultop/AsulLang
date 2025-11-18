@@ -1,6 +1,6 @@
-# ALang 简易 JS 解释器
+# ALang 简易解释器
 
-一个用 C++17 实现的极简 JavaScript 风格解释器，支持：
+一个用 C++17 实现的极简解释器 (ALang)，支持：
 
 - 变量声明：`let/var/const`（目前不区分可变性）
 - 基本类型：number、string、boolean、null、array、object
@@ -8,9 +8,11 @@
 - 访问与赋值：标识符、属性访问 `obj.a`、下标访问 `a[i]`，可作为赋值左值
 - 语句：表达式语句、`if/else`、`while`、`for`、`break`、`continue`、`return`、块 `{}`
 - 函数：`function name(a,b){...}`，带作用域闭包
-- 内置：`print(...)`、`len(x)`、`push(arr, ...values)`
+- 内置：`print(...)`（不换行）、`println(...)`（换行）、`len(x)`、`push(arr, ...values)`、`sleep(ms)`
 - 方法风格内置：字符串/数组/对象支持 `len()`，数组支持 `push(...)`，例如：`"abc".len()`, `[1,2].len()`, `{a:1}.len()`, `[1].push(2,3)`
 - 类系统：`class` 定义、`new` 实例化、构造器 `constructor`、多继承 `class A <- (B, C)`、扩展已有类 `extends Name { ... }`
+- 匿名函数（lambda）：`[](x, y){ ... }`，可直接作为回调传入
+- 异步模型：`await`、`async function`、事件循环（任务队列）、`go` 语句、Promise.then/catch 链式（返回新 Promise）、`Promise.resolve/reject`
 
 ## 快速开始
 
@@ -19,46 +21,53 @@
 使用 g++（或 MSVC）编译，需要 C++17：
 
 ```pwsh
-# g++ （如使用 MSYS2/MinGW 或 WSL）
-g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
+# g++（如使用 MSYS2/MinGW 或 WSL）
+g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang.exe
 
 # MSVC（开发者命令行）
-cl /std:c++17 /O2 Main.cpp ALangEngine.cpp
+cl /std:c++17 /O2 Main.cpp ALangEngine.cpp /Fe:alang.exe
 ```
 
 ### 运行
 
 ```pwsh
-# 运行内置示例
-./alang
-
 # 运行指定脚本文件
-./alang .\example.alang
+.\n+alang.exe .\Example\example.alang
+
+# 运行更多示例
+.
+\alang.exe .\lambdaExample.alang
+.
+\alang.exe .\Example\builtins_test.alang
 ```
+
+如果脚本中使用了 then/catch 或 go 等异步特性，运行后需要排空事件循环（对 CLI 版 Main.cpp，可在执行脚本后调用一次 `runEventLoopUntilIdle()`）。
 
 ## 语言子集示例
 
 ```js
-function add(a, b) { return a + b; }
-let x = 10; let y = 20;
-print("sum:", add(x, y));
+.
+\alang.exe .\Example\example.alang
+println("sum:", add(x, y));
 
-let i = 0; let acc = 0;
-while (i < 5) { acc = acc + i; i = i + 1; }
-if (acc >= 10) { print("acc:", acc); } else { print("small", acc); }
-```
+.
+\alang.exe .\lambdaExample.alang
+.
+\alang.exe .\Example\builtins_test.alang
+.
+\alang.exe .\Example\try_catchExample.alang
 
 ## 数组/对象
 
 ```js
 let arr = [1, 2, 3];
 arr[1] = 42;
-print(arr);           // => [1, 42, 3]
+println(arr);           // => [1, 42, 3]
 
 let obj = { a: 1, b: "hi" };
-print(obj.a);         // => 1
+println(obj.a);         // => 1
 obj["c"] = 7;
-print(obj);           // => {c: 7, b: hi, a: 1} （键顺序未定义）
+println(obj);           // => {c: 7, b: hi, a: 1} （键顺序未定义）
 ```
 
 ## for/break/continue
@@ -70,15 +79,17 @@ for (let k = 0; k < 10; k = k + 1) {
 	if (k == 8) break;
 	s = s + k;
 }
-print(s); // => 25
+println(s); // => 25
 ```
 
 ## 内置函数
 
-- `print(...args)`: 输出参数并换行。
+- `print(...args)`: 扁平输出（无分隔、无换行）。
+- `println(...args)`: 扁平输出并换行。
 - `len(x)`: 返回长度。
 	- string: 字符数；array: 元素个数；object: 键的数量；null: 0；其他类型报错。
 - `push(arr, ...values)`: 将一个或多个值追加到数组末尾，返回新长度。
+- `sleep(ms)`: 返回一个在 `ms` 毫秒后 resolve 的 Promise。
 
 同时支持方法风格：
 
@@ -87,6 +98,86 @@ print(s); // => 25
 [1,2,3].len();       // 3
 {a:1, b:2}.len();    // 2
 let a = [1]; a.push(2,3); // a => [1,2,3]
+```
+
+## 异步、Promise 与事件循环
+
+- 事件循环：内部维护任务队列；内置 `postTask` 调度 then/catch 与 `go` 任务。
+- `await`：阻塞当前脚本直到 Promise settle。
+- `async function f(...) { ... }`：调用返回 Promise，函数体在事件循环任务中执行。
+- `go expr;`：将表达式（通常是调用）异步投递到事件循环执行，丢弃异常。
+- Promise：支持 `then` / `catch`，返回新 Promise 的链式语义；支持 `Promise.resolve(value)` 与 `Promise.reject(reason)`。
+- 匿名函数（lambda）：`[](args){ ... }` 可直接作为 then/catch 回调。
+
+示例：
+
+```js
+// 链式 then/catch 与 lambda
+Promise.resolve(1)
+	.then([](v){ return v + 10; })
+	.then([](v){ println("v2", v); return v; })
+	.catch([](e){ println("err", e); return 0; });
+
+// async + await + sleep
+async function task(n) {
+	println("before sleep", n);
+	await sleep(100);
+	println("after sleep", n);
+	return n * 2;
+}
+
+task(5)
+	.then([](r){ println("task result:", r); return r; })
+	.catch([](e){ println("task error:", e); return 0; });
+
+// go 异步触发
+function tick(){ println("tick"); }
+go tick();
+```
+
+主程序（宿主）在执行脚本后应调用一次 `runEventLoopUntilIdle()` 来排空事件循环（CLI 示例工程已暴露该接口）。
+
+## 异常（throw / try...catch）
+
+- 抛出：`throw <value>;` 支持任意值（string/number/object 等）。
+- 捕获：`try { ... } catch(e) { ... }`，`e` 绑定为抛出的值。
+- await：等待被拒绝的 Promise 会抛出语言级异常，可被外层 `try...catch` 捕获。
+- async：函数体内未捕获的异常会使返回的 Promise 进入 reject，拒绝值为异常值。
+- then/catch：回调抛出的异常将使链上下一个 Promise 变为 reject；回调返回 Promise 将被扁平化。
+- go：`go expr;` 中抛出的异常会被吞掉，不会影响主流程（可在日志中自行扩展记录）。
+
+示例：
+
+```js
+// 1) 直接 throw + try/catch
+try {
+	throw "bad";
+	println("unreached");
+} catch(e) {
+	println("caught:", e);
+}
+
+// 2) await 拒绝被捕获
+async function task() {
+	try {
+		await Promise.reject("oops");
+		println("unreached in task");
+	} catch(e) {
+		println("task caught:", e);
+	}
+	return 42;
+}
+task().then([](v){ println("task ret:", v); });
+
+// 3) then 回调抛出异常由链式 catch 捕获
+Promise.resolve(1)
+	.then([](v){ println("v=", v); throw "fail at then"; })
+	.catch([](e){ println("chain caught:", e); return 0; })
+	.then([](v){ println("after catch:", v); });
+
+// 4) go 中的异常被吞掉
+function boom(){ throw "boom"; }
+go boom();
 ```
 
 ## 类、继承与扩展
@@ -117,8 +208,8 @@ extends Derived {
 
 let d = new Derived(10);
 d.inc();
-print(d.get());     // 11
-print(d.twice());   // 22
+println(d.get());     // 11
+println(d.twice());   // 22
 ```
 
 方法解析顺序：实例字段 → 本类方法 → 依声明顺序线性查找父类方法。
@@ -163,8 +254,8 @@ engine.registerClass(
 
 ```js
 let m = new Math();
-print("math sum 3+4:", m.sum(3,4));
-print("math abs -5:", m.abs(-5));
+println("math sum 3+4:", m.sum(3,4));
+println("math abs -5:", m.abs(-5));
 ```
 
 ## 从 C++ 调用脚本函数
@@ -184,15 +275,17 @@ if (std::holds_alternative<double>(ret)) {
 
 ## 限制
 
-- 无原型/方法调度（`arr.push` 不支持，用 `push(arr, v)`）
+- 已支持常用方法风格（如 `arr.push(...)`、`"s".len()`），但无原型链与动态派发
 - 无对象/数组字面量中的计算属性名与展开
 - 无 `for-of`/`for-in`，仅 C 风格 `for`
 - `==` 实现为严格相等（按类型）
-- 没有异常机制，仅用于函数 `return`、`break`、`continue` 的内部信号
+- 支持语言级异常（throw / try...catch），但暂不支持 finally；`go` 中异常被吞掉；宿主未提供统一日志钩子
 
 ## 结构
 
-- `ALangEngine.h/.cpp`：解释器实现（词法、语法、AST、解释执行）
-- `Main.cpp`：命令行入口
+- `ALangEngine.h/.cpp`：解释器实现（词法、语法、AST、解释执行、事件循环、Promise）
+- `Main.cpp`：命令行入口（可执行加载脚本并在末尾调用 `runEventLoopUntilIdle()`）
+
+更多示例：见 `Example/` 与 `lambdaExample.alang`。
 
 欢迎根据需要继续扩展内置函数或语法。

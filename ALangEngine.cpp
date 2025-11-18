@@ -36,7 +36,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw,
 	EndOfFile
 };
 
@@ -109,6 +109,7 @@ private:
 			{"await", TokenType::Await},
 			{"async", TokenType::Async},
 			{"go", TokenType::Go},
+			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
 		};
 		auto it = keywords.find(text);
 		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line});
@@ -319,8 +320,8 @@ struct PromiseState {
 
 struct Expr { virtual ~Expr() = default; };
 struct LiteralExpr : Expr { Value value; explicit LiteralExpr(Value v): value(std::move(v)){} };
-struct VariableExpr : Expr { std::string name; explicit VariableExpr(std::string n): name(std::move(n)){} };
-struct AssignExpr : Expr { std::string name; ExprPtr value; AssignExpr(std::string n, ExprPtr v): name(std::move(n)), value(std::move(v)){} };
+struct VariableExpr : Expr { std::string name; int line{0}; VariableExpr(std::string n, int l): name(std::move(n)), line(l){} };
+struct AssignExpr : Expr { std::string name; ExprPtr value; int line{0}; AssignExpr(std::string n, ExprPtr v, int l): name(std::move(n)), value(std::move(v)), line(l){} };
 struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r): op(std::move(o)), right(std::move(r)){} };
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
@@ -349,6 +350,8 @@ struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
 struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
+struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
+struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
 
 // ----------- Parser -----------
 
@@ -472,6 +475,17 @@ private:
 		if (match({TokenType::While})) return whileStatement();
 		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::Return})) return returnStatement();
+		if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
+		if (match({TokenType::Try})) {
+			// try 后接任意语句（通常为块）
+			auto tryB = statement();
+			consume(TokenType::Catch, "Expect 'catch' after try block");
+			consume(TokenType::LeftParen, "Expect '(' after catch");
+			auto name = consume(TokenType::Identifier, "Expect identifier in catch").lexeme;
+			consume(TokenType::RightParen, "Expect ')' after catch param");
+			auto catchB = statement();
+			return std::make_shared<TryCatchStmt>(tryB, name, catchB);
+		}
 		if (match({TokenType::Go})) { auto expr = expression(); consume(TokenType::Semicolon, "Expect ';' after go call"); return std::make_shared<GoStmt>(expr); }
 		if (match({TokenType::Break})) { consume(TokenType::Semicolon, "Expect ';' after break"); return std::make_shared<BreakStmt>(); }
 		if (match({TokenType::Continue})) { consume(TokenType::Semicolon, "Expect ';' after continue"); return std::make_shared<ContinueStmt>(); }
@@ -545,7 +559,7 @@ private:
 		if (match({TokenType::Equal})) {
 			auto value = assignment();
 			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
-				return std::make_shared<AssignExpr>(var->name, value);
+				return std::make_shared<AssignExpr>(var->name, value, var->line);
 			}
 			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
 				return std::make_shared<SetPropExpr>(getp->object, getp->name, value);
@@ -645,7 +659,12 @@ private:
 		for (;;) {
 			if (match({TokenType::LeftParen})) expr = finishCall(expr);
 			else if (match({TokenType::Dot})) {
-				auto name = consume(TokenType::Identifier, "Expect property name after '.'").lexeme;
+				std::string name;
+				if (check(TokenType::Identifier)) { name = advance().lexeme; }
+				else if (check(TokenType::Catch)) { name = advance().lexeme; /* allow .catch */ }
+				else {
+					throw std::runtime_error(std::string("[Parse] Expect property name after '.' at line ") + std::to_string(peek().line));
+				}
 				expr = std::make_shared<GetPropExpr>(expr, name);
 			}
 			else if (match({TokenType::LeftBracket})) {
@@ -681,14 +700,14 @@ private:
 			std::vector<ExprPtr> args;
 			if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma})); }
 			consume(TokenType::RightParen, "Expect ')'");
-			return std::make_shared<NewExpr>(std::make_shared<VariableExpr>(nameTok.lexeme), args);
+			return std::make_shared<NewExpr>(std::make_shared<VariableExpr>(nameTok.lexeme, nameTok.line), args);
 		}
 		if (match({TokenType::False})) return std::make_shared<LiteralExpr>(Value{false});
 		if (match({TokenType::True})) return std::make_shared<LiteralExpr>(Value{true});
 		if (match({TokenType::Null})) return std::make_shared<LiteralExpr>(Value{std::monostate{}});
 		if (match({TokenType::Number})) return std::make_shared<LiteralExpr>(Value{std::stod(previous().lexeme)});
 		if (match({TokenType::String})) return std::make_shared<LiteralExpr>(Value{previous().lexeme});
-		if (match({TokenType::Identifier})) return std::make_shared<VariableExpr>(previous().lexeme);
+		if (match({TokenType::Identifier})) return std::make_shared<VariableExpr>(previous().lexeme, previous().line);
 		if (match({TokenType::LeftBracket})) {
 			std::vector<ExprPtr> elems;
 			if (!check(TokenType::RightBracket)) {
@@ -723,6 +742,7 @@ private:
 struct ReturnSignal { Value value; };
 struct BreakSignal {};
 struct ContinueSignal {};
+struct ExceptionSignal { Value value; };
 
 class Interpreter {
 public:
@@ -754,12 +774,18 @@ public:
 
 	Value evaluate(const ExprPtr& expr) {
 		if (auto lit = std::dynamic_pointer_cast<LiteralExpr>(expr)) return lit->value;
-		if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) return env->get(var->name);
-		if (auto asg = std::dynamic_pointer_cast<AssignExpr>(expr)) {
-			Value v = evaluate(asg->value);
-			if (!env->assign(asg->name, v)) throw std::runtime_error("Undefined variable '" + asg->name + "'");
-			return v;
-		}
+			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+				try {
+					return env->get(var->name);
+				} catch (const std::exception& ex) {
+					throw std::runtime_error(std::string(ex.what()) + " at line " + std::to_string(var->line));
+				}
+			}
+			if (auto asg = std::dynamic_pointer_cast<AssignExpr>(expr)) {
+				Value v = evaluate(asg->value);
+				if (!env->assign(asg->name, v)) throw std::runtime_error("Undefined variable '" + asg->name + "' at line " + std::to_string(asg->line));
+				return v;
+			}
 		if (auto arr = std::dynamic_pointer_cast<ArrayLiteralExpr>(expr)) {
 			auto av = std::make_shared<Array>();
 			av->reserve(arr->elements.size());
@@ -869,7 +895,7 @@ public:
 			if (!p) return Value{std::monostate{}};
 			std::unique_lock<std::mutex> lk(p->mtx);
 			p->cv.wait(lk, [&]{ return p->settled; });
-			if (p->rejected) throw std::runtime_error("Promise rejected");
+			if (p->rejected) throw ExceptionSignal{ p->result };
 			return p->result;
 		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
@@ -897,6 +923,9 @@ public:
 						executeBlock(fn->body, local);
 					} catch (const ReturnSignal& rs) {
 						ret = rs.value;
+					} catch (const ExceptionSignal& ex) {
+						settlePromise(p, true, ex.value);
+						return;
 					}
 					settlePromise(p, false, ret);
 				});
@@ -979,6 +1008,25 @@ public:
 		if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
 			Value val = r->value ? evaluate(r->value) : Value{std::monostate{}};
 			throw ReturnSignal{val};
+		}
+		if (auto t = std::dynamic_pointer_cast<ThrowStmt>(stmt)) {
+			Value val = t->value ? evaluate(t->value) : Value{std::monostate{}};
+			throw ExceptionSignal{ val };
+		}
+		if (auto tc = std::dynamic_pointer_cast<TryCatchStmt>(stmt)) {
+			try {
+				execute(tc->tryBlock);
+			} catch (const ExceptionSignal& ex) {
+				auto local = std::make_shared<Environment>(env);
+				local->define(tc->catchName, ex.value);
+				// 在新的局部环境中执行 catch 块
+				if (auto block = std::dynamic_pointer_cast<BlockStmt>(tc->catchBlock)) {
+					executeBlock(block->statements, local);
+				} else {
+					executeBlock(std::vector<StmtPtr>{ tc->catchBlock }, local);
+				}
+			}
+			return;
 		}
 		if (std::dynamic_pointer_cast<BreakStmt>(stmt)) { throw BreakSignal{}; }
 		if (std::dynamic_pointer_cast<ContinueStmt>(stmt)) { throw ContinueSignal{}; }
@@ -1123,8 +1171,12 @@ private:
 						} else {
 							settlePromise(nextP, false, ret);
 						}
+					} catch (const ExceptionSignal& ex) {
+						settlePromise(nextP, true, ex.value);
 					} catch (const std::exception& ex) {
 						settlePromise(nextP, true, Value{ std::string(ex.what()) });
+					} catch (...) {
+						settlePromise(nextP, true, Value{ std::string("error") });
 					}
 				});
 			}
@@ -1157,8 +1209,12 @@ private:
 						} else {
 							settlePromise(nextP, false, ret);
 						}
+					} catch (const ExceptionSignal& ex) {
+						settlePromise(nextP, true, ex.value);
 					} catch (const std::exception& ex) {
 						settlePromise(nextP, true, Value{ std::string(ex.what()) });
+					} catch (...) {
+						settlePromise(nextP, true, Value{ std::string("error") });
 					}
 				});
 			}
@@ -1313,8 +1369,12 @@ private:
 										} else {
 											loop->settlePromise(nextP, false, ret);
 										}
+									} catch (const ExceptionSignal& ex) {
+										loop->settlePromise(nextP, true, ex.value);
 									} catch (const std::exception& ex) {
 										loop->settlePromise(nextP, true, Value{ std::string(ex.what()) });
+									} catch (...) {
+										loop->settlePromise(nextP, true, Value{ std::string("error") });
 									}
 								});
 							}
@@ -1361,8 +1421,12 @@ private:
 										} else {
 											loop->settlePromise(nextP, false, ret);
 										}
+									} catch (const ExceptionSignal& ex) {
+										loop->settlePromise(nextP, true, ex.value);
 									} catch (const std::exception& ex) {
 										loop->settlePromise(nextP, true, Value{ std::string(ex.what()) });
+									} catch (...) {
+										loop->settlePromise(nextP, true, Value{ std::string("error") });
 									}
 								});
 							}
@@ -1432,15 +1496,21 @@ private:
 	void installBuiltins() {
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
-		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-			for (size_t i=0;i<args.size();++i) {
-				std::cout << toString(args[i]);
-				if (i+1<args.size()) std::cout << " ";
-			}
-			std::cout << std::endl;
+		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			for (auto& v : args) std::cout << toString(v);
+			// no newline, no separators (flat output)
 			return Value{std::monostate{}};
 		};
 		globals->define("print", printFn);
+
+		auto printlnFn = std::make_shared<Function>();
+		printlnFn->isBuiltin = true;
+		printlnFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			for (auto& v : args) std::cout << toString(v);
+			std::cout << std::endl;
+			return Value{std::monostate{}};
+		};
+		globals->define("println", printlnFn);
 
 		// len(x): string/array/object长度
 		auto lenFn = std::make_shared<Function>();
@@ -1546,6 +1616,9 @@ void ALangEngine::execute(const std::string& code) {
 		Parser ps(tokens);
 		auto stmts = ps.parse();
 		impl->interpreter.execute(stmts);
+	} catch (const ExceptionSignal& ex) {
+		std::cerr << "[ALang Error] " << toString(ex.value) << std::endl;
+		throw;
 	} catch (const std::exception& ex) {
 		std::cerr << "[ALang Error] " << ex.what() << std::endl;
 		throw; // 也可选择吞掉错误，根据需要
