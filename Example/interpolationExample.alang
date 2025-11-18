@@ -1,3 +1,5 @@
+// 字符串插值：从基础到复杂
+println("== Interpolation examples ==");
 let a = 42;
 let b = { x: 7 };
 let s = "value a:${a}, obj.x:${b.x}, math:${a + b.x}";
@@ -20,5 +22,5 @@ let k1 = "k1";
 println("call:${double(a + b.x)}, idx:${arr[1]}, inlineObj:${{ k: a, y: 2 }.k}, inlineArrIdx:${{ arr: [1,2,3,4] }.arr[2]}");
 println("computedKey:${{ [k1]: a }.k1}");
 println("deep:${{ o: { p: { q: 5 } } }.o.p.q}");
-println("await-in-interp:${await sleep(10)}");
+println("await-in-interp:${await sleep(10)}"); // await 结果为 null
 println("lambdaCall:${([](x){ return x * 3; })(a)}");

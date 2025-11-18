@@ -1,0 +1,17 @@
+// == Import System Examples ==
+
+// 1) import Package.(a, b, ...)
+// import Math.(pi, abs);
+println("pi:", pi, ", abs(-3):", abs(-3));
+
+// 2) import (Pkg.a, Pkg.b, ...)
+import (Math.pi, Math.abs);
+println("again pi:", pi, ", abs(2):", abs(2));
+
+// 3) from Package import name | (name1, name2)
+from Math import abs;
+println("abs(5):", abs(5));
+
+// 4) import Package.*
+import Math.*;
+println("wildcard -> pi:", pi, ", abs(-7):", abs(-7));

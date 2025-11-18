@@ -16,6 +16,7 @@
 - 计算属性名：对象字面量支持 `{ [expr]: value }`
 - 接口：`interface Name { function sig(...); }`，可被 `class X <- (Base, Name)` 继承用于动态派发
 - 字符串插值：`"Hello ${name}, v=${expr}"`
+ - 包与导入：`import/from` 多种导入形式（内置 `Math` 包）
 
 ## 快速开始
 
@@ -104,6 +105,31 @@ println("a:${a}, b.x:${b.x}, sum:${a + b.x}");
 let obj = { k: a, y: 2 };
 println("obj.k:${obj.k}");
 ```
+
+## 模块与导入（import/from）
+
+内置包通过 `import`/`from` 导入到当前作用域。当前提供 `Math` 包：`pi`、`abs(x)`。
+
+支持形式：
+
+```js
+// 1) 指定包内符号列表
+import Math.(pi, abs);
+
+// 2) 列出包名+符号的列表（可跨包）
+import (Math.pi, Math.abs);
+
+// 3) from 形式
+from Math import abs;
+from Math import (pi, abs);
+
+// 4) 通配导入
+import Math.*;
+
+println("pi:", pi, ", abs(-3):", abs(-3));
+```
+
+更多见 `Example/importExample.alang`。
 
 ## for/break/continue
 

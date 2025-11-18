@@ -1,0 +1,3 @@
+[submodule "AsulFormatString"]
+	path = AsulFormatString
+	url = https://github.com/AsulTop/AsulFormatString.git

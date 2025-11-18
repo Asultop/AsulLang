@@ -20,6 +20,8 @@ public:
     // 加载源码（供execute()无参调用）
     void setSource(const std::string& code);
     void registerModule(const char* moduleName, std::function<void()> initFunc);
+    // 错误输出颜色映射配置（键：header/code/caret/label/value）
+    void setErrorColorMap(const std::unordered_map<std::string, std::string>& colorMap);
 
     // 宿主原生类注册（简化版）：仅支持基本类型（null/number/string/bool）参数与返回
     using NativeValue = std::variant<std::monostate,double,std::string,bool>;

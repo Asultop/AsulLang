@@ -1,28 +1,19 @@
-// 验证内置函数 len / push
+// 内置函数与方法：len / push 简明示例
+println("== Builtins: len / push ==");
 let s = "hello";
-println("len(s)=", len(s));
-println("s.len()=", s.len());
-println();
+println("len(s): ${len(s)} | s.len(): ${s.len()}");
 
 let a = [1,2,3];
-println("len(a)=", len(a));
-println("a.len()=", a.len());
-println("a[0]=", a[0]);
-println("a[1]=", a[1]);
-println("a[2]=", a[2]);
-
+println("len(a): ${len(a)} | a.len(): ${a.len()} | a: ${a}");
 a.push(4);
-println("len(a)=", len(a));
-println("a.len()=", a.len());
-println("a[0]=", a[0]);
-println("a[1]=", a[1]);
-println("a[2]=", a[2]);
-println("a[3]=", a[3]);
-
+println("after push(4): len=${len(a)} | a: ${a}");
 push(a, 4, 5);
-print("a=", a , "\n" , "len(a)=", len(a));
-println();
+println("after push(a,4,5): len=${len(a)} | a: ${a}");
 
 let o = { x: 1, y: 2 };
-println("len(o)=", len(o));
+println("len(o): ${len(o)} | o: ${o}");
+
+// 复杂：字符串/数组/对象混合
+let mix = { s: s, arr: a, o: o };
+println("mix sizes => s:${len(mix.s)}, arr:${len(mix.arr)}, o:${len(mix.o)}");
 

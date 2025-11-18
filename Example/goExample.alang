@@ -1,15 +1,22 @@
+// go 示例：演示 go 将调用投递到事件循环执行；异常会被吞掉
+println("== go example ==");
 async function task(v) {
-  print("task start", v);
-  await sleep(200);
-  print("task done", v);
+  println("task start ${v}");
+  await sleep(100);
+  println("task done ${v}");
   return v * 2;
 }
-function onTask(r) { 
-  print("task result", r); 
-}
+function onTask(r) { println("task result ${r}"); }
 
+// 简单：then + go 一次
 let p = task(21);
 p.then(onTask);
-
-// go 语句：将调用放入事件循环执行
 go task(5);
+
+// 复杂：批量投递 + 含异常的任务（异常将被吞掉，不影响其他任务）
+function boom(){ throw "boom"; }
+go boom();
+go task(1);
+go task(2);
+go task(3);
+println("(host should drain event loop to see outputs)");

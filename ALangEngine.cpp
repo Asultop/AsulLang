@@ -16,10 +16,12 @@
 #include <string>
 #include <iomanip>
 #include <unordered_map>
+#include <algorithm>
 #include <utility>
 #include <variant>
 #include <vector>
 #include <queue>
+#include "AsulFormatString/AsulFormatString.h"
 
 namespace {
 
@@ -37,7 +39,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface,
+	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
 	EndOfFile
 };
 
@@ -45,6 +47,8 @@ struct Token {
 	TokenType type;
 	std::string lexeme;
 	int line;
+	int column{1};
+	int length{1};
 };
 
 class Lexer {
@@ -55,7 +59,8 @@ public:
 			start = current;
 			scanToken();
 		}
-		tokens.push_back(Token{TokenType::EndOfFile, "", line});
+		int col = static_cast<int>((current >= lineStart) ? (current - lineStart + 1) : 1);
+		tokens.push_back(Token{TokenType::EndOfFile, "", line, col, 0});
 		return tokens;
 	}
 
@@ -76,7 +81,11 @@ private:
 		current++;
 		return true;
 	}
-	void add(TokenType type) { tokens.push_back(Token{type, source.substr(start, current - start), line}); }
+	void add(TokenType type) {
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		tokens.push_back(Token{type, source.substr(start, current - start), line, col, len});
+	}
 
 	void string() {
 		while (!isAtEnd() && peek() != '"') {
@@ -86,7 +95,9 @@ private:
 		if (isAtEnd()) throw std::runtime_error("Unterminated string at line " + std::to_string(line));
 		advance(); // closing quote
 		std::string value = source.substr(start + 1, current - start - 2);
-		tokens.push_back(Token{TokenType::String, value, line});
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start); // include quotes
+		tokens.push_back(Token{TokenType::String, value, line, col, len});
 	}
 
 	void number() {
@@ -95,7 +106,9 @@ private:
 			advance();
 			while (std::isdigit(peek())) advance();
 		}
-		tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line});
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len});
 	}
 
 	void identifier() {
@@ -113,10 +126,13 @@ private:
 			{"go", TokenType::Go},
 			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
 			{"interface", TokenType::Interface},
+			{"import", TokenType::Import}, {"from", TokenType::From},
 		};
 		auto it = keywords.find(text);
-		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line});
-		else tokens.push_back(Token{TokenType::Identifier, text, line});
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line, col, len});
+		else tokens.push_back(Token{TokenType::Identifier, text, line, col, len});
 	}
 
 	void skipWhitespaceAndComments() {
@@ -206,7 +222,7 @@ private:
 		case '/': add(TokenType::Slash); break;
 		case '"': string(); break;
 		default:
-			if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line}); }
+			if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1); int len = static_cast<int>(current - start); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len}); }
 			else if (std::isalpha(c) || c == '_') identifier();
 			else {
 				size_t pos = current - 1;
@@ -366,24 +382,24 @@ struct PromiseState {
 
 struct Expr { virtual ~Expr() = default; };
 struct LiteralExpr : Expr { Value value; explicit LiteralExpr(Value v): value(std::move(v)){} };
-struct VariableExpr : Expr { std::string name; int line{0}; VariableExpr(std::string n, int l): name(std::move(n)), line(l){} };
+struct VariableExpr : Expr { std::string name; int line{0}; int column{1}; int length{1}; VariableExpr(std::string n, int l, int c, int len): name(std::move(n)), line(l), column(c), length(len){} };
 struct AssignExpr : Expr { std::string name; ExprPtr value; int line{0}; AssignExpr(std::string n, ExprPtr v, int l): name(std::move(n)), value(std::move(v)), line(l){} };
 struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r): op(std::move(o)), right(std::move(r)){} };
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
-struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; CallExpr(ExprPtr c, std::vector<ExprPtr> a): callee(std::move(c)), args(std::move(a)){} };
-struct NewExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; NewExpr(ExprPtr c, std::vector<ExprPtr> a): callee(std::move(c)), args(std::move(a)){} };
-struct GetPropExpr : Expr { ExprPtr object; std::string name; GetPropExpr(ExprPtr o, std::string n): object(std::move(o)), name(std::move(n)){} };
-struct IndexExpr : Expr { ExprPtr object; ExprPtr index; IndexExpr(ExprPtr o, ExprPtr i): object(std::move(o)), index(std::move(i)){} };
-struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; SetPropExpr(ExprPtr o, std::string n, ExprPtr v): object(std::move(o)), name(std::move(n)), value(std::move(v)){} };
-struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v): object(std::move(o)), index(std::move(i)), value(std::move(v)){} };
+struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; CallExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
+struct NewExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; NewExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
+struct GetPropExpr : Expr { ExprPtr object; std::string name; int line{0}, column{1}, length{1}; GetPropExpr(ExprPtr o, std::string n, int l, int c0, int len): object(std::move(o)), name(std::move(n)), line(l), column(c0), length(len){} };
+struct IndexExpr : Expr { ExprPtr object; ExprPtr index; int line{0}, column{1}, length{1}; IndexExpr(ExprPtr o, ExprPtr i, int l, int c0, int len): object(std::move(o)), index(std::move(i)), line(l), column(c0), length(len){} };
+struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; int line{0}, column{1}, length{1}; SetPropExpr(ExprPtr o, std::string n, ExprPtr v, int l, int c0, int len): object(std::move(o)), name(std::move(n)), value(std::move(v)), line(l), column(c0), length(len){} };
+struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; int line{0}, column{1}, length{1}; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v, int l, int c0, int len): object(std::move(o)), index(std::move(i)), value(std::move(v)), line(l), column(c0), length(len){} };
 struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
 struct ObjectLiteralExpr : Expr {
 	struct Prop { bool computed; std::string name; ExprPtr keyExpr; ExprPtr value; };
 	std::vector<Prop> props;
 	explicit ObjectLiteralExpr(std::vector<Prop> p): props(std::move(p)){}
 };
-struct AwaitExpr : Expr { ExprPtr expr; explicit AwaitExpr(ExprPtr e): expr(std::move(e)){} };
+struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
 struct FunctionExpr : Expr { std::vector<std::string> params; StmtPtr body; explicit FunctionExpr(std::vector<std::string> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
 
 struct Stmt { virtual ~Stmt() = default; };
@@ -404,12 +420,16 @@ struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(
 struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
 struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
 struct EmptyStmt : Stmt {};
+struct ImportStmt : Stmt {
+	struct Entry { std::string packageName; std::string symbol; }; // symbol == "*" means wildcard
+	std::vector<Entry> entries;
+};
 
 // ----------- Parser -----------
 
 class Parser {
 public:
-	explicit Parser(const std::vector<Token>& t): tokens(t) {}
+	explicit Parser(const std::vector<Token>& t, const std::string& src): tokens(t), source(src) {}
 	std::vector<StmtPtr> parse() {
 		std::vector<StmtPtr> stmts;
 		while (!isAtEnd()) stmts.push_back(declaration());
@@ -419,6 +439,7 @@ public:
 private:
 	const std::vector<Token>& tokens;
 	size_t current{0};
+	const std::string& source;
 
 	bool isAtEnd() const { return peek().type == TokenType::EndOfFile; }
 	const Token& peek() const { return tokens[current]; }
@@ -431,7 +452,25 @@ private:
 	}
 	const Token& consume(TokenType type, const char* message) {
 		if (check(type)) return advance();
-		throw std::runtime_error(std::string("[Parse] ") + message + " at line " + std::to_string(peek().line));
+		const Token& tok = peek();
+		std::ostringstream oss;
+		oss << "[Parse] " << message << " at line " << tok.line << ", column " << tok.column << "\n";
+		oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+		throw std::runtime_error(oss.str());
+	}
+
+	std::string getLineText(int line) const {
+		if (line <= 0) return std::string();
+		int curLine = 1;
+		size_t i = 0, startIdx = 0;
+		for (; i < source.size(); ++i) {
+			if (curLine == line) { startIdx = i; break; }
+			if (source[i] == '\n') curLine++;
+		}
+		if (curLine != line) return std::string();
+		size_t j = startIdx;
+		while (j < source.size() && source[j] != '\n' && source[j] != '\r') j++;
+		return source.substr(startIdx, j - startIdx);
 	}
 
 	StmtPtr declaration() {
@@ -440,8 +479,63 @@ private:
 		if (match({TokenType::Class})) return classDeclaration();
 		if (match({TokenType::Extends})) return extendsDeclaration();
 		if (match({TokenType::Interface})) return interfaceDeclaration();
+		if (match({TokenType::Import})) return importDeclaration(false);
+		if (match({TokenType::From})) return importDeclaration(true);
 		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration();
 		return statement();
+	}
+
+	StmtPtr importDeclaration(bool isFrom) {
+		auto imp = std::make_shared<ImportStmt>();
+		if (isFrom) {
+			// from Package import name | from Package import (name1 name2 ...)
+			auto pkg = consume(TokenType::Identifier, "Expect package name after 'from'").lexeme;
+			consume(TokenType::Import, "Expect 'import' after package name");
+			if (match({TokenType::LeftParen})) {
+				while (!check(TokenType::RightParen) && !isAtEnd()) {
+					auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
+					imp->entries.push_back({pkg, name});
+					(void)match({TokenType::Comma});
+				}
+				consume(TokenType::RightParen, "Expect ')' after import list");
+			} else {
+				auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
+				imp->entries.push_back({pkg, name});
+			}
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+
+		// import Package.* | import Package.(a b ...) | import (Pkg.a Pkg.b ...)
+		if (match({TokenType::LeftParen})) {
+			// import (Pkg.a Pkg.b ...)
+			while (!check(TokenType::RightParen) && !isAtEnd()) {
+				auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
+				consume(TokenType::Dot, "Expect '.' after package name");
+				auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
+				imp->entries.push_back({pkg, sym});
+				(void)match({TokenType::Comma});
+			}
+			consume(TokenType::RightParen, "Expect ')' after import list");
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+		auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
+		consume(TokenType::Dot, "Expect '.' after package name");
+		if (match({TokenType::Star})) {
+			imp->entries.push_back({pkg, std::string("*")});
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+		consume(TokenType::LeftParen, "Expect '(' after package '.' for symbol list");
+		while (!check(TokenType::RightParen) && !isAtEnd()) {
+			auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
+			imp->entries.push_back({pkg, sym});
+			(void)match({TokenType::Comma});
+		}
+		consume(TokenType::RightParen, "Expect ')' after symbol list");
+		consume(TokenType::Semicolon, "Expect ';' after import statement");
+		return imp;
 	}
 	StmtPtr interfaceDeclaration() {
 		// 语法：interface Name ; | interface Name { function sig(...); ... }
@@ -645,12 +739,18 @@ private:
 				return std::make_shared<AssignExpr>(var->name, value, var->line);
 			}
 			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
-				return std::make_shared<SetPropExpr>(getp->object, getp->name, value);
+				return std::make_shared<SetPropExpr>(getp->object, getp->name, value, getp->line, getp->column, getp->length);
 			}
 			if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
-				return std::make_shared<SetIndexExpr>(idx->object, idx->index, value);
+				return std::make_shared<SetIndexExpr>(idx->object, idx->index, value, idx->line, idx->column, idx->length);
 			}
-			throw std::runtime_error("Invalid assignment target at line " + std::to_string(previous().line));
+			{
+				const Token& tok = previous();
+				std::ostringstream oss;
+				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
 		}
 		return expr;
 	}
@@ -722,8 +822,9 @@ private:
 			return std::make_shared<UnaryExpr>(op, right);
 		}
 		if (match({TokenType::Await})) {
+			Token awTok = previous();
 			auto inner = unary();
-			return std::make_shared<AwaitExpr>(inner);
+			return std::make_shared<AwaitExpr>(inner, awTok.line, awTok.column, std::max(1, awTok.length));
 		}
 		return call();
 	}
@@ -733,8 +834,8 @@ private:
 		if (!check(TokenType::RightParen)) {
 			do { args.push_back(expression()); } while (match({TokenType::Comma}));
 		}
-		consume(TokenType::RightParen, "Expect ')' after arguments");
-		return std::make_shared<CallExpr>(callee, args);
+		Token rp = consume(TokenType::RightParen, "Expect ')' after arguments");
+		return std::make_shared<CallExpr>(callee, args, rp.line, rp.column, std::max(1, rp.length));
 	}
 
 	ExprPtr call() {
@@ -742,18 +843,23 @@ private:
 		for (;;) {
 			if (match({TokenType::LeftParen})) expr = finishCall(expr);
 			else if (match({TokenType::Dot})) {
-				std::string name;
-				if (check(TokenType::Identifier)) { name = advance().lexeme; }
-				else if (check(TokenType::Catch)) { name = advance().lexeme; /* allow .catch */ }
+				std::string name; Token nameTok;
+				if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
+				else if (check(TokenType::Catch)) { nameTok = advance(); name = nameTok.lexeme; /* allow .catch */ }
 				else {
-					throw std::runtime_error(std::string("[Parse] Expect property name after '.' at line ") + std::to_string(peek().line));
+					const Token& tok = peek();
+					std::ostringstream oss;
+					oss << "[Parse] Expect property name after '.' at line " << tok.line << ", column " << tok.column << "\n";
+					oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+					throw std::runtime_error(oss.str());
 				}
-				expr = std::make_shared<GetPropExpr>(expr, name);
+				expr = std::make_shared<GetPropExpr>(expr, name, nameTok.line, nameTok.column, std::max(1, nameTok.length));
 			}
 			else if (match({TokenType::LeftBracket})) {
+				Token lb = previous();
 				auto idx = expression();
 				consume(TokenType::RightBracket, "Expect ']' after index");
-				expr = std::make_shared<IndexExpr>(expr, idx);
+				expr = std::make_shared<IndexExpr>(expr, idx, lb.line, lb.column, 1);
 			}
 			else break;
 		}
@@ -778,12 +884,13 @@ private:
 			}
 		}
 		if (match({TokenType::New})) {
+			Token newTok = previous();
 			auto nameTok = consume(TokenType::Identifier, "Expect class name after 'new'");
 			consume(TokenType::LeftParen, "Expect '('");
 			std::vector<ExprPtr> args;
 			if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma})); }
 			consume(TokenType::RightParen, "Expect ')'");
-			return std::make_shared<NewExpr>(std::make_shared<VariableExpr>(nameTok.lexeme, nameTok.line), args);
+			return std::make_shared<NewExpr>(std::make_shared<VariableExpr>(nameTok.lexeme, nameTok.line, nameTok.column, nameTok.length), args, newTok.line, newTok.column, std::max(1, newTok.length));
 		}
 		if (match({TokenType::False})) return std::make_shared<LiteralExpr>(Value{false});
 		if (match({TokenType::True})) return std::make_shared<LiteralExpr>(Value{true});
@@ -797,7 +904,7 @@ private:
 			}
 			return parseInterpolatedString(s, tok.line);
 		}
-		if (match({TokenType::Identifier})) return std::make_shared<VariableExpr>(previous().lexeme, previous().line);
+		if (match({TokenType::Identifier})) { auto tok = previous(); return std::make_shared<VariableExpr>(tok.lexeme, tok.line, tok.column, tok.length); }
 		if (match({TokenType::LeftBracket})) {
 			std::vector<ExprPtr> elems;
 			if (!check(TokenType::RightBracket)) {
@@ -827,7 +934,13 @@ private:
 			return std::make_shared<ObjectLiteralExpr>(props);
 		}
 		if (match({TokenType::LeftParen})) { auto e = expression(); consume(TokenType::RightParen, "Expect ')'"); return e; }
-		throw std::runtime_error("Expect expression at line " + std::to_string(peek().line));
+		{
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect expression at line " << tok.line << ", column " << tok.column << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
 	}
 
 	// --- 插值字符串支持："hello ${expr} world" -> 通过'+'串联 ---
@@ -881,7 +994,7 @@ private:
 		snippet.push_back(';');
 		Lexer lx(snippet);
 		auto toks = lx.scanTokens();
-		Parser sub(toks);
+		Parser sub(toks, snippet);
 		auto stmts = sub.parse();
 		if (stmts.empty()) throw std::runtime_error("Empty interpolation expression");
 		if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmts[0])) return es->expr;
@@ -930,7 +1043,9 @@ public:
 				try {
 					return env->get(var->name);
 				} catch (const std::exception& ex) {
-					throw std::runtime_error(std::string(ex.what()) + " at line " + std::to_string(var->line));
+					std::ostringstream oss;
+					oss << ex.what() << " at line " << var->line << ", column " << var->column << ", length " << var->length;
+					throw std::runtime_error(oss.str());
 				}
 			}
 			if (auto asg = std::dynamic_pointer_cast<AssignExpr>(expr)) {
@@ -965,10 +1080,18 @@ public:
 		if (auto ix = std::dynamic_pointer_cast<IndexExpr>(expr)) {
 			Value o = evaluate(ix->object);
 			Value k = evaluate(ix->index);
-			return getIndex(o, k);
+			try { return getIndex(o, k); }
+			catch (const std::exception& ex) {
+				std::ostringstream oss; oss << ex.what() << " at line " << ix->line << ", column " << ix->column << ", length " << ix->length; throw std::runtime_error(oss.str());
+			}
 		}
 		if (auto sp = std::dynamic_pointer_cast<SetPropExpr>(expr)) {
-			Value& ov = ensureObjectRef(sp->object);
+			Value& ov = *[&]()->Value*{
+				try { return &ensureObjectRef(sp->object); }
+				catch (const std::exception& ex) {
+					std::ostringstream oss; oss << ex.what() << " at line " << sp->line << ", column " << sp->column << ", length " << sp->length; throw std::runtime_error(oss.str());
+				}
+			}();
 			Value v = evaluate(sp->value);
 			if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
 				(**pobj)[sp->name] = v;
@@ -981,65 +1104,85 @@ public:
 			return v;
 		}
 		if (auto si = std::dynamic_pointer_cast<SetIndexExpr>(expr)) {
-			Value& ov = evaluateRef(si->object);
-			Value idxv = evaluate(si->index);
-			Value v = evaluate(si->value);
-			if (auto parr = std::get_if<std::shared_ptr<Array>>(&ov)) {
-				size_t idx = indexFromValue(idxv);
-				auto& vec = **parr;
-				if (idx >= vec.size()) throw std::runtime_error("Array index out of range");
-				vec[idx] = v; return v;
+			try {
+				Value& ov = evaluateRef(si->object);
+				Value idxv = evaluate(si->index);
+				Value v = evaluate(si->value);
+				if (auto parr = std::get_if<std::shared_ptr<Array>>(&ov)) {
+					size_t idx = indexFromValue(idxv);
+					auto& vec = **parr;
+					if (idx >= vec.size()) {
+						std::ostringstream oss; oss << "Array index out of range at line " << si->line << ", column " << si->column << ", length " << si->length; throw std::runtime_error(oss.str());
+					}
+					vec[idx] = v; return v;
+				}
+				if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
+					std::string key = keyFromValue(idxv);
+					(**pobj)[key] = v; return v;
+				}
+				if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
+					std::string key = keyFromValue(idxv);
+					(*pins)->fields[key] = v; return v;
+				}
+				{
+					std::ostringstream oss; oss << "Index assignment on non-array/object at line " << si->line << ", column " << si->column << ", length " << si->length; throw std::runtime_error(oss.str());
+				}
+			} catch (const std::exception& ex) {
+				std::string s = ex.what();
+				if (s.find("line ") == std::string::npos) {
+					std::ostringstream oss; oss << s << " at line " << si->line << ", column " << si->column << ", length " << si->length; throw std::runtime_error(oss.str());
+				}
+				throw;
 			}
-			if (auto pobj = std::get_if<std::shared_ptr<Object>>(&ov)) {
-				std::string key = keyFromValue(idxv);
-				(**pobj)[key] = v; return v;
-			}
-			if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
-				std::string key = keyFromValue(idxv);
-				(*pins)->fields[key] = v; return v;
-			}
-			throw std::runtime_error("Index assignment on non-array/object");
 		}
 		if (auto un = std::dynamic_pointer_cast<UnaryExpr>(expr)) {
 			Value r = evaluate(un->right);
-			switch (un->op.type) {
-			case TokenType::Bang: return Value{!isTruthy(r)};
-			case TokenType::Minus: {
-				if (auto n = std::get_if<double>(&r)) return Value{-*n};
-				throw std::runtime_error("Unary '-' requires number");
-			}
-			default: break;
+			try {
+				switch (un->op.type) {
+				case TokenType::Bang: return Value{!isTruthy(r)};
+				case TokenType::Minus: {
+					double rv = getNumber(r, "unary '-'");
+					return Value{-rv};
+				}
+				default: break;
+				}
+			} catch (const std::exception& ex) {
+				std::ostringstream oss; oss << ex.what() << " at line " << un->op.line << ", column " << un->op.column << ", length " << std::max(1, un->op.length); throw std::runtime_error(oss.str());
 			}
 		}
 		if (auto bin = std::dynamic_pointer_cast<BinaryExpr>(expr)) {
 			Value l = evaluate(bin->left); Value r = evaluate(bin->right);
-			switch (bin->op.type) {
-			case TokenType::Plus:
-				if (auto ln = std::get_if<double>(&l)) {
-					if (auto rn = std::get_if<double>(&r)) return Value{*ln + *rn};
-					if (auto rs = std::get_if<std::string>(&r)) return Value{toString(l) + *rs};
+			try {
+				switch (bin->op.type) {
+				case TokenType::Plus:
+					if (auto ln = std::get_if<double>(&l)) {
+						if (auto rn = std::get_if<double>(&r)) return Value{*ln + *rn};
+						if (auto rs = std::get_if<std::string>(&r)) return Value{toString(l) + *rs};
+					}
+					if (auto ls = std::get_if<std::string>(&l)) return Value{*ls + toString(r)};
+					throw std::runtime_error("'+' requires numbers or strings");
+				case TokenType::Minus:
+					return Value{getNumber(l, "left of '-' ") - getNumber(r, "right of '-' ")};
+				case TokenType::Star:
+					return Value{getNumber(l, "left of '*' ") * getNumber(r, "right of '*' ")};
+				case TokenType::Slash: {
+					double denom = getNumber(r, "right of '/' ");
+					return Value{getNumber(l, "left of '/' ") / denom};
 				}
-				if (auto ls = std::get_if<std::string>(&l)) return Value{*ls + toString(r)};
-				throw std::runtime_error("'+' requires numbers or strings");
-			case TokenType::Minus:
-				return Value{getNumber(l, "left of '-' ") - getNumber(r, "right of '-' ")};
-			case TokenType::Star:
-				return Value{getNumber(l, "left of '*' ") * getNumber(r, "right of '*' ")};
-			case TokenType::Slash: {
-				double denom = getNumber(r, "right of '/' ");
-				return Value{getNumber(l, "left of '/' ") / denom};
-			}
-			case TokenType::Percent: {
-				double rv = getNumber(r, "right of '%' ");
-				return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
-			}
-			case TokenType::Greater: return Value{getNumber(l, ">") > getNumber(r, ">")};
-			case TokenType::GreaterEqual: return Value{getNumber(l, ">=") >= getNumber(r, ">=")};
-			case TokenType::Less: return Value{getNumber(l, "<") < getNumber(r, "<")};
-			case TokenType::LessEqual: return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
-			case TokenType::EqualEqual: return Value{isEqual(l, r)};
-			case TokenType::BangEqual: return Value{!isEqual(l, r)};
-			default: break;
+				case TokenType::Percent: {
+					double rv = getNumber(r, "right of '%' ");
+					return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
+				}
+				case TokenType::Greater: return Value{getNumber(l, ">") > getNumber(r, ">")};
+				case TokenType::GreaterEqual: return Value{getNumber(l, ">=") >= getNumber(r, ">=")};
+				case TokenType::Less: return Value{getNumber(l, "<") < getNumber(r, "<")};
+				case TokenType::LessEqual: return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
+				case TokenType::EqualEqual: return Value{isEqual(l, r)};
+				case TokenType::BangEqual: return Value{!isEqual(l, r)};
+				default: break;
+				}
+			} catch (const std::exception& ex) {
+				std::ostringstream oss; oss << ex.what() << " at line " << bin->op.line << ", column " << bin->op.column << ", length " << std::max(1, bin->op.length); throw std::runtime_error(oss.str());
 			}
 		}
 		if (auto lg = std::dynamic_pointer_cast<LogicalExpr>(expr)) {
@@ -1050,7 +1193,7 @@ public:
 		if (auto aw = std::dynamic_pointer_cast<AwaitExpr>(expr)) {
 			Value v = evaluate(aw->expr);
 			if (!std::holds_alternative<std::shared_ptr<PromiseState>>(v)) {
-				throw std::runtime_error("await expects a Promise");
+				std::ostringstream oss; oss << "await expects a Promise at line " << aw->line << ", column " << aw->column << ", length " << aw->length; throw std::runtime_error(oss.str());
 			}
 			auto p = std::get<std::shared_ptr<PromiseState>>(v);
 			if (!p) return Value{std::monostate{}};
@@ -1061,11 +1204,22 @@ public:
 		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			Value cal = evaluate(call->callee);
-			if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) throw std::runtime_error("Can only call functions");
+			if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) {
+				std::ostringstream oss; oss << "Can only call functions at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
+			}
 			auto fn = std::get<std::shared_ptr<Function>>(cal);
 			std::vector<Value> args; args.reserve(call->args.size());
 			for (auto& a : call->args) args.push_back(evaluate(a));
-			if (fn->isBuiltin) return fn->builtin(args, fn->closure);
+			if (fn->isBuiltin) {
+				try { return fn->builtin(args, fn->closure); }
+				catch (const std::exception& ex) {
+					std::string s = ex.what();
+					if (s.find("line ") == std::string::npos) {
+						std::ostringstream oss; oss << s << " at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
+					}
+					throw;
+				}
+			}
 			// 支持调用由 FunctionExpr 生成的普通函数
 			if (fn->isAsync) {
 				// 返回一个 Promise，并将函数体作为任务投递
@@ -1092,7 +1246,9 @@ public:
 				});
 				return Value{p};
 			}
-			if (args.size() != fn->params.size()) throw std::runtime_error("Arity mismatch");
+			if (args.size() != fn->params.size()) {
+				std::ostringstream oss; oss << "Arity mismatch at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
+			}
 			auto local = std::make_shared<Environment>(fn->closure);
 			for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
 			try {
@@ -1109,7 +1265,9 @@ public:
 		}
 		if (auto nw = std::dynamic_pointer_cast<NewExpr>(expr)) {
 			Value cal = evaluate(nw->callee);
-			if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(cal)) throw std::runtime_error("new: target is not a class");
+			if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(cal)) {
+				std::ostringstream oss; oss << "new: target is not a class at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
+			}
 			auto klass = std::get<std::shared_ptr<ClassInfo>>(cal);
 			auto inst = std::make_shared<Instance>();
 			inst->klass = klass;
@@ -1123,8 +1281,19 @@ public:
 				auto thisEnv = std::make_shared<Environment>(bound->closure);
 				thisEnv->define("this", inst);
 				bound->closure = thisEnv;
-				if (bound->isBuiltin) (void)bound->builtin(args, bound->closure); else {
-					if (args.size() != bound->params.size()) throw std::runtime_error("Arity mismatch");
+				if (bound->isBuiltin) {
+					try { (void)bound->builtin(args, bound->closure); }
+					catch (const std::exception& ex) {
+						std::string s = ex.what();
+						if (s.find("line ") == std::string::npos) {
+							std::ostringstream oss; oss << s << " at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
+						}
+						throw;
+					}
+				} else {
+					if (args.size() != bound->params.size()) {
+						std::ostringstream oss; oss << "Arity mismatch at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
+					}
 					auto local = std::make_shared<Environment>(bound->closure);
 					for (size_t i=0;i<args.size();++i) local->define(bound->params[i], args[i]);
 					try { executeBlock(bound->body, local); } catch (const ReturnSignal&) {}
@@ -1138,6 +1307,22 @@ public:
 	void execute(const StmtPtr& stmt) {
 		if (auto e = std::dynamic_pointer_cast<ExprStmt>(stmt)) { (void)evaluate(e->expr); return; }
 		if (std::dynamic_pointer_cast<EmptyStmt>(stmt)) { return; }
+		if (auto imp = std::dynamic_pointer_cast<ImportStmt>(stmt)) {
+			for (auto& ent : imp->entries) {
+				auto it = packages.find(ent.packageName);
+				if (it == packages.end()) throw std::runtime_error("Unknown package: " + ent.packageName);
+				auto pobj = it->second;
+				if (!pobj) continue;
+				if (ent.symbol == "*") {
+					for (auto& kv : *pobj) env->define(kv.first, kv.second);
+				} else {
+					auto fit = pobj->find(ent.symbol);
+					if (fit == pobj->end()) throw std::runtime_error("Package '" + ent.packageName + "' has no symbol '" + ent.symbol + "'");
+					env->define(ent.symbol, fit->second);
+				}
+			}
+			return;
+		}
 		if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
 			Value init = v->init ? evaluate(v->init) : Value{std::monostate{}};
 			env->define(v->name, init);
@@ -1303,6 +1488,7 @@ private:
 	std::mutex loopMutex;
 	std::condition_variable loopCv;
 	std::queue<std::function<void()>> taskQueue;
+	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
 
 	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) {
 		{
@@ -1758,6 +1944,21 @@ private:
 			(*promiseObj)["reject"] = fn;
 		}
 		globals->define("Promise", Value{promiseObj});
+
+		// --- Packages ---
+		// Math: pi, abs
+		auto math = std::make_shared<Object>();
+		(*math)["pi"] = Value{ 3.14159265358979323846 };
+		{
+			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+			fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+				if (args.empty()) return Value{0.0};
+				double x = getNumber(args[0], "abs x");
+				return Value{ x < 0 ? -x : x };
+			};
+			(*math)["abs"] = fn;
+		}
+		packages["Math"] = math;
 	}
 };
 
@@ -1774,28 +1975,139 @@ ALangEngine::ALangEngine() : impl(new Impl()) {}
 ALangEngine::~ALangEngine() { delete impl; }
 
 void ALangEngine::initialize() {
-	// 目前Interpreter构造已安装内置，无需额外初始化
+	// 安装 AsulFormatString 色彩与日志标签（用于错误美化输出）
+	try {
+		auto& afs = asul_formatter();
+		afs.installColorFormatAdapter();
+		afs.installLogLabelAdapter();
+		afs.installResetLabelAdapter();
+	} catch (...) {
+		// 忽略格式器初始化异常，保持回退到纯文本错误输出
+	}
 }
 
+// 全局可配置的错误配色映射：{"header","code","caret"}
+static std::unordered_map<std::string, std::string> g_errorColorMap;
+
 void ALangEngine::setSource(const std::string& code) { impl->source = code; }
+
+void ALangEngine::setErrorColorMap(const std::unordered_map<std::string, std::string>& colorMap) {
+	g_errorColorMap = colorMap;
+}
 
 void ALangEngine::execute() {
 	if (impl->source.empty()) return;
 	execute(impl->source);
 }
 
+static std::string colorize(const std::string& key, const std::string& text, const char* defColor) {
+    std::string color = defColor;
+    auto it = g_errorColorMap.find(key);
+    if (it != g_errorColorMap.end() && !it->second.empty()) color = it->second;
+    return f("{" + color + "}", text);
+}
+
+static std::string sanitizeHeaderMsg(const std::string& msg) {
+	// Remove ", column N" and ", length M" from header text, keep "line N" if present
+	std::string s = msg;
+	// operate only on the first line for caret-context messages; but safe to run on whole
+	auto removeSegment = [&](const char* key){
+		size_t p = 0;
+		while ((p = s.find(key, p)) != std::string::npos) {
+			size_t end = p + std::strlen(key);
+			while (end < s.size() && isspace(static_cast<unsigned char>(s[end]))) end++;
+			while (end < s.size() && isdigit(static_cast<unsigned char>(s[end]))) end++;
+			// Remove preceding comma and space if present
+			size_t start = p;
+			if (start >= 2 && s[start-2] == ',' && s[start-1] == ' ') start -= 2;
+			s.erase(start, end - start);
+		}
+	};
+	removeSegment("column");
+	removeSegment("length");
+	return s;
+}
+
+static void printErrorWithContext(const std::string& src, const std::string& msg) {
+	// If message already contains a caret context, just print it (with colored header).
+	if (msg.find('\n') != std::string::npos && msg.find('^') != std::string::npos) {
+		std::string head = colorize("header", std::string("[ALang Error]"), "RED");
+		std::cerr << head << " " << sanitizeHeaderMsg(msg) << std::endl;
+		return;
+	}
+	// Try to extract line and column numbers: patterns like "line N, column M" or "at line N"
+	int line = -1, col = 1, width = 1;
+	size_t p = msg.find("line ");
+	if (p != std::string::npos) {
+		p += 5;
+		size_t q = p;
+		while (q < msg.size() && isdigit(static_cast<unsigned char>(msg[q]))) q++;
+		if (q > p) {
+			line = std::stoi(msg.substr(p, q - p));
+			size_t cpos = msg.find("column ", q);
+			if (cpos != std::string::npos) {
+				cpos += 7;
+				size_t r = cpos;
+				while (r < msg.size() && isdigit(static_cast<unsigned char>(msg[r]))) r++;
+				if (r > cpos) col = std::stoi(msg.substr(cpos, r - cpos));
+			}
+			// try parse length
+			size_t lpos = msg.find("length ", q);
+			if (lpos != std::string::npos) {
+				lpos += 7;
+				size_t r2 = lpos;
+				while (r2 < msg.size() && isdigit(static_cast<unsigned char>(msg[r2]))) r2++;
+				if (r2 > lpos) width = std::max(1, std::stoi(msg.substr(lpos, r2 - lpos)));
+			}
+		}
+	}
+	if (line >= 1) {
+		// Extract line text
+		int curLine = 1;
+		size_t i = 0, startIdx = 0;
+		for (; i < src.size(); ++i) { if (curLine == line) { startIdx = i; break; } if (src[i] == '\n') curLine++; }
+		size_t j = startIdx; while (j < src.size() && src[j] != '\n' && src[j] != '\r') j++;
+		std::string lineStr = (curLine == line) ? src.substr(startIdx, j - startIdx) : std::string();
+		std::string head = colorize("header", std::string("[ALang Error]"), "RED");
+		// Render token inside the code line
+		int c0 = std::max(1, col) - 1; int w = std::max(1, width);
+		if (c0 > static_cast<int>(lineStr.size())) c0 = static_cast<int>(lineStr.size());
+		int endPos = std::min(static_cast<int>(lineStr.size()), c0 + w);
+		std::string before = lineStr.substr(0, c0);
+		std::string mid = lineStr.substr(c0, endPos - c0);
+		std::string after = lineStr.substr(endPos);
+		std::string codeLine = colorize("code", before, "LIGHT_GRAY")
+							 + colorize("token", mid, "RED")
+							 + colorize("code", after, "LIGHT_GRAY");
+		std::string caretStr = colorize("caret", std::string(width, '^'), "RED");
+		// line prefix (colored): e.g., "line 5: "
+		std::string linePrefix = colorize("lineLabel", std::string("line "), "YELLOW")
+							   + colorize("lineValue", std::to_string(line), "CYAN")
+							   + colorize("lineLabel", std::string(": "), "YELLOW");
+		int prefixLen = 5 + static_cast<int>(std::to_string(line).size()) + 2; // "line " + digits + ": "
+		std::cerr << head << " " << sanitizeHeaderMsg(msg) << "\n"
+				  << linePrefix << codeLine << "\n"
+				  << std::string(prefixLen + (col > 1 ? col - 1 : 0), ' ') << caretStr
+				  << std::endl;
+		return;
+	}
+	// Fallback
+	std::string head = colorize("header", std::string("[ALang Error]"), "RED");
+	std::cerr << head << " " << sanitizeHeaderMsg(msg) << std::endl;
+}
+
 void ALangEngine::execute(const std::string& code) {
 	try {
 		Lexer lx(code);
 		auto tokens = lx.scanTokens();
-		Parser ps(tokens);
+		Parser ps(tokens, code);
 		auto stmts = ps.parse();
 		impl->interpreter.execute(stmts);
 	} catch (const ExceptionSignal& ex) {
-		std::cerr << "[ALang Error] " << toString(ex.value) << std::endl;
+		printErrorWithContext(code, toString(ex.value));
 		throw;
 	} catch (const std::exception& ex) {
-		std::cerr << "[ALang Error] " << ex.what() << std::endl;
+		printErrorWithContext(code, ex.what());
 		throw; // 也可选择吞掉错误，根据需要
 	}
 }
@@ -1895,7 +2207,7 @@ ALangEngine::NativeValue ALangEngine::callFunction(
 		Value ret = impl->interpreter.callFunction(functionName, va);
 		return valueToNative(ret);
 	} catch (const std::exception& ex) {
-		std::cerr << "[ALang Error] callFunction: " << ex.what() << std::endl;
+		printErrorWithContext(impl->source, std::string("callFunction: ") + ex.what());
 		throw;
 	}
 }

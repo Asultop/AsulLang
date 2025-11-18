@@ -1,19 +1,16 @@
-println("=== interface & dispatch ===");
+// 接口与动态派发：接口仅声明签名，可与类多继承组合实现动态方法查找
+println("== Interface & Dynamic Dispatch ==");
 
-interface Inter { 
-  function ping(a); 
-};
+interface Inter { function ping(a); };
+class Base { function ping(a) { println("Base.ping ${a}"); } }
+class D <- (Base, Inter) { function pong() { println("D.pong"); } }
 
-class Base {
-  function ping(a) { println("Base.ping ", a); }
-}
-
-class D <- (Base, Inter) {
-  function pong() { println("D.pong"); }
-}
-
+// 简单：接口+基类 -> 实例调用基类实现
 let d = new D();
-d.ping(7); // dynamic dispatch to Base.ping
+d.ping(7);
 d.pong();
 
-println("done");
+// 复杂：扩展 D 添加新方法 & 再次调用
+extends D { function hello(who){ println("Hello ${who}"); } }
+d.hello("interface");
+println("(end)");
