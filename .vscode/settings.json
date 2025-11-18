@@ -8,6 +8,7 @@
         "memory": "cpp",
         "utility": "cpp",
         "unordered_set": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "iostream": "cpp"
     }
 }
