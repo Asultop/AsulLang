@@ -1,0 +1,1 @@
+g++ -std=c++17 -O2 ALangEngine.cpp Main.cpp -o alang.exe -fexec-charset=GBK
