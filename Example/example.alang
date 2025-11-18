@@ -1,27 +1,37 @@
+// 示例总览：按章节展示 ALang 的核心能力
+// 提示：脚本末尾会打印结束语；CLI 主程序随后会调用 runEventLoopUntilIdle() 排空事件循环，
+// 以便看到 then/catch 和 go 的异步输出结果。
+
+// 1) 变量、函数与基础算术
 println("== Variables, Functions, Math ==");
 function add(a, b) { return a + b; }
 let x = 10; let y = 90;
 println("sum: ${add(x, y)}");
 
+// 2) 循环与条件：while 与 if/else
 println(""); println("== Loops & Conditionals ==");
 let i = 0; let acc = 0;
 while (i < 5) { acc = acc + i; i = i + 1; }
 if (acc >= 10) { println("acc: ${acc}"); } else { println("small ${acc}"); }
 
+// 3) 数组与对象：下标赋值、属性访问、计算属性名
 println(""); println("== Arrays & Objects ==");
 let arr = [1, 2, 3]; arr[1] = 42; println("arr: ${arr}");
 let obj = { a: 1, b: "hi" }; println("obj.a: ${obj.a}"); obj["c"] = 7; println("obj: ${obj}");
 let key = "dyn"; let o2 = { [key]: 1, x: 2 }; println("computed: dyn=${o2.dyn}, x=${o2.x}");
 
+// 4) for / break / continue：跳过与提前退出
 println(""); println("== for / break / continue ==");
 let s = 0;
 for (let k = 0; k < 10; k = k + 1) { if (k == 3) continue; if (k == 8) break; s = s + k; }
 println("sum for: ${s}");
 
+// 5) 方法风格内置：len()/push()（字符串/数组/对象都支持 len）
 println(""); println("== Methods: len / push ==");
 let s2 = "hello"; println("s2.len(): ${s2.len()}");
 let a2 = [1,2]; a2.push(3); println("a2: ${a2}, a2.len(): ${a2.len()}");
 
+// 6) 类、继承与扩展：使用 '<-' 继承；用 extends 扩展已有类的方法
 println(""); println("== Classes, Inheritance, Extends ==");
 class Base { function constructor(v) { this.value = v; } function get() { return this.value; } }
 class Test <- Base { function inc() { this.value = this.value + 1; } }
@@ -30,24 +40,29 @@ println("t.get(): ${t.get()}"); t.inc(); println("t after inc: ${t.get()}"); pri
 extends Test { function twice() { this.value = this.value * 2; } }
 let t2 = new Test(10); t2.twice(); println("t2: ${t2.value}");
 
+// 7) 接口与动态派发：interface 仅声明签名，可作为多继承的父类型参与方法查找
 println(""); println("== Interface & Dynamic Dispatch ==");
 interface Inter { function ping(a); };
 class Base2 { function ping(a) { println("Base2.ping ${a}"); } }
 class D <- (Base2, Inter) { function pong() { println("D.pong"); } }
 let d = new D(); d.ping(7); d.pong();
 
+// 8) Lambda（匿名函数表达式）：闭包与立即调用
 println(""); println("== Lambdas (Function Expressions) ==");
 let triple = [](n){ return n * 3; };
 println("triple(7): ${triple(7)}");
 println("inline call: ${([](x){ return x + 5; })(10)}");
 
+// 9) 异常：throw / try...catch；await 的拒绝也会抛异常可被捕获（见异步章节）
 println(""); println("== Exceptions: throw / try...catch ==");
 try { throw "bad"; println("unreached"); } catch(e) { println("caught: ${e}"); }
 
+// 10) 字符串插值：在字符串中用 ${expr} 内联任意表达式
 println(""); println("== String Interpolation ==");
 println("A:${x}, B:${y}, add:${add(x,y)}");
 println("inline obj: ${ {k: 1, y: 2}.k }");
 
+// 11) 异步：async/await、Promise.then/catch 链式、go 投递任务到事件循环
 println(""); println("== Async / Await / Promise / go ==");
 async function task(v) { println("task start ${v}"); await sleep(50); println("task done ${v}"); return v * 2; }
 function onTask(r) { println("then got: ${r}"); }
