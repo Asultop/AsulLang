@@ -1,10 +1,10 @@
-// Demonstration of file-based imports
-// Base dir: main script directory (set by host)
+// 文件导入示例
+// 基目录：主脚本目录（由宿主设置）
 
 import (
   "./Module/modA" 
   "./Module/modB"
-); // suffix .alang is optional
+); // 后缀 .alang 可省略
 
 println("A:", A, ", B:", B);
 let n1 = greetA("Asul");

@@ -169,6 +169,30 @@ private:
 			switch (c) {
 			case ' ': case '\r': case '\t': advance(); break;
 			case '\n': line++; advance(); lineStart = current; break;
+			case '"':
+				// Support pure triple-double-quote block comments: """ ... """
+				if (current + 2 < source.size() && peekNext() == '"' && source[current+2] == '"') {
+					// consume three quotes
+					advance(); advance(); advance();
+					while (!isAtEnd() && !(peek() == '"' && peekNext() == '"' && (current + 2 < source.size() && source[current+2] == '"'))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else return;
+				break;
+			case '\'':
+				// Support pure triple-single-quote block comments: ''' ... '''
+				if (current + 2 < source.size() && peekNext() == '\'' && source[current+2] == '\'') {
+					// consume three single quotes
+					advance(); advance(); advance();
+					while (!isAtEnd() && !(peek() == '\'' && peekNext() == '\'' && (current + 2 < source.size() && source[current+2] == '\''))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else return;
+				break;
 			case '/':
 				if (peekNext() == '/') {
 					while (!isAtEnd() && peek() != '\n') advance();
@@ -180,6 +204,33 @@ private:
 					}
 					if (!isAtEnd()) { advance(); advance(); }
 				} else return;
+				break;
+			case '#':
+				// Support Python-style single-line comments starting with '#'
+				// and block comments that start with #"""...""" or #'''...'''
+				if (current + 3 < source.size() && source[current+1] == '"' && source[current+2] == '"' && source[current+3] == '"') {
+					// consume '#' and opening triple quotes
+					advance(); advance(); advance(); advance();
+					// scan until closing triple double-quotes
+					while (!isAtEnd() && !(peek() == '"' && peekNext() == '"' && (current + 2 < source.size() && source[current+2] == '"'))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else if (current + 3 < source.size() && source[current+1] == '\'' && source[current+2] == '\'' && source[current+3] == '\'') {
+					// consume '#' and opening triple single-quotes
+					advance(); advance(); advance(); advance();
+					// scan until closing triple single-quotes
+					while (!isAtEnd() && !(peek() == '\'' && peekNext() == '\'' && (current + 2 < source.size() && source[current+2] == '\''))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else {
+					// single-line '#'-style comment
+					advance();
+					while (!isAtEnd() && peek() != '\n') advance();
+				}
 				break;
 			default:
 				return;
