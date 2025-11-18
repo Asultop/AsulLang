@@ -6,6 +6,7 @@
         "variant": "cpp",
         "mutex": "cpp",
         "memory": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "unordered_set": "cpp"
     }
 }

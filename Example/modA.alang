@@ -1,0 +1,6 @@
+// Module A: define a value and a function
+let A = 10;
+function greetA(name) { 
+    println("[A] hello, ", name); 
+    return name; 
+}

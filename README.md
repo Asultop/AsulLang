@@ -131,6 +131,33 @@ println("pi:", pi, ", abs(-3):", abs(-3));
 
 更多见 `Example/importExample.alang`。
 
+## 文件导入
+
+支持将其他脚本文件导入到当前作用域：
+
+```js
+// 单个文件
+import "path/to/module";      // 后缀 .alang 可省略
+
+// 多个文件（可混合）
+import ("modA", "modB");
+import (Math.pi, Math.abs, "utils");
+
+// 使用导入的符号
+greetA("world");
+println(A);
+```
+
+行为说明：
+
+- 相对路径基准：主脚本文件所在目录（由宿主在运行入口设置）。
+- 绝对路径：直接使用。
+- 后缀补全：若导入路径无扩展名，将先尝试原路径，若不存在再尝试追加 `.alang`。
+- 多次导入去重：同一绝对路径只会导入执行一次（防止循环与重复）。
+- 符号合入：导入文件在能访问全局内置的隔离环境中执行，执行完成后其顶层定义将“通配式”合入当前作用域（类似 `import Package.*`）。
+
+示例见 `Example/fileImportExample.alang`（依赖 `Example/modA.alang` 与 `Example/modB.alang`）。
+
 ## for/break/continue
 
 ```js

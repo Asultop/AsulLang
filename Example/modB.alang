@@ -1,0 +1,6 @@
+// Module B: define a value and a function
+let B = 32;
+function greetB(name) {
+    println("[B] welcome, ", name); 
+    return name; 
+}

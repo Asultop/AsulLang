@@ -22,6 +22,8 @@ public:
     void registerModule(const char* moduleName, std::function<void()> initFunc);
     // 错误输出颜色映射配置（键：header/code/caret/label/value）
     void setErrorColorMap(const std::unordered_map<std::string, std::string>& colorMap);
+    // 设置 import 的相对路径基准目录（默认使用当前工作目录）。
+    void setImportBaseDir(const std::string& dir);
 
     // 宿主原生类注册（简化版）：仅支持基本类型（null/number/string/bool）参数与返回
     using NativeValue = std::variant<std::monostate,double,std::string,bool>;

@@ -4,6 +4,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <cmath>
+#include <filesystem>
 
 int main(int argc, char* argv[]) {
 	ALangEngine engine;
@@ -43,6 +44,13 @@ int main(int argc, char* argv[]) {
 
 	std::string code;
 	if (argc > 1) {
+		// 设置 import 相对路径基准为主脚本所在目录
+		try {
+			std::filesystem::path inPath(argv[1]);
+			std::filesystem::path base = inPath.has_parent_path() ? inPath.parent_path() : std::filesystem::current_path();
+			engine.setImportBaseDir(base.string());
+		} catch (...) { /* ignore base dir errors */ }
+
 		std::ifstream in(argv[1]);
 		if (!in) { std::cerr << "Cannot open file: " << argv[1] << std::endl; return 1; }
 		std::ostringstream ss; ss << in.rdbuf(); code = ss.str();

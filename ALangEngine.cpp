@@ -16,11 +16,15 @@
 #include <string>
 #include <iomanip>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 #include <utility>
 #include <variant>
 #include <vector>
 #include <queue>
+#include <filesystem>
+#include <fstream>
+#include <optional>
 #include "AsulFormatString/AsulFormatString.h"
 
 namespace {
@@ -421,7 +425,14 @@ struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(st
 struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
 struct EmptyStmt : Stmt {};
 struct ImportStmt : Stmt {
-	struct Entry { std::string packageName; std::string symbol; }; // symbol == "*" means wildcard
+	struct Entry {
+		// Package import (existing behavior): symbol == "*" means wildcard
+		std::string packageName;
+		std::string symbol;
+		// File import: when isFile == true, use filePath and ignore packageName/symbol
+		bool isFile{false};
+		std::string filePath; // may be relative or absolute; .alang suffix may be omitted
+	};
 	std::vector<Entry> entries;
 };
 
@@ -494,43 +505,56 @@ private:
 			if (match({TokenType::LeftParen})) {
 				while (!check(TokenType::RightParen) && !isAtEnd()) {
 					auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-					imp->entries.push_back({pkg, name});
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = name; e.isFile = false; imp->entries.push_back(e);
 					(void)match({TokenType::Comma});
 				}
 				consume(TokenType::RightParen, "Expect ')' after import list");
 			} else {
 				auto name = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-				imp->entries.push_back({pkg, name});
+				ImportStmt::Entry e; e.packageName = pkg; e.symbol = name; e.isFile = false; imp->entries.push_back(e);
 			}
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
 
-		// import Package.* | import Package.(a b ...) | import (Pkg.a Pkg.b ...)
+		// import Package.* | import Package.(a b ...) | import (Pkg.a Pkg.b ...) | import "file" | import ("f1" "f2" ...)
 		if (match({TokenType::LeftParen})) {
-			// import (Pkg.a Pkg.b ...)
+			// import (Pkg.a Pkg.b ...) or ("file1" "file2" ...)
 			while (!check(TokenType::RightParen) && !isAtEnd()) {
-				auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
-				consume(TokenType::Dot, "Expect '.' after package name");
-				auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-				imp->entries.push_back({pkg, sym});
+				if (match({TokenType::String})) {
+					// file import entry from string literal
+					Token t = previous();
+					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; imp->entries.push_back(e);
+				} else {
+					auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
+					consume(TokenType::Dot, "Expect '.' after package name");
+					auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = sym; e.isFile = false; imp->entries.push_back(e);
+				}
 				(void)match({TokenType::Comma});
 			}
 			consume(TokenType::RightParen, "Expect ')' after import list");
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
+		// Support: import "file";  OR keep existing package import forms
+		if (match({TokenType::String})) {
+			Token t = previous();
+			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; imp->entries.push_back(e);
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
 		auto pkg = consume(TokenType::Identifier, "Expect package name").lexeme;
 		consume(TokenType::Dot, "Expect '.' after package name");
 		if (match({TokenType::Star})) {
-			imp->entries.push_back({pkg, std::string("*")});
+			ImportStmt::Entry e; e.packageName = pkg; e.symbol = std::string("*"); e.isFile = false; imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
 		consume(TokenType::LeftParen, "Expect '(' after package '.' for symbol list");
 		while (!check(TokenType::RightParen) && !isAtEnd()) {
 			auto sym = consume(TokenType::Identifier, "Expect symbol name").lexeme;
-			imp->entries.push_back({pkg, sym});
+			ImportStmt::Entry e; e.packageName = pkg; e.symbol = sym; e.isFile = false; imp->entries.push_back(e);
 			(void)match({TokenType::Comma});
 		}
 		consume(TokenType::RightParen, "Expect ')' after symbol list");
@@ -1013,6 +1037,11 @@ class Interpreter {
 public:
 	Interpreter() { globals = std::make_shared<Environment>(); env = globals; installBuiltins(); }
 
+	void setImportBaseDir(const std::string& base) {
+		try { importBaseDir = std::filesystem::path(base); }
+		catch (...) { importBaseDir.clear(); }
+	}
+
 	void execute(const std::vector<StmtPtr>& stmts) {
 		for (auto& s : stmts) execute(s);
 	}
@@ -1034,6 +1063,68 @@ public:
 				fn = std::move(taskQueue.front()); taskQueue.pop();
 			}
 			if (fn) fn();
+		}
+	}
+
+	// Import external file: resolve path, read, parse and execute in isolated env, then merge symbols
+	void importFilePath(const std::string& rawPath) {
+		try {
+			namespace fs = std::filesystem;
+			fs::path p(rawPath);
+			// Try both as-is and with .alang suffix if no extension
+			auto resolveCandidate = [&](const fs::path& cand, fs::path& out)->bool{
+				std::error_code ec{};
+				fs::path base = importBaseDir.empty() ? fs::current_path(ec) : importBaseDir;
+				fs::path abs = cand.is_absolute() ? cand : (base / cand);
+				if (!ec && fs::exists(abs)) { out = fs::weakly_canonical(abs, ec); return true; }
+				return false;
+			};
+			fs::path finalPath;
+			bool found = false;
+			if (p.has_extension()) {
+				found = resolveCandidate(p, finalPath);
+			} else {
+				// try without extension first, then add .alang
+				found = resolveCandidate(p, finalPath);
+				if (!found) {
+					fs::path withExt = p.string() + ".alang";
+					found = resolveCandidate(withExt, finalPath);
+				}
+			}
+			if (!found) {
+				throw std::runtime_error(std::string("Import file not found: ") + rawPath);
+			}
+			std::string key = finalPath.string();
+			if (importedFiles.find(key) != importedFiles.end()) return; // already imported
+
+			// Read file content
+			std::ifstream in(key, std::ios::in | std::ios::binary);
+			if (!in) throw std::runtime_error(std::string("Cannot open import file: ") + key);
+			std::ostringstream ss; ss << in.rdbuf();
+			std::string code = ss.str();
+
+			// Lex/parse
+			Lexer lx(code);
+			auto tokens = lx.scanTokens();
+			Parser ps(tokens, code);
+			auto stmts = ps.parse();
+
+			// Execute in an isolated environment that can see globals (builtins/classes)
+			auto fileEnv = std::make_shared<Environment>(globals);
+			// Run
+			executeBlock(stmts, fileEnv);
+
+			// Merge symbols into current env (similar to wildcard import)
+			for (const auto& kv : fileEnv->values) {
+				// Bring into the current environment
+				env->define(kv.first, kv.second);
+			}
+
+			// Mark imported
+			importedFiles.insert(key);
+		} catch (const ExceptionSignal& ex) {
+			// rethrow as std::exception so it can be surfaced with caret by caller
+			throw std::runtime_error(toString(ex.value));
 		}
 	}
 
@@ -1309,6 +1400,10 @@ public:
 		if (std::dynamic_pointer_cast<EmptyStmt>(stmt)) { return; }
 		if (auto imp = std::dynamic_pointer_cast<ImportStmt>(stmt)) {
 			for (auto& ent : imp->entries) {
+				if (ent.isFile) {
+					importFilePath(ent.filePath);
+					continue;
+				}
 				auto it = packages.find(ent.packageName);
 				if (it == packages.end()) throw std::runtime_error("Unknown package: " + ent.packageName);
 				auto pobj = it->second;
@@ -1489,6 +1584,8 @@ private:
 	std::condition_variable loopCv;
 	std::queue<std::function<void()>> taskQueue;
 	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
+	std::unordered_set<std::string> importedFiles;
+    std::filesystem::path importBaseDir;
 
 	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) {
 		{
@@ -2214,5 +2311,9 @@ ALangEngine::NativeValue ALangEngine::callFunction(
 
 void ALangEngine::runEventLoopUntilIdle() {
 	impl->interpreter.runEventLoopUntilIdle();
+}
+
+void ALangEngine::setImportBaseDir(const std::string& dir) {
+	impl->interpreter.setImportBaseDir(dir);
 }
 

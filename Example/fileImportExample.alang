@@ -1,0 +1,12 @@
+// Demonstration of file-based imports
+// Base dir: main script directory (set by host)
+
+import (
+  "modA" 
+  "modB"
+); // suffix .alang is optional
+
+println("A:", A, ", B:", B);
+let n1 = greetA("Asul");
+let n2 = greetB("Lang");
+println("done:", n1, ",", n2);
