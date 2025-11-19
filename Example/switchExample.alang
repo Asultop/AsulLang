@@ -1,0 +1,173 @@
+println("== Switch/Case 基础示例 ==");
+
+// 示例1: 基础 switch 语句
+let day = 3;
+switch (day) {
+    case 1:
+        println("星期一");
+        break;
+    case 2:
+        println("星期二");
+        break;
+    case 3:
+        println("星期三");
+        break;
+    case 4:
+        println("星期四");
+        break;
+    case 5:
+        println("星期五");
+        break;
+    case 6:
+        println("星期六");
+        break;
+    case 7:
+        println("星期日");
+        break;
+    default:
+        println("无效的日期");
+        break;
+}
+
+// 示例2: 使用字符串
+let fruit = "apple";
+switch (fruit) {
+    case "apple":
+        println("苹果: 5元/斤");
+        break;
+    case "banana":
+        println("香蕉: 3元/斤");
+        break;
+    case "orange":
+        println("橙子: 4元/斤");
+        break;
+    default:
+        println("水果不在列表中");
+        break;
+}
+
+// 示例3: Fall-through (不使用 break)
+println("\n== Fall-through 示例 ==");
+let score = 85;
+let grade = "";
+switch (true) {
+    case score >= 90:
+        grade = "优秀";
+        break;
+    case score >= 80:
+        grade = "良好";
+        break;
+    case score >= 70:
+        grade = "中等";
+        break;
+    case score >= 60:
+        grade = "及格";
+        break;
+    default:
+        grade = "不及格";
+        break;
+}
+println("分数:", score, ", 等级:", grade);
+
+// 示例4: 多个 case 共享代码 (利用 fall-through)
+println("\n== 多个 case 共享代码 ==");
+let month = 2;
+let daysInMonth = 0;
+switch (month) {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+    case 10:
+    case 12:
+        daysInMonth = 31;
+        break;
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+        daysInMonth = 30;
+        break;
+    case 2:
+        daysInMonth = 28;
+        break;
+    default:
+        println("无效的月份");
+        break;
+}
+println("月份", month, "有", daysInMonth, "天");
+
+// 示例5: Switch 中使用表达式
+println("\n== Switch 中使用表达式 ==");
+function getOperation(op, a, b) {
+    let result = 0;
+    switch (op) {
+        case "+":
+            result = a + b;
+            break;
+        case "-":
+            result = a - b;
+            break;
+        case "*":
+            result = a * b;
+            break;
+        case "/":
+            result = a / b;
+            break;
+        default:
+            println("未知运算符:", op);
+            return null;
+    }
+    return result;
+}
+
+println("10 + 5 =", getOperation("+", 10, 5));
+println("10 - 5 =", getOperation("-", 10, 5));
+println("10 * 5 =", getOperation("*", 10, 5));
+println("10 / 5 =", getOperation("/", 10, 5));
+
+// 示例6: Default 分支
+println("\n== Default 分支 ==");
+let unknown = 999;
+switch (unknown) {
+    case 1:
+        println("是 1");
+        break;
+    case 2:
+        println("是 2");
+        break;
+    default:
+        println("未知值:", unknown);
+        break;
+}
+
+// 示例7: Switch 嵌套
+println("\n== Switch 嵌套 ==");
+let category = "electronics";
+let item = "laptop";
+
+switch (category) {
+    case "electronics":
+        println("电子产品:");
+        switch (item) {
+            case "laptop":
+                println("  - 笔记本电脑");
+                break;
+            case "phone":
+                println("  - 手机");
+                break;
+            default:
+                println("  - 其他电子产品");
+                break;
+        }
+        break;
+    case "books":
+        println("图书类");
+        break;
+    default:
+        println("其他类别");
+        break;
+}
+
+println("\n== Switch 示例结束 ==");

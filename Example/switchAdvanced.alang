@@ -1,0 +1,298 @@
+println("== Switch/Case 高级示例 ==");
+
+// 示例1: 状态机模拟
+println("== 示例1: 状态机 ==");
+let state = "idle";
+let events = ["start", "pause", "resume", "stop"];
+
+function processEvent(currentState, event) {
+    let newState = currentState;
+    switch (currentState) {
+        case "idle":
+            switch (event) {
+                case "start":
+                    newState = "running";
+                    println("状态转换: idle -> running");
+                    break;
+                default:
+                    println("idle 状态下忽略事件:", event);
+                    break;
+            }
+            break;
+        case "running":
+            switch (event) {
+                case "pause":
+                    newState = "paused";
+                    println("状态转换: running -> paused");
+                    break;
+                case "stop":
+                    newState = "idle";
+                    println("状态转换: running -> idle");
+                    break;
+                default:
+                    println("running 状态下忽略事件:", event);
+                    break;
+            }
+            break;
+        case "paused":
+            switch (event) {
+                case "resume":
+                    newState = "running";
+                    println("状态转换: paused -> running");
+                    break;
+                case "stop":
+                    newState = "idle";
+                    println("状态转换: paused -> idle");
+                    break;
+                default:
+                    println("paused 状态下忽略事件:", event);
+                    break;
+            }
+            break;
+    }
+    return newState;
+}
+
+state = processEvent(state, "start");
+state = processEvent(state, "pause");
+state = processEvent(state, "resume");
+state = processEvent(state, "stop");
+
+// 示例2: 类型判断与处理
+println("\n== 示例2: 类型判断 ==");
+function processValue(val) {
+    let t = val.type();
+    switch (t) {
+        case "number":
+            println("数字:", val, ", 平方:", val * val);
+            break;
+        case "string":
+            println("字符串:", val, ", 长度:", val.len());
+            break;
+        case "array":
+            println("数组, 元素个数:", val.len());
+            break;
+        case "object":
+            println("对象, 属性个数:", len(val));
+            break;
+        case "function":
+            println("这是一个函数");
+            break;
+        default:
+            println("其他类型:", t);
+            break;
+    }
+}
+
+processValue(42);
+processValue("hello");
+processValue([1, 2, 3, 4, 5]);
+processValue({name: "Alice", age: 30});
+processValue(processValue);
+
+// 示例3: 模式匹配风格的计算器
+println("\n== 示例3: 计算器 (支持多种操作) ==");
+function calculate(expr) {
+    let op = expr.op;
+    let a = expr.a;
+    let b = expr.b;
+    
+    switch (op) {
+        case "add":
+        case "+":
+            return a + b;
+        case "sub":
+        case "-":
+            return a - b;
+        case "mul":
+        case "*":
+            return a * b;
+        case "div":
+        case "/":
+            if (b == 0) {
+                println("错误: 除数不能为零");
+                return null;
+            }
+            return a / b;
+        case "mod":
+        case "%":
+            return a % b;
+        case "pow":
+            {
+                let result = 1;
+                for (let i = 0; i < b; i++) {
+                    result = result * a;
+                }
+                return result;
+            }
+        default:
+            println("未知操作:", op);
+            return null;
+    }
+}
+
+println("10 + 5 =", calculate({op: "add", a: 10, b: 5}));
+println("10 - 5 =", calculate({op: "sub", a: 10, b: 5}));
+println("10 * 5 =", calculate({op: "*", a: 10, b: 5}));
+println("10 / 5 =", calculate({op: "/", a: 10, b: 5}));
+println("10 % 3 =", calculate({op: "mod", a: 10, b: 3}));
+println("2 ^ 8 =", calculate({op: "pow", a: 2, b: 8}));
+
+// 示例4: HTTP 状态码处理
+println("\n== 示例4: HTTP 状态码 ==");
+function handleHttpStatus(code) {
+    switch (code) {
+        case 200:
+            println("200 OK - 请求成功");
+            break;
+        case 201:
+            println("201 Created - 资源创建成功");
+            break;
+        case 204:
+            println("204 No Content - 无内容返回");
+            break;
+        case 301:
+        case 302:
+            println("3xx - 重定向");
+            break;
+        case 400:
+            println("400 Bad Request - 请求错误");
+            break;
+        case 401:
+            println("401 Unauthorized - 未授权");
+            break;
+        case 403:
+            println("403 Forbidden - 禁止访问");
+            break;
+        case 404:
+            println("404 Not Found - 资源未找到");
+            break;
+        case 500:
+            println("500 Internal Server Error - 服务器内部错误");
+            break;
+        case 503:
+            println("503 Service Unavailable - 服务不可用");
+            break;
+        default:
+            if (code >= 200 && code < 300) {
+                println("2xx 成功");
+            } else if (code >= 400 && code < 500) {
+                println("4xx 客户端错误");
+            } else if (code >= 500) {
+                println("5xx 服务器错误");
+            } else {
+                println("未知状态码:", code);
+            }
+            break;
+    }
+}
+
+handleHttpStatus(200);
+handleHttpStatus(404);
+handleHttpStatus(500);
+handleHttpStatus(302);
+
+// 示例5: 菜单系统
+println("\n== 示例5: 菜单系统 ==");
+function showMenu(choice) {
+    switch (choice) {
+        case 1:
+            println("选项 1: 新建文件");
+            println("  操作: 创建一个新的空白文件");
+            break;
+        case 2:
+            println("选项 2: 打开文件");
+            println("  操作: 浏览并打开现有文件");
+            break;
+        case 3:
+            println("选项 3: 保存文件");
+            println("  操作: 保存当前文件");
+            break;
+        case 4:
+            println("选项 4: 另存为");
+            println("  操作: 以新名称保存文件");
+            break;
+        case 0:
+            println("退出程序");
+            break;
+        default:
+            println("无效选项，请重新选择");
+            break;
+    }
+}
+
+showMenu(1);
+showMenu(3);
+showMenu(0);
+
+// 示例6: 季节判断
+println("\n== 示例6: 根据月份判断季节 ==");
+function getSeason(month) {
+    let season = "";
+    switch (month) {
+        case 12:
+        case 1:
+        case 2:
+            season = "冬季";
+            break;
+        case 3:
+        case 4:
+        case 5:
+            season = "春季";
+            break;
+        case 6:
+        case 7:
+        case 8:
+            season = "夏季";
+            break;
+        case 9:
+        case 10:
+        case 11:
+            season = "秋季";
+            break;
+        default:
+            season = "无效月份";
+            break;
+    }
+    return season;
+}
+
+for (let m = 1; m <= 12; m++) {
+    println("月份", m, ":", getSeason(m));
+}
+
+// 示例7: 权限检查
+println("\n== 示例7: 权限级别 ==");
+function checkPermission(role) {
+    switch (role) {
+        case "admin":
+            println("管理员权限:");
+            println("  - 可以读取");
+            println("  - 可以写入");
+            println("  - 可以删除");
+            println("  - 可以管理用户");
+            break;
+        case "editor":
+            println("编辑者权限:");
+            println("  - 可以读取");
+            println("  - 可以写入");
+            println("  - 可以删除自己的内容");
+            break;
+        case "viewer":
+            println("查看者权限:");
+            println("  - 可以读取");
+            break;
+        case "guest":
+            println("访客权限:");
+            println("  - 仅限访问公开内容");
+            break;
+        default:
+            println("未知角色:", role);
+            break;
+    }
+}
+
+checkPermission("admin");
+checkPermission("viewer");
+
+println("\n== Switch 高级示例结束 ==");
