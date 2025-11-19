@@ -9,6 +9,9 @@
         "utility": "cpp",
         "unordered_set": "cpp",
         "filesystem": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "bitset": "cpp",
+        "string_view": "cpp",
+        "regex": "cpp"
     }
 }

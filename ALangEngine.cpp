@@ -96,11 +96,25 @@ private:
 	}
 
 	void string() {
+int startLine = line;  // Save the starting line
+size_t startLineStart = lineStart;  // Save starting line position
 		while (!isAtEnd() && peek() != '"') {
 			if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
 			advance();
 		}
-		if (isAtEnd()) throw std::runtime_error("Unterminated string at line " + std::to_string(line));
+		if (isAtEnd()) {
+			int col = static_cast<int>((start >= startLineStart) ? (start - startLineStart + 1) : 1);
+			int len = static_cast<int>(current - start);
+			// construct line text and caret
+			size_t ls = startLineStart;
+			size_t le = ls;
+			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+			std::string lineStr = source.substr(ls, le - ls);
+			std::ostringstream oss;
+			oss << "Unterminated string at line " << startLine << ", column " << col << ", length " << len << "\n";
+			oss << lineStr << "\n" << std::string(col > 1 ? col - 1 : 0, ' ') << std::string(std::max(1, len), '^');
+			throw std::runtime_error(oss.str());
+		}
 		advance(); // closing quote
 		std::string raw = source.substr(start + 1, current - start - 2);
 		// Unescape common sequences: \n, \t, \r, \\, \", \' and \0
@@ -1085,7 +1099,7 @@ private:
 			if (s.find("${") == std::string::npos) {
 				return std::make_shared<LiteralExpr>(Value{s});
 			}
-			return parseInterpolatedString(s, tok.line);
+			return parseInterpolatedString(s, tok.line, tok.column, std::max(1, tok.length));
 		}
 		if (match({TokenType::Identifier})) { auto tok = previous(); return std::make_shared<VariableExpr>(tok.lexeme, tok.line, tok.column, tok.length); }
 		if (match({TokenType::LeftBracket})) {
@@ -1141,13 +1155,14 @@ private:
 	}
 
 	// --- 插值字符串支持："hello ${expr} world" -> 通过'+'串联 ---
-	ExprPtr parseInterpolatedString(const std::string& s, int line) {
+	ExprPtr parseInterpolatedString(const std::string& s, int line, int column, int length) {
 		std::vector<ExprPtr> parts;
 		std::string raw;
 		auto flushRaw = [&](){ if (!raw.empty()) { parts.push_back(std::make_shared<LiteralExpr>(Value{raw})); raw.clear(); } };
 		for (size_t i=0;i<s.size();) {
 			if (s[i] == '$' && i+1 < s.size() && s[i+1] == '{') {
 				flushRaw();
+				size_t startPos = i; // 记录 ${ 的起始位置
 				i += 2; // skip ${
 				int depth = 1; bool inStr = false; bool esc = false;
 				std::string exprText;
@@ -1164,8 +1179,12 @@ private:
 					if (c == '}') { depth--; if (depth == 0) { ++i; break; } exprText.push_back(c); continue; }
 					exprText.push_back(c);
 				}
+				// 计算插值表达式在源代码中的准确列位置
+				// column 是字符串开始的列，加上开头的引号(1)，再加上字符串内的偏移
+				int interpolationColumn = column + 1 + startPos;
+				int interpolationLength = i - startPos; // 包含 ${ ... } 的完整长度
 				// 解析 exprText 为表达式
-				parts.push_back(parseExprSnippet(exprText));
+				parts.push_back(parseExprSnippet(exprText, line, interpolationColumn, interpolationLength));
 				continue;
 			}
 			raw.push_back(s[i]);
@@ -1182,7 +1201,7 @@ private:
 		return acc;
 	}
 
-	ExprPtr parseExprSnippet(const std::string& code) {
+	ExprPtr parseExprSnippet(const std::string& code, int line, int column, int length) {
 		// 将子表达式封装为一个独立的解析： (expr);
 		// 使用括号避免以 '{' 开头被误判为块语句。
 		std::string snippet = "(";
@@ -1192,10 +1211,25 @@ private:
 		Lexer lx(snippet);
 		auto toks = lx.scanTokens();
 		Parser sub(toks, snippet);
-		auto stmts = sub.parse();
-		if (stmts.empty()) throw std::runtime_error("Empty interpolation expression");
+		std::vector<StmtPtr> stmts;
+		try {
+			stmts = sub.parse();
+		} catch (const std::exception& e) {
+			// 捕获子解析器的异常，重新抛出为包含正确位置信息的异常
+			// 不包含行文本和箭头，让 printErrorWithContext 来格式化
+			std::ostringstream oss;
+			oss << "Expect expression at line " << line << ", column " << column << ", length " << length;
+			throw std::runtime_error(oss.str());
+		}
+		if (stmts.empty()) {
+			std::ostringstream oss;
+			oss << "Empty interpolation expression at line " << line << ", column " << column << ", length " << length;
+			throw std::runtime_error(oss.str());
+		}
 		if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmts[0])) return es->expr;
-		throw std::runtime_error("Invalid interpolation expression");
+		std::ostringstream oss;
+		oss << "Invalid interpolation expression at line " << line << ", column " << column << ", length " << length;
+		throw std::runtime_error(oss.str());
 	}
 };
 
@@ -2196,7 +2230,11 @@ public:
 		// String synthetic methods
 		if (auto ps = std::get_if<std::string>(&obj)) {
 			if (name == "len") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(s.size()) }; }; return fn; }
-			return Value{std::monostate{}};
+			return Value{std::string("undefined")};
+		}
+		// For numbers and other primitives, return "undefined" instead of null
+		if (std::get_if<double>(&obj) || std::get_if<bool>(&obj)) {
+			return Value{std::string("undefined")};
 		}
 		// Promise synthetic methods: then/catch
 		if (auto p = std::get_if<std::shared_ptr<PromiseState>>(&obj)) {
