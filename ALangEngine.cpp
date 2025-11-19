@@ -496,6 +496,7 @@ struct Stmt; struct Expr; using StmtPtr = std::shared_ptr<Stmt>; using ExprPtr =
 
 struct Function {
 	std::vector<std::string> params;
+	int restParamIndex{-1}; // -1 表示没有 rest 参数，否则表示 rest 参数的索引
 	std::vector<StmtPtr> body;
 	std::shared_ptr<Environment> closure;
 	bool isBuiltin{false};
@@ -553,7 +554,12 @@ struct ObjectLiteralExpr : Expr {
 };
 struct SpreadExpr : Expr { ExprPtr expr; explicit SpreadExpr(ExprPtr e): expr(std::move(e)){} };
 struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
-struct Param { std::string name; std::optional<std::string> type; Param(std::string n, std::optional<std::string> t = std::nullopt): name(std::move(n)), type(std::move(t)) {} };
+struct Param { 
+	std::string name; 
+	std::optional<std::string> type; 
+	bool isRest{false}; 
+	Param(std::string n, std::optional<std::string> t = std::nullopt, bool rest = false): name(std::move(n)), type(std::move(t)), isRest(rest) {} 
+};
 
 struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; explicit FunctionExpr(std::vector<Param> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
 
@@ -839,12 +845,28 @@ private:
 		auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
 		std::vector<Param> params;
+		bool hasRest = false;
 		if (!check(TokenType::RightParen)) {
 			do {
+				// Check for rest parameter: ...paramName
+				bool isRest = false;
+				if (match({TokenType::Ellipsis})) {
+					if (hasRest) {
+						throw std::runtime_error("Only one rest parameter allowed");
+					}
+					isRest = true;
+					hasRest = true;
+				}
+				
 				auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
 				std::optional<std::string> ptype = std::nullopt;
 				if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
-				params.emplace_back(pname, ptype);
+				params.emplace_back(pname, ptype, isRest);
+				
+				// Rest parameter must be last
+				if (isRest && !check(TokenType::RightParen)) {
+					throw std::runtime_error("Rest parameter must be last");
+				}
 			} while (match({TokenType::Comma}));
 		}
 		consume(TokenType::RightParen, "Expect ')'");
@@ -1245,12 +1267,28 @@ private:
 				advance(); // ]
 				advance(); // (
 				std::vector<Param> params;
+				bool hasRest = false;
 				if (!check(TokenType::RightParen)) {
 					do {
+						// Check for rest parameter: ...paramName
+						bool isRest = false;
+						if (match({TokenType::Ellipsis})) {
+							if (hasRest) {
+								throw std::runtime_error("Only one rest parameter allowed");
+							}
+							isRest = true;
+							hasRest = true;
+						}
+						
 						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
 						std::optional<std::string> ptype = std::nullopt;
 						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
-						params.emplace_back(pname, ptype);
+						params.emplace_back(pname, ptype, isRest);
+						
+						// Rest parameter must be last
+						if (isRest && !check(TokenType::RightParen)) {
+							throw std::runtime_error("Rest parameter must be last");
+						}
 					} while (match({TokenType::Comma}));
 				}
 				consume(TokenType::RightParen, "Expect ')' after lambda parameters");
@@ -1921,11 +1959,28 @@ public:
 				postTask([this, fn, args, p]{
 					// 在闭包环境基础上创建局部环境并执行
 					auto local = std::make_shared<Environment>(fn->closure);
-					if (args.size() != fn->params.size()) {
-						for (size_t i=0;i<fn->params.size() && i<args.size();++i) local->define(fn->params[i], args[i]);
+					
+					// Handle rest parameters
+					if (fn->restParamIndex >= 0) {
+						// Bind normal parameters
+						for (int i = 0; i < fn->restParamIndex && i < static_cast<int>(args.size()); ++i) {
+							local->define(fn->params[i], args[i]);
+						}
+						// Collect rest parameters into array
+						auto restArray = std::make_shared<std::vector<Value>>();
+						for (size_t i = fn->restParamIndex; i < args.size(); ++i) {
+							restArray->push_back(args[i]);
+						}
+						local->define(fn->params[fn->restParamIndex], Value{restArray});
 					} else {
-						for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
+						// No rest parameter, use old logic
+						if (args.size() != fn->params.size()) {
+							for (size_t i=0;i<fn->params.size() && i<args.size();++i) local->define(fn->params[i], args[i]);
+						} else {
+							for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
+						}
 					}
+					
 					Value ret{std::monostate{}};
 					try {
 						executeBlock(fn->body, local);
@@ -1939,6 +1994,38 @@ public:
 				});
 				return Value{p};
 			}
+			
+			// Synchronous function call
+			// Handle rest parameters
+			if (fn->restParamIndex >= 0) {
+				// Check minimum parameter count
+				int minParams = fn->restParamIndex;
+				if (static_cast<int>(args.size()) < minParams) {
+					std::ostringstream oss; 
+					oss << "Expected at least " << minParams << " arguments but got " << args.size() 
+					    << " at line " << call->line << ", column " << call->column << ", length " << call->length; 
+					throw std::runtime_error(oss.str());
+				}
+				
+				auto local = std::make_shared<Environment>(fn->closure);
+				// Bind normal parameters
+				for (int i = 0; i < fn->restParamIndex; ++i) {
+					local->define(fn->params[i], args[i]);
+				}
+				// Collect rest parameters into array
+				auto restArray = std::make_shared<std::vector<Value>>();
+				for (size_t i = fn->restParamIndex; i < args.size(); ++i) {
+					restArray->push_back(args[i]);
+				}
+				local->define(fn->params[fn->restParamIndex], Value{restArray});
+				
+				try {
+					executeBlock(fn->body, local);
+				} catch (const ReturnSignal& rs) { return rs.value; }
+				return Value{std::monostate{}};
+			}
+			
+			// No rest parameter
 			if (args.size() != fn->params.size()) {
 				std::ostringstream oss; oss << "Arity mismatch at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
 			}
@@ -1966,7 +2053,13 @@ public:
 			auto fn = std::make_shared<Function>();
 			// extract parameter names (ignore optional types at runtime)
 			fn->params.clear();
-			for (auto &p : fexpr->params) fn->params.push_back(p.name);
+			fn->restParamIndex = -1;
+			for (size_t i = 0; i < fexpr->params.size(); ++i) {
+				fn->params.push_back(fexpr->params[i].name);
+				if (fexpr->params[i].isRest) {
+					fn->restParamIndex = static_cast<int>(i);
+				}
+			}
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(fexpr->body)) fn->body = innerBlock->statements; else fn->body = { fexpr->body };
 			fn->closure = env; // 关闭环境捕获
 			return Value{fn};
@@ -2217,7 +2310,13 @@ public:
 			auto fn = std::make_shared<Function>();
 			// extract parameter names (ignore optional types at runtime)
 			fn->params.clear();
-			for (auto &p : f->params) fn->params.push_back(p.name);
+			fn->restParamIndex = -1;
+			for (size_t i = 0; i < f->params.size(); ++i) {
+				fn->params.push_back(f->params[i].name);
+				if (f->params[i].isRest) {
+					fn->restParamIndex = static_cast<int>(i);
+				}
+			}
 			// 将语句体包装成块：函数体如果是单个语句，处理成block便于复用
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(f->body)) fn->body = innerBlock->statements;
 			else fn->body = { f->body };

@@ -1,0 +1,152 @@
+println("== Rest Parameters 基础示例 ==");
+
+// 示例1: 求和函数（接收任意数量的参数）
+function sum(...numbers) {
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total;
+}
+
+println("sum(1, 2, 3) =", sum(1, 2, 3));
+println("sum(10, 20, 30, 40, 50) =", sum(10, 20, 30, 40, 50));
+println("sum() =", sum());  // 空数组
+
+// 示例2: 打印所有参数
+function printAll(...args) {
+    println("收到", args.len(), "个参数:");
+    foreach (arg in args) {
+        println("  -", arg);
+    }
+}
+
+printAll("hello", "world", "rest", "params");
+printAll(1, 2, 3);
+printAll();
+
+// 示例3: 普通参数 + Rest 参数
+function greet(greeting, ...names) {
+    foreach (name in names) {
+        println(greeting, name);
+    }
+}
+
+println("\n== 混合普通参数和 Rest 参数 ==");
+greet("Hello", "Alice", "Bob", "Charlie");
+greet("Hi", "Dave");
+
+// 示例4: 查找最大值
+function max(...numbers) {
+    if (numbers.len() == 0) {
+        return null;
+    }
+    let maxVal = numbers[0];
+    foreach (num in numbers) {
+        if (num > maxVal) {
+            maxVal = num;
+        }
+    }
+    return maxVal;
+}
+
+println("\n== 查找最大值 ==");
+println("max(5, 2, 9, 1, 7) =", max(5, 2, 9, 1, 7));
+println("max(100, 50, 200, 75) =", max(100, 50, 200, 75));
+println("max(-5, -10, -2) =", max(-5, -10, -2));
+
+// 示例5: 字符串连接
+function concat(separator, ...strings) {
+    if (strings.len() == 0) {
+        return "";
+    }
+    let result = strings[0];
+    for (let i = 1; i < strings.len(); i++) {
+        result = result + separator + strings[i];
+    }
+    return result;
+}
+
+println("\n== 字符串连接 ==");
+println("concat('-', 'a', 'b', 'c') =", concat("-", "a", "b", "c"));
+println("concat(' ', 'hello', 'world') =", concat(" ", "hello", "world"));
+println("concat(',', '1', '2', '3', '4', '5') =", concat(",", "1", "2", "3", "4", "5"));
+
+// 示例6: Lambda 表达式中的 Rest 参数
+let multiply = [](factor, ...numbers) {
+    let result = [];
+    foreach (num in numbers) {
+        push(result, num * factor);
+    }
+    return result;
+};
+
+println("\n== Lambda 中的 Rest 参数 ==");
+println("multiply(2, 1, 2, 3, 4, 5) =", multiply(2, 1, 2, 3, 4, 5));
+println("multiply(10, 5, 7, 9) =", multiply(10, 5, 7, 9));
+
+// 示例7: 构建对象
+function createPerson(name, age, ...hobbies) {
+    return {
+        name: name,
+        age: age,
+        hobbies: hobbies
+    };
+}
+
+println("\n== 构建对象 ==");
+let person1 = createPerson("Alice", 25, "reading", "coding", "gaming");
+println("person1.name:", person1.name);
+println("person1.age:", person1.age);
+println("person1.hobbies:", person1.hobbies);
+
+let person2 = createPerson("Bob", 30, "music", "sports");
+println("person2.name:", person2.name);
+println("person2.hobbies:", person2.hobbies);
+
+// 示例8: 平均值计算
+function average(...numbers) {
+    if (numbers.len() == 0) {
+        return 0;
+    }
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total / numbers.len();
+}
+
+println("\n== 平均值 ==");
+println("average(10, 20, 30, 40, 50) =", average(10, 20, 30, 40, 50));
+println("average(5, 15, 25) =", average(5, 15, 25));
+println("average(100) =", average(100));
+
+// 示例9: 数组合并
+function mergeArrays(...arrays) {
+    let result = [];
+    foreach (arr in arrays) {
+        foreach (item in arr) {
+            push(result, item);
+        }
+    }
+    return result;
+}
+
+println("\n== 数组合并 ==");
+let merged = mergeArrays([1, 2], [3, 4], [5, 6, 7]);
+println("merged:", merged);
+
+// 示例10: 日志函数
+function log(level, ...messages) {
+    let prefix = "[" + level + "]";
+    foreach (msg in messages) {
+        println(prefix, msg);
+    }
+}
+
+println("\n== 日志输出 ==");
+log("INFO", "Application started", "Version 1.0");
+log("ERROR", "Connection failed", "Retrying...");
+log("DEBUG", "Variable x:", 42, "Variable y:", 100);
+
+println("\n== Rest Parameters 示例结束 ==");

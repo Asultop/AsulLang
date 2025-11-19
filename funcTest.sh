@@ -38,6 +38,8 @@ func_files=(
     "quote_complex.alang"
     "quote_edit_apply.alang"
     "reflection_test.alang"
+    "restParamsExample.alang"
+    "restParamsAdvanced.alang"
     "spread_examples.alang"
     "switchExample.alang"
     "switchAdvanced.alang"

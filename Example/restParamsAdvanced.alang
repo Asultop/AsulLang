@@ -1,0 +1,253 @@
+println("== Rest Parameters 高级示例 ==");
+
+// 示例1: 函数柯里化（部分应用）
+function curry(fn, ...fixedArgs) {
+    return [](...args) {
+        let allArgs = [];
+        foreach (arg in fixedArgs) {
+            push(allArgs, arg);
+        }
+        foreach (arg in args) {
+            push(allArgs, arg);
+        }
+        // 手动调用函数（模拟 apply）
+        if (allArgs.len() == 0) return fn();
+        if (allArgs.len() == 1) return fn(allArgs[0]);
+        if (allArgs.len() == 2) return fn(allArgs[0], allArgs[1]);
+        if (allArgs.len() == 3) return fn(allArgs[0], allArgs[1], allArgs[2]);
+        return null;  // 简化版本，只支持最多3个参数
+    };
+}
+
+function add3(a, b, c) {
+    return a + b + c;
+}
+
+let add10 = curry(add3, 10);
+println("add10(5, 15) =", add10(5, 15));  // 10 + 5 + 15 = 30
+
+let add10And20 = curry(add3, 10, 20);
+println("add10And20(5) =", add10And20(5));  // 10 + 20 + 5 = 35
+
+// 示例2: 数据转换管道
+function pipeline(initial, ...transformers) {
+    let result = initial;
+    foreach (fn in transformers) {
+        result = fn(result);
+    }
+    return result;
+}
+
+let double = [](x) { return x * 2; };
+let addTen = [](x) { return x + 10; };
+let square = [](x) { return x * x; };
+
+println("\n== 数据转换管道 ==");
+let result1 = pipeline(5, double, addTen, square);
+println("pipeline(5, double, addTen, square) =", result1);  // ((5 * 2) + 10)^2 = 400
+
+// 示例3: 多条件过滤器
+function filter(array, ...predicates) {
+    let result = [];
+    foreach (item in array) {
+        let pass = true;
+        foreach (predicate in predicates) {
+            if (!predicate(item)) {
+                pass = false;
+                break;
+            }
+        }
+        if (pass) {
+            push(result, item);
+        }
+    }
+    return result;
+}
+
+let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+let isEven = [](n) { return n % 2 == 0; };
+let greaterThan5 = [](n) { return n > 5; };
+let lessThan10 = [](n) { return n < 10; };
+
+println("\n== 多条件过滤 ==");
+let filtered1 = filter(numbers, isEven);
+println("偶数:", filtered1);
+
+let filtered2 = filter(numbers, isEven, greaterThan5);
+println("偶数且大于5:", filtered2);
+
+let filtered3 = filter(numbers, isEven, greaterThan5, lessThan10);
+println("偶数且在(5,10)之间:", filtered3);
+
+// 示例4: 递归求和（多层嵌套）
+function deepSum(...items) {
+    let total = 0;
+    foreach (item in items) {
+        let t = item.type();
+        if (t == "number") {
+            total += item;
+        } else if (t == "array") {
+            // 递归处理数组
+            foreach (subItem in item) {
+                total += deepSum(subItem);
+            }
+        }
+    }
+    return total;
+}
+
+println("\n== 深度求和 ==");
+println("deepSum(1, 2, 3) =", deepSum(1, 2, 3));
+println("deepSum(1, [2, 3], 4) =", deepSum(1, [2, 3], 4));
+println("deepSum([1, [2, [3, 4]]], 5) =", deepSum([1, [2, [3, 4]]], 5));
+
+// 示例5: 构建 SQL 查询（字符串构建）
+function buildQuery(table, ...conditions) {
+    let query = "SELECT * FROM " + table;
+    if (conditions.len() > 0) {
+        query = query + " WHERE ";
+        for (let i = 0; i < conditions.len(); i++) {
+            if (i > 0) {
+                query = query + " AND ";
+            }
+            query = query + conditions[i];
+        }
+    }
+    return query;
+}
+
+println("\n== SQL 查询构建 ==");
+println(buildQuery("users"));
+println(buildQuery("users", "age > 18"));
+println(buildQuery("users", "age > 18", "status = 'active'", "city = 'Beijing'"));
+
+// 示例6: 事件监听器（多个回调）
+function EventEmitter() {
+    let listeners = {};
+    
+    return {
+        on: [](event, ...callbacks) {
+            if (!listeners[event]) {
+                listeners[event] = [];
+            }
+            foreach (cb in callbacks) {
+                push(listeners[event], cb);
+            }
+        },
+        emit: [](event, ...args) {
+            if (listeners[event]) {
+                foreach (cb in listeners[event]) {
+                    // 简化版本：只支持最多2个参数
+                    if (args.len() == 0) cb();
+                    else if (args.len() == 1) cb(args[0]);
+                    else if (args.len() == 2) cb(args[0], args[1]);
+                }
+            }
+        }
+    };
+}
+
+println("\n== 事件系统 ==");
+let emitter = EventEmitter();
+emitter.on("message", [](msg) { println("Listener 1:", msg); });
+emitter.on("message", [](msg) { println("Listener 2:", msg); });
+emitter.emit("message", "Hello Events!");
+
+emitter.on("data", [](key, value) { println("Data received:", key, "=", value); });
+emitter.emit("data", "temperature", 25);
+
+// 示例7: 配置合并
+function mergeConfig(base, ...overrides) {
+    let result = {};
+    
+    // Copy base config
+    foreach (key in base) {
+        result[key] = base[key];
+    }
+    
+    // Apply overrides
+    foreach (override in overrides) {
+        foreach (key in override) {
+            result[key] = override[key];
+        }
+    }
+    
+    return result;
+}
+
+println("\n== 配置合并 ==");
+let baseConfig = {host: "localhost", port: 8080, debug: false};
+let devConfig = {debug: true};
+let prodConfig = {host: "example.com", port: 443};
+
+let finalConfig = mergeConfig(baseConfig, devConfig, prodConfig);
+println("finalConfig.host:", finalConfig.host);
+println("finalConfig.port:", finalConfig.port);
+println("finalConfig.debug:", finalConfig.debug);
+
+// 示例8: 数学运算链
+function calculate(initial, ...operations) {
+    let result = initial;
+    foreach (op in operations) {
+        let operator = op.op;
+        let value = op.value;
+        
+        switch (operator) {
+            case "+":
+                result = result + value;
+                break;
+            case "-":
+                result = result - value;
+                break;
+            case "*":
+                result = result * value;
+                break;
+            case "/":
+                result = result / value;
+                break;
+        }
+    }
+    return result;
+}
+
+println("\n== 数学运算链 ==");
+let calc1 = calculate(10, 
+    {op: "+", value: 5},
+    {op: "*", value: 2},
+    {op: "-", value: 3}
+);
+println("(10 + 5) * 2 - 3 =", calc1);
+
+// 示例9: 路径拼接
+function joinPath(root, ...segments) {
+    let path = root;
+    foreach (segment in segments) {
+        // 简化版本：总是添加斜杠
+        path = path + "/" + segment;
+    }
+    return path;
+}
+
+println("\n== 路径拼接 ==");
+println(joinPath("/home", "user", "documents", "file.txt"));
+println(joinPath("/var", "log", "app.log"));
+
+// 示例10: 函数组合
+function compose(...functions) {
+    return [](x) {
+        let result = x;
+        // 从右到左执行
+        for (let i = functions.len() - 1; i >= 0; i--) {
+            result = functions[i](result);
+        }
+        return result;
+    };
+}
+
+println("\n== 函数组合 ==");
+let increment = [](x) { return x + 1; };
+let triple = [](x) { return x * 3; };
+let composed = compose(triple, increment);
+println("compose(triple, increment)(5) =", composed(5));  // (5 + 1) * 3 = 18
+
+println("\n== Rest Parameters 高级示例结束 ==");

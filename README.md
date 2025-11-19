@@ -245,6 +245,81 @@ switch (category) {
 
 示例请参考 `Example/switchExample.alang` 和 `Example/switchAdvanced.alang`。
 
+**Rest Parameters（剩余参数）**
+
+ALang 支持 rest parameters（剩余参数），允许函数接收可变数量的参数，所有剩余参数会被收集到一个数组中：
+
+```javascript
+// 基础用法：求和函数
+function sum(...numbers) {
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total;
+}
+
+println(sum(1, 2, 3));           // 输出: 6
+println(sum(10, 20, 30, 40));    // 输出: 100
+println(sum());                   // 输出: 0（空数组）
+
+// 普通参数 + Rest 参数
+function greet(greeting, ...names) {
+    foreach (name in names) {
+        println(greeting, name);
+    }
+}
+
+greet("Hello", "Alice", "Bob", "Charlie");
+// 输出:
+// Hello Alice
+// Hello Bob
+// Hello Charlie
+
+// 在 Lambda 表达式中使用
+let multiply = [](factor, ...numbers) {
+    let result = [];
+    foreach (num in numbers) {
+        push(result, num * factor);
+    }
+    return result;
+};
+
+println(multiply(2, 1, 2, 3, 4));  // [2, 4, 6, 8]
+
+// 查找最大值
+function max(...numbers) {
+    if (numbers.len() == 0) return null;
+    let maxVal = numbers[0];
+    foreach (num in numbers) {
+        if (num > maxVal) maxVal = num;
+    }
+    return maxVal;
+}
+
+println(max(5, 2, 9, 1, 7));  // 输出: 9
+
+// 字符串拼接
+function concat(separator, ...strings) {
+    if (strings.len() == 0) return "";
+    let result = strings[0];
+    for (let i = 1; i < strings.len(); i++) {
+        result = result + separator + strings[i];
+    }
+    return result;
+}
+
+println(concat("-", "a", "b", "c"));  // 输出: a-b-c
+```
+
+重要规则：
+- Rest 参数必须是参数列表中的最后一个参数
+- 一个函数只能有一个 rest 参数
+- Rest 参数总是一个数组，即使没有传递任何剩余参数（此时为空数组）
+- 调用时必须至少提供普通参数的数量
+
+示例请参考 `Example/restParamsExample.alang` 和 `Example/restParamsAdvanced.alang`。
+
 **模块与文件导入**
 - 支持相对/绝对路径导入：`import "path/to/module"`（后缀 `.alang` 可省略）
 - 相对路径基于主脚本文件所在目录（可通过宿主调用 `setImportBaseDir()` 设置）
