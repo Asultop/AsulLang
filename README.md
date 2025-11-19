@@ -5,7 +5,7 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 **主要特性**
 - 基本类型：number、string、boolean、null、array、object
 - 变量与作用域：`let/var/const`（当前实现未严格区分可变性）
-- 表达式与语句：算术、比较、逻辑运算；`if/else`、`while`、`for`、`break`/`continue`、`return`、块语句
+- 表达式与语句：算术、比较、逻辑运算；`if/else`、`while`、`for`、`foreach`、`break`/`continue`、`return`、块语句
 - 函数与闭包：`function`、匿名 lambda `[](args){}`、函数作为一等值
 - 类与继承：`class`、`new`、构造器 `constructor`、多继承语法 `class A <- (B, C)`、`extends` 扩展
 - 接口：`interface` 用作方法签名与多继承占位
@@ -51,6 +51,29 @@ g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
 - `len(x)`：字符串/数组/对象的长度
 - `push(arr, ...values)`：向数组追加元素
 - `sleep(ms)`：返回在 `ms` 毫秒后 resolve 的 Promise
+
+**foreach 枚举容器**
+
+`foreach` 语句用于遍历可迭代对象（数组、对象、字符串），语法如下：
+
+```javascript
+// 遍历数组
+foreach (item in array) {
+    println(item);
+}
+
+// 遍历对象（遍历键名）
+foreach (key in object) {
+    println(key, ":", object[key]);
+}
+
+// 遍历字符串（遍历字符）
+foreach (ch in "Hello") {
+    println(ch);
+}
+```
+
+支持 `break` 和 `continue` 控制流程。示例请参考 `Example/foreachExample.alang` 和 `Example/foreachAdvanced.alang`。
 
 **模块与文件导入**
 - 支持相对/绝对路径导入：`import "path/to/module"`（后缀 `.alang` 可省略）
@@ -473,7 +496,7 @@ if (std::holds_alternative<double>(ret)) {
 ## 限制
 
 - 已支持常用方法风格（如 `arr.push(...)`、`"s".len()`），但无原型链与动态派发
-- 支持对象/数组字面量中的计算属性名与展开（`[expr]` 与 `...expr`）
+- ~~支持对象/数组字面量中的计算属性名与展开（`[expr]` 与 `...expr`）~~
 - 无 `for-of`/`for-in`，仅 C 风格 `for`
 - `==` 实现为类似 ECMAScript 的抽象相等（带类型强制），`===` 为严格相等（按类型与引用）
 - 支持语言级异常（throw / try...catch），但暂不支持 finally；`go` 中异常被吞掉；宿主未提供统一日志钩子

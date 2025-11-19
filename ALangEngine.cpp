@@ -47,7 +47,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
+	Let, Var, Const, Function, Return, If, Else, While, For, ForEach, In, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
 	EndOfFile
 };
 
@@ -164,7 +164,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 			{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
 			{"function", TokenType::Function}, {"return", TokenType::Return},
 			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While},
-			{"for", TokenType::For}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+			{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
 			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
 			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
 			{"await", TokenType::Await},
@@ -549,6 +549,7 @@ struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodN
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
+struct ForEachStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForEachStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
 struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
 struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
 struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
@@ -841,6 +842,7 @@ private:
 		if (match({TokenType::If})) return ifStatement();
 		if (match({TokenType::While})) return whileStatement();
 		if (match({TokenType::For})) return forStatement();
+		if (match({TokenType::ForEach})) return forEachStatement();
 		if (match({TokenType::Return})) return returnStatement();
 		if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
 		// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
@@ -880,6 +882,28 @@ private:
 		consume(TokenType::RightParen, "Expect ')' after for clauses");
 		auto body = statement();
 		return std::make_shared<ForStmt>(init, cond, post, body);
+	}
+
+	StmtPtr forEachStatement() {
+		// foreach (varName in iterable) body
+		consume(TokenType::LeftParen, "Expect '(' after 'foreach'");
+		
+		if (!check(TokenType::Identifier)) {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect variable name in foreach at line " << tok.line << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+		std::string varName = advance().lexeme;
+		
+		consume(TokenType::In, "Expect 'in' after variable name in foreach");
+		
+		ExprPtr iterable = expression();
+		consume(TokenType::RightParen, "Expect ')' after foreach clauses");
+		auto body = statement();
+		
+		return std::make_shared<ForEachStmt>(varName, iterable, body);
 	}
 
 	StmtPtr returnStatement() {
@@ -1811,6 +1835,59 @@ public:
 				catch (const ContinueSignal&) { /* go to post */ }
 				catch (const BreakSignal&) { break; }
 				if (f->post) (void)evaluate(f->post);
+			}
+			return;
+		}
+		if (auto fe = std::dynamic_pointer_cast<ForEachStmt>(stmt)) {
+			// foreach (varName in iterable) body
+			Value iterableValue = evaluate(fe->iterable);
+			
+			// 创建新的作用域用于循环变量
+			auto loopEnv = std::make_shared<Environment>(env);
+			loopEnv->define(fe->varName, Value{std::monostate{}});
+			
+			// 根据 iterable 类型进行迭代
+			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
+				// 数组：遍历每个元素
+				for (const auto& elem : **arr) {
+					loopEnv->assign(fe->varName, elem);
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fe->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
+				// 对象：遍历每个键
+				for (const auto& [key, value] : **obj) {
+					loopEnv->assign(fe->varName, Value{key});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fe->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
+				// 字符串：遍历每个字符
+				for (char ch : *str) {
+					loopEnv->assign(fe->varName, Value{std::string(1, ch)});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fe->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else {
+				throw std::runtime_error("foreach requires an iterable (array, object, or string)");
 			}
 			return;
 		}

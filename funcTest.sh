@@ -26,6 +26,8 @@ func_files=(
     "evalExample.alang"
     "example.alang"
     "fileImportExample.alang"
+    "foreachExample.alang"
+    "foreachAdvanced.alang"
     "goExample.alang"
     "importExample.alang"
     "interfaceExample.alang"

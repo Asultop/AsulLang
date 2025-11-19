@@ -1,0 +1,94 @@
+// foreach 高级应用示例
+
+println("== 示例1: 计算数组总和 ==");
+var numbers = [10, 20, 30, 40, 50];
+var sum = 0;
+foreach (num in numbers) {
+    sum = sum + num;
+}
+println("总和:", sum);
+
+println("\n== 示例2: 查找最大值 ==");
+var values = [3, 7, 2, 9, 1, 8, 5];
+var max = values[0];
+foreach (v in values) {
+    if (v > max) {
+        max = v;
+    }
+}
+println("最大值:", max);
+
+println("\n== 示例3: 过滤偶数 ==");
+var nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+var evens = [];
+foreach (n in nums) {
+    if (n % 2 == 0) {
+        push(evens, n);
+    }
+}
+println("偶数:", evens);
+
+println("\n== 示例4: 字符串处理 ==");
+var words = ["hello", "world", "foreach", "alang"];
+var lengths = [];
+foreach (word in words) {
+    push(lengths, len(word));
+}
+println("单词:", words);
+println("长度:", lengths);
+
+println("\n== 示例5: 对象转换 ==");
+var users = [
+    {name: "Alice", age: 25},
+    {name: "Bob", age: 30},
+    {name: "Charlie", age: 35}
+];
+var names = [];
+foreach (user in users) {
+    push(names, user["name"]);
+}
+println("用户名列表:", names);
+
+println("\n== 示例6: 统计对象属性 ==");
+var config = {
+    host: "localhost",
+    port: 8080,
+    debug: true,
+    timeout: 30
+};
+var count = 0;
+foreach (key in config) {
+    count = count + 1;
+    println("配置项", count, ":", key, "=", config[key]);
+}
+println("总配置项数:", count);
+
+println("\n== 示例7: 二维数组求和 ==");
+var table = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9]
+];
+var total = 0;
+foreach (row in table) {
+    foreach (cell in row) {
+        total = total + cell;
+    }
+}
+println("表格总和:", total);
+
+println("\n== 示例8: 字符统计 ==");
+var text = "hello";
+var charCount = {};
+foreach (ch in text) {
+    if (charCount[ch] == null) {
+        charCount[ch] = 0;
+    }
+    charCount[ch] = charCount[ch] + 1;
+}
+println("字符统计:");
+foreach (ch in charCount) {
+    println("  '", ch, "': ", charCount[ch], "次");
+}
+
+println("\n== foreach 高级示例结束 ==");

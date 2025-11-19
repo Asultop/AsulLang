@@ -1,0 +1,48 @@
+// foreach 枚举容器示例
+
+println("== foreach 遍历数组 ==");
+var arr = [1, 2, 3, 4, 5];
+foreach (item in arr) {
+    println("数组元素:", item);
+}
+
+println("\n== foreach 遍历对象 ==");
+var obj = {name: "Alice", age: 30, city: "Beijing"};
+foreach (key in obj) {
+    println("对象键:", key, "值:", obj[key]);
+}
+
+println("\n== foreach 遍历字符串 ==");
+var str = "Hello";
+foreach (ch in str) {
+    println("字符:", ch);
+}
+
+println("\n== foreach 中使用 break ==");
+var numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+foreach (n in numbers) {
+    if (n > 5) {
+        println("遇到", n, "，停止循环");
+        break;
+    }
+    println("数字:", n);
+}
+
+println("\n== foreach 中使用 continue ==");
+foreach (n in numbers) {
+    if (n % 2 == 0) {
+        continue;
+    }
+    println("奇数:", n);
+}
+
+println("\n== foreach 嵌套循环 ==");
+var matrix = [[1, 2], [3, 4], [5, 6]];
+foreach (row in matrix) {
+    println("行:");
+    foreach (val in row) {
+        println("  值:", val);
+    }
+}
+
+println("\n== foreach 示例结束 ==");
