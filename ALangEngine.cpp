@@ -458,6 +458,25 @@ inline std::string toString(const Value& v) {
 	return "unknown";
 }
 
+// Compare two Value keys for use in Map/Set: numbers/strings/bools/null compare by value,
+// arrays/objects/functions/etc compare by pointer identity (shared_ptr address).
+inline bool valueEqual(const Value& a, const Value& b) {
+	if (a.index() != b.index()) return false;
+	switch (a.index()) {
+		case 0: return true; // null
+		case 1: return std::get<double>(a) == std::get<double>(b);
+		case 2: return std::get<std::string>(a) == std::get<std::string>(b);
+		case 3: return std::get<bool>(a) == std::get<bool>(b);
+		case 4: return std::get<std::shared_ptr<Function>>(a).get() == std::get<std::shared_ptr<Function>>(b).get();
+		case 5: return std::get<std::shared_ptr<Array>>(a).get() == std::get<std::shared_ptr<Array>>(b).get();
+		case 6: return std::get<std::shared_ptr<Object>>(a).get() == std::get<std::shared_ptr<Object>>(b).get();
+		case 7: return std::get<std::shared_ptr<ClassInfo>>(a).get() == std::get<std::shared_ptr<ClassInfo>>(b).get();
+		case 8: return std::get<std::shared_ptr<Instance>>(a).get() == std::get<std::shared_ptr<Instance>>(b).get();
+		case 9: return std::get<std::shared_ptr<PromiseState>>(a).get() == std::get<std::shared_ptr<PromiseState>>(b).get();
+		default: return false;
+	}
+}
+
 struct Environment : std::enable_shared_from_this<Environment> {
 	std::shared_ptr<Environment> parent;
 	std::unordered_map<std::string, Value> values;
@@ -3351,6 +3370,270 @@ public:
 			(*math)["abs"] = fn;
 		}
 		packages["Math"] = math;
+
+		// ---- Builtin containers and helpers ----
+		// Map / Set implemented as Objects for simplicity
+		// map(): insertion-ordered map supporting non-string keys (value-equality for primitives,
+		// pointer-identity for complex types). Internally store as Array of [key,value] pairs.
+		{
+			auto mapCtor = std::make_shared<Function>(); mapCtor->isBuiltin = true;
+			mapCtor->builtin = [](const std::vector<Value>& /*args*/, std::shared_ptr<Environment>) -> Value {
+				auto obj = std::make_shared<Object>();
+				auto data = std::make_shared<Array>(); // each element is Array [key, value]
+				(*obj)["__data"] = Value{data};
+
+				auto findIndex = [data](const Value& key)->int {
+					for (size_t i=0;i<data->size();++i) {
+						if (std::holds_alternative<std::shared_ptr<Array>>((*data)[i])) {
+							auto pair = std::get<std::shared_ptr<Array>>((*data)[i]);
+							if (pair->size() >= 1 && valueEqual((*pair)[0], key)) return static_cast<int>(i);
+						}
+					}
+					return -1;
+				};
+
+				// set(key, val)
+				auto setFn = std::make_shared<Function>(); setFn->isBuiltin = true;
+				setFn->builtin = [data, findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					if (args.size() != 2) throw std::runtime_error("map.set expects 2 arguments (key, value)");
+					int idx = findIndex(args[0]);
+					if (idx >= 0) {
+						auto pair = std::get<std::shared_ptr<Array>>((*data)[idx]);
+						(*pair)[1] = args[1];
+					} else {
+						auto pair = std::make_shared<Array>();
+						pair->push_back(args[0]);
+						pair->push_back(args[1]);
+						data->push_back(Value{pair});
+					}
+					return Value{std::monostate{}};
+				};
+				(*obj)["set"] = setFn;
+
+				// get(key)
+				auto getFn = std::make_shared<Function>(); getFn->isBuiltin = true;
+				getFn->builtin = [data, findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					if (args.size() != 1) throw std::runtime_error("map.get expects 1 argument (key)");
+					int idx = findIndex(args[0]);
+					if (idx < 0) return Value{std::monostate{}};
+					auto pair = std::get<std::shared_ptr<Array>>((*data)[idx]);
+					return (*pair)[1];
+				};
+				(*obj)["get"] = getFn;
+
+				// has(key)
+				auto hasFn = std::make_shared<Function>(); hasFn->isBuiltin = true;
+				hasFn->builtin = [findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					if (args.size() != 1) throw std::runtime_error("map.has expects 1 argument (key)");
+					int idx = findIndex(args[0]);
+					return Value{ idx >= 0 };
+				};
+				(*obj)["has"] = hasFn;
+
+				// delete(key)
+				auto delFn = std::make_shared<Function>(); delFn->isBuiltin = true;
+				delFn->builtin = [data, findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					if (args.size() != 1) throw std::runtime_error("map.delete expects 1 argument (key)");
+					int idx = findIndex(args[0]);
+					if (idx < 0) return Value{false};
+					data->erase(data->begin() + idx);
+					return Value{true};
+				};
+				(*obj)["delete"] = delFn;
+
+				// size()
+				auto sizeFn = std::make_shared<Function>(); sizeFn->isBuiltin = true;
+				sizeFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					return Value{ static_cast<double>(data->size()) };
+				};
+				(*obj)["size"] = sizeFn;
+
+				// clear()
+				auto clearFn = std::make_shared<Function>(); clearFn->isBuiltin = true;
+				clearFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){ data->clear(); return Value{std::monostate{}}; };
+				(*obj)["clear"] = clearFn;
+
+				// keys()
+				auto keysFn = std::make_shared<Function>(); keysFn->isBuiltin = true;
+				keysFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					auto arr = std::make_shared<Array>();
+					for (auto &v : *data) {
+						auto pair = std::get<std::shared_ptr<Array>>(v);
+						arr->push_back((*pair)[0]);
+					}
+					return Value{arr};
+				};
+				(*obj)["keys"] = keysFn;
+
+				// values()
+				auto valuesFn = std::make_shared<Function>(); valuesFn->isBuiltin = true;
+				valuesFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					auto arr = std::make_shared<Array>();
+					for (auto &v : *data) {
+						auto pair = std::get<std::shared_ptr<Array>>(v);
+						arr->push_back((*pair)[1]);
+					}
+					return Value{arr};
+				};
+				(*obj)["values"] = valuesFn;
+
+				// entries(): returns array of [key, value]
+				auto entriesFn = std::make_shared<Function>(); entriesFn->isBuiltin = true;
+				entriesFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					auto arr = std::make_shared<Array>();
+					for (auto &v : *data) {
+						auto pair = std::get<std::shared_ptr<Array>>(v);
+						auto outPair = std::make_shared<Array>();
+						outPair->push_back((*pair)[0]);
+						outPair->push_back((*pair)[1]);
+						arr->push_back(Value{outPair});
+					}
+					return Value{arr};
+				};
+				(*obj)["entries"] = entriesFn;
+
+				return Value{obj};
+			};
+			globals->define("map", mapCtor);
+		}
+
+		// set(): insertion-ordered set supporting arbitrary Value keys; stored as Array of [key]
+		{
+			auto setCtor = std::make_shared<Function>(); setCtor->isBuiltin = true;
+			setCtor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment>) -> Value {
+				auto obj = std::make_shared<Object>();
+				auto data = std::make_shared<Array>(); (*obj)["__data"] = Value{data};
+
+				auto findIndex = [data](const Value& key)->int {
+					for (size_t i=0;i<data->size();++i) {
+						if (std::holds_alternative<std::shared_ptr<Array>>((*data)[i])) {
+							auto pair = std::get<std::shared_ptr<Array>>((*data)[i]);
+							if (pair->size()>=1 && valueEqual((*pair)[0], key)) return static_cast<int>(i);
+						}
+					}
+					return -1;
+				};
+
+				// add(v)
+				auto addFn = std::make_shared<Function>(); addFn->isBuiltin = true;
+				addFn->builtin = [data, findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){
+					if (args.size() != 1) throw std::runtime_error("set.add expects 1 argument");
+					int idx = findIndex(args[0]);
+					if (idx >= 0) return Value{std::monostate{}}; // already present
+					auto pair = std::make_shared<Array>(); pair->push_back(args[0]); data->push_back(Value{pair});
+					return Value{std::monostate{}};
+				};
+				(*obj)["add"] = addFn;
+
+				// has(v)
+				auto hasFn = std::make_shared<Function>(); hasFn->isBuiltin = true;
+				hasFn->builtin = [findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){ if (args.size()!=1) throw std::runtime_error("set.has expects 1 arg"); int idx=findIndex(args[0]); return Value{ idx>=0 }; };
+				(*obj)["has"] = hasFn;
+
+				// delete(v)
+				auto delFn = std::make_shared<Function>(); delFn->isBuiltin = true;
+				delFn->builtin = [data, findIndex](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=1) throw std::runtime_error("set.delete expects 1 arg"); int idx=findIndex(args[0]); if(idx<0) return Value{false}; data->erase(data->begin()+idx); return Value{true}; };
+				(*obj)["delete"] = delFn;
+
+				// size
+				auto sizeFn = std::make_shared<Function>(); sizeFn->isBuiltin = true; sizeFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["size"] = sizeFn;
+
+				// clear
+				auto clearFn = std::make_shared<Function>(); clearFn->isBuiltin=true; clearFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ data->clear(); return Value{std::monostate{}}; };
+				(*obj)["clear"] = clearFn;
+
+				// values()
+				auto valuesFn = std::make_shared<Function>(); valuesFn->isBuiltin=true; valuesFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ auto arr=std::make_shared<Array>(); for(auto &v:*data){ auto p = std::get<std::shared_ptr<Array>>(v); arr->push_back((*p)[0]); } return Value{arr}; };
+				(*obj)["values"] = valuesFn;
+
+				return Value{obj};
+			}; globals->define("set", setCtor);
+		}
+
+		// deque / stack: use Array as underlying storage
+		{
+			auto dequeCtor = std::make_shared<Function>(); dequeCtor->isBuiltin = true;
+			dequeCtor->builtin = [](const std::vector<Value>& /*args*/, std::shared_ptr<Environment>) -> Value {
+				auto obj = std::make_shared<Object>();
+				auto data = std::make_shared<Array>(); (*obj)["__data"] = Value{data};
+				// push_back
+				auto pushFn = std::make_shared<Function>(); pushFn->isBuiltin = true; pushFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){ for(auto &v: args) data->push_back(v); return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["push"] = pushFn;
+				// pop_back
+				auto popFn = std::make_shared<Function>(); popFn->isBuiltin = true; popFn->builtin = [data](const std::vector<Value>&, std::shared_ptr<Environment>){ if(data->empty()) return Value{std::monostate{}}; Value v = (*data)[data->size()-1]; data->pop_back(); return v; };
+				(*obj)["pop"] = popFn;
+				// push_front (unshift)
+				auto unshiftFn = std::make_shared<Function>(); unshiftFn->isBuiltin = true; unshiftFn->builtin=[data](const std::vector<Value>& args, std::shared_ptr<Environment>){ for (auto it = args.rbegin(); it != args.rend(); ++it) data->insert(data->begin(), *it); return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["unshift"] = unshiftFn;
+				// shift
+				auto shiftFn = std::make_shared<Function>(); shiftFn->isBuiltin = true; shiftFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ if(data->empty()) return Value{std::monostate{}}; Value v = (*data)[0]; data->erase(data->begin()); return v; };
+				(*obj)["shift"] = shiftFn;
+				// peek front/back
+				auto peekFn = std::make_shared<Function>(); peekFn->isBuiltin=true; peekFn->builtin=[data](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()==0){ if(data->empty()) return Value{std::monostate{}}; return (*data)[0]; } else { if(data->empty()) return Value{std::monostate{}}; return (*data)[data->size()-1]; } };
+				(*obj)["peek"] = peekFn;
+				// size
+				auto sizeFn = std::make_shared<Function>(); sizeFn->isBuiltin=true; sizeFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["size"] = sizeFn;
+				// clear
+				auto clearFn = std::make_shared<Function>(); clearFn->isBuiltin=true; clearFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ data->clear(); return Value{std::monostate{}}; };
+				(*obj)["clear"] = clearFn;
+				return Value{obj};
+			}; globals->define("deque", dequeCtor);
+			// stack alias (LIFO): push/pop/peek
+			auto stackCtor = std::make_shared<Function>(); stackCtor->isBuiltin = true;
+			stackCtor->builtin = [](const std::vector<Value>& /*args*/, std::shared_ptr<Environment>) -> Value {
+				auto obj = std::make_shared<Object>();
+				auto data = std::make_shared<Array>(); (*obj)["__data"] = Value{data};
+				auto pushFn = std::make_shared<Function>(); pushFn->isBuiltin = true; pushFn->builtin = [data](const std::vector<Value>& args, std::shared_ptr<Environment>){ for(auto &v: args) data->push_back(v); return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["push"] = pushFn;
+				auto popFn = std::make_shared<Function>(); popFn->isBuiltin = true; popFn->builtin = [data](const std::vector<Value>&, std::shared_ptr<Environment>){ if(data->empty()) return Value{std::monostate{}}; Value v = (*data)[data->size()-1]; data->pop_back(); return v; };
+				(*obj)["pop"] = popFn;
+				auto peekFn = std::make_shared<Function>(); peekFn->isBuiltin = true; peekFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ if(data->empty()) return Value{std::monostate{}}; return (*data)[data->size()-1]; };
+				(*obj)["peek"] = peekFn;
+				auto sizeFn = std::make_shared<Function>(); sizeFn->isBuiltin=true; sizeFn->builtin=[data](const std::vector<Value>&, std::shared_ptr<Environment>){ return Value{ static_cast<double>(data->size()) }; };
+				(*obj)["size"] = sizeFn;
+				return Value{obj};
+			}; globals->define("stack", stackCtor);
+		}
+
+		// ---- Utility helper functions ----
+		{
+			// keys(obj)
+			auto keysFn = std::make_shared<Function>(); keysFn->isBuiltin = true;
+			keysFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if (args.size()!=1) throw std::runtime_error("keys expects 1 object argument"); if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) throw std::runtime_error("keys expects an object"); auto po = std::get<std::shared_ptr<Object>>(args[0]); auto arr = std::make_shared<Array>(); for(auto &kv:*po) arr->push_back(Value{kv.first}); return Value{arr}; };
+			globals->define("keys", keysFn);
+
+			// values(obj)
+			auto valuesFn = std::make_shared<Function>(); valuesFn->isBuiltin = true;
+			valuesFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if (args.size()!=1) throw std::runtime_error("values expects 1 object argument"); if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) throw std::runtime_error("values expects an object"); auto po = std::get<std::shared_ptr<Object>>(args[0]); auto arr = std::make_shared<Array>(); for(auto &kv:*po) arr->push_back(kv.second); return Value{arr}; };
+			globals->define("values", valuesFn);
+
+			// entries(obj)
+			auto entriesFn = std::make_shared<Function>(); entriesFn->isBuiltin = true;
+			entriesFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if (args.size()!=1) throw std::runtime_error("entries expects 1 object argument"); if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) throw std::runtime_error("entries expects an object"); auto po = std::get<std::shared_ptr<Object>>(args[0]); auto arr = std::make_shared<Array>(); for(auto &kv:*po){ auto p = std::make_shared<Array>(); p->push_back(Value{kv.first}); p->push_back(kv.second); arr->push_back(Value{p}); } return Value{arr}; };
+			globals->define("entries", entriesFn);
+
+			// clone(obj): shallow clone object or array
+			auto cloneFn = std::make_shared<Function>(); cloneFn->isBuiltin = true;
+			cloneFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=1) throw std::runtime_error("clone expects 1 argument"); if (std::holds_alternative<std::shared_ptr<Object>>(args[0])){ auto src = std::get<std::shared_ptr<Object>>(args[0]); auto dst = std::make_shared<Object>(); for(auto &kv:*src) (*dst)[kv.first]=kv.second; return Value{dst}; } if (std::holds_alternative<std::shared_ptr<Array>>(args[0])){ auto src = std::get<std::shared_ptr<Array>>(args[0]); auto dst = std::make_shared<Array>(*src); return Value{dst}; } throw std::runtime_error("clone expects object or array"); };
+			globals->define("clone", cloneFn);
+
+			// merge(a,b): shallow merge objects into new object
+			auto mergeFn = std::make_shared<Function>(); mergeFn->isBuiltin = true;
+			mergeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=2) throw std::runtime_error("merge expects 2 object arguments"); if(!std::holds_alternative<std::shared_ptr<Object>>(args[0])||!std::holds_alternative<std::shared_ptr<Object>>(args[1])) throw std::runtime_error("merge expects objects"); auto a=std::get<std::shared_ptr<Object>>(args[0]); auto b=std::get<std::shared_ptr<Object>>(args[1]); auto dst=std::make_shared<Object>(); for(auto &kv:*a) (*dst)[kv.first]=kv.second; for(auto &kv:*b) (*dst)[kv.first]=kv.second; return Value{dst}; };
+			globals->define("merge", mergeFn);
+
+			// range(n) -> array [0..n-1]
+			auto rangeFn = std::make_shared<Function>(); rangeFn->isBuiltin = true;
+			rangeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=1) throw std::runtime_error("range expects 1 numeric argument"); double n = 0; if (std::holds_alternative<double>(args[0])) n = std::get<double>(args[0]); else throw std::runtime_error("range expects a number"); auto arr = std::make_shared<Array>(); for(int i=0;i<static_cast<int>(n);++i) arr->push_back(Value{ static_cast<double>(i) }); return Value{arr}; };
+			globals->define("range", rangeFn);
+
+			// enumerate(iterable) -> array of [index/key, value]
+			auto enumFn = std::make_shared<Function>(); enumFn->isBuiltin = true;
+			enumFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=1) throw std::runtime_error("enumerate expects 1 iterable"); if(std::holds_alternative<std::shared_ptr<Array>>(args[0])){ auto a=std::get<std::shared_ptr<Array>>(args[0]); auto out=std::make_shared<Array>(); for(size_t i=0;i<a->size();++i){ auto pair=std::make_shared<Array>(); pair->push_back(Value{static_cast<double>(static_cast<int>(i))}); pair->push_back((*a)[i]); out->push_back(Value{pair}); } return Value{out}; } if(std::holds_alternative<std::shared_ptr<Object>>(args[0])){ auto o=std::get<std::shared_ptr<Object>>(args[0]); auto out=std::make_shared<Array>(); for(auto &kv:*o){ auto pair=std::make_shared<Array>(); pair->push_back(Value{kv.first}); pair->push_back(kv.second); out->push_back(Value{pair}); } return Value{out}; } throw std::runtime_error("enumerate expects array or object"); };
+			globals->define("enumerate", enumFn);
+		}
 	}
 };
 

@@ -1,0 +1,14 @@
+// Map example
+let m = map();
+m.set("a", 1);
+m.set("b", 2);
+println("m.get('a'):", m.get("a"));
+println("m.has('c'):", m.has("c"));
+println("keys:", m.keys());
+println("values:", m.values());
+println("entries:", m.entries());
+// non-string keys
+let k = [1,2];
+m.set(k, "arrayKey");
+println("get by array key:", m.get(k));
+println("all keys (stable order):", m.keys());

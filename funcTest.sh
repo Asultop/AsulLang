@@ -51,6 +51,8 @@ func_files=(
     "try_catchExample.alang"
     "type_and_match_example.alang"
     "type_comparison.alang"
+    "map_example.alang"
+    "containers_example.alang"
 )
 
 # Counter for passed/failed tests
