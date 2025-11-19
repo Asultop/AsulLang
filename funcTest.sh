@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Function Test Script
+# This script runs all functional example files in the Example directory
+
+echo "================================"
+echo "Running ALang Function Examples"
+echo "================================"
+echo ""
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Path to alang executable (same directory as this script)
+ALANG="$SCRIPT_DIR/alang"
+
+# Example directory
+EXAMPLE_DIR="$SCRIPT_DIR/Example"
+
+# Array of functional example files
+func_files=(
+    "builtins_test.alang"
+    "comment_examples.alang"
+    "computedProps.alang"
+    "emptySemicolons.alang"
+    "evalExample.alang"
+    "example.alang"
+    "fileImportExample.alang"
+    "goExample.alang"
+    "importExample.alang"
+    "interfaceExample.alang"
+    "interpolationExample.alang"
+    "lambdaExample.alang"
+    "quoteExample.alang"
+    "quote_complex.alang"
+    "quote_edit_apply.alang"
+    "reflection_test.alang"
+    "spread_examples.alang"
+    "try_catchExample.alang"
+    "type_and_match_example.alang"
+    "type_comparison.alang"
+)
+
+# Counter for passed/failed tests
+total=0
+passed=0
+failed=0
+
+# Run each functional example
+for file in "${func_files[@]}"; do
+    echo "----------------------------------------"
+    echo "Testing: $file"
+    echo "----------------------------------------"
+    
+    # Run alang with the functional example file
+    "$ALANG" "$EXAMPLE_DIR/$file"
+    
+    # Capture the exit code
+    exit_code=$?
+    
+    total=$((total + 1))
+    
+    if [ $exit_code -eq 0 ]; then
+        echo "✓ Test passed"
+        passed=$((passed + 1))
+    else
+        echo "✗ Test failed (exit code: $exit_code)"
+        failed=$((failed + 1))
+    fi
+    
+    echo ""
+done
+
+echo "================================"
+echo "Test Summary"
+echo "================================"
+echo "Total files tested: $total"
+echo "Passed: $passed"
+echo "Failed: $failed"
+echo "================================"
+
+# Exit with error if any test failed
+if [ $failed -gt 0 ]; then
+    exit 1
+fi

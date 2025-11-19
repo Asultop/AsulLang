@@ -11,8 +11,11 @@ echo ""
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Path to alang executable (../../alang relative to this script)
-ALANG="$SCRIPT_DIR/../../alang"
+# Path to alang executable (same directory as this script)
+ALANG="$SCRIPT_DIR/alang"
+
+# Error examples directory
+ERROR_DIR="$SCRIPT_DIR/Example/ErrorExample"
 
 # Array of error example files
 error_files=(
@@ -44,7 +47,7 @@ for file in "${error_files[@]}"; do
     echo "----------------------------------------"
     
     # Run alang with the error example file
-    "$ALANG" "$SCRIPT_DIR/$file"
+    "$ALANG" "$ERROR_DIR/$file"
     
     # Capture the exit code
     exit_code=$?
