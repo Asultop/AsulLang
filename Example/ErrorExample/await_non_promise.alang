@@ -1,0 +1,8 @@
+// 示例: 在非 Promise 上使用 await（运行时错误）
+// 说明: await 期望一个 Promise；在非 Promise 上使用会抛出 "await expects a Promise"
+
+async function main() {
+    let x = 123;
+    await x;
+}
+main();

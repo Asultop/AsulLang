@@ -1,0 +1,5 @@
+// 示例: import 文件找不到（运行时/加载错误）
+// 说明: 使用 import 时若找不到文件会抛出 "Import file not found" 或 "Cannot open import file"
+
+import "nonexistent_file.alang";
+println("after import");

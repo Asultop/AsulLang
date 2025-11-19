@@ -1,0 +1,6 @@
+// 示例: 在对象字面量中使用非对象展开值（运行时错误）
+// 说明: 使用 `{ ...value }` 展开时，如果 value 不是对象，会抛出 "Spread value is not an object"
+
+let notObj = [1,2];
+let o = { a:1, ...notObj };
+println(o);

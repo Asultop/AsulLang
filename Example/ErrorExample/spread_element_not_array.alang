@@ -1,0 +1,6 @@
+// 示例: 在数组字面量中使用非数组展开元素（运行时错误）
+// 说明: 使用 `...value` 展开时，如果 value 不是数组，会抛出 "Spread element is not an array"
+
+let notArr = {a:1};
+let a = [1, ...notArr];
+println(a);

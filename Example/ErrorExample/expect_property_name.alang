@@ -1,0 +1,4 @@
+// 示例: 对象字面量缺失属性名（解析错误）
+// 说明: 在对象字面量中缺少属性名或键会触发 "Expect property name in object literal"
+
+let o = { : 1 };

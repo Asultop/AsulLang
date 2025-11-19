@@ -1,0 +1,5 @@
+// 示例: 未终止字符串（词法错误）
+// 说明: 忘记闭合引号会在词法阶段报错 "Unterminated string"
+
+println("hello    
+

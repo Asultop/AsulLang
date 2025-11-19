@@ -1,0 +1,5 @@
+// 示例: 数组索引越界（运行时错误）
+// 说明: 访问超出范围的数组索引将抛出 "Array index out of range"
+
+let a = [1, 2, 3];
+println(a[10]);

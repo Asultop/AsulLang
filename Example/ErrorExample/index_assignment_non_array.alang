@@ -1,0 +1,5 @@
+// 示例: 对非数组或非对象进行索引赋值（运行时错误）
+// 说明: 例如对数字或字符串使用索引赋值会抛出 "Index assignment on non-array/object"
+
+let n = 123;
+n[0] = 5;
