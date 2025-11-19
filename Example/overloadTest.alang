@@ -1,0 +1,48 @@
+// Test function overloading (by parameter count)
+
+// ALang does not support true function overloading (same name, different signatures).
+// Later function definitions override earlier ones.
+// However, we can simulate overloading using default parameters:
+
+fn greet(name = null, greeting = "Hello") {
+    if (name == null) {
+        print("Hello!");
+    } else {
+        print(greeting + ", " + name + "!");
+    }
+}
+
+greet();               // Uses both defaults: outputs "Hello!"
+greet("Alice");        // Uses default greeting: outputs "Hello, Alice!"
+greet("Bob", "Hi");    // All arguments provided: outputs "Hi, Bob!"
+
+// Another example: simulating multiple signatures with rest parameters
+fn sum(...numbers) {
+    if (len(numbers) == 0) {
+        return 0;
+    }
+    let total = 0;
+    foreach (num in numbers) {
+        total = total + num;
+    }
+    return total;
+}
+
+println("sum() = " + sum());
+println("sum(5) = " + sum(5));
+println("sum(1,2,3) = " + sum(1, 2, 3));
+
+// Combining default and rest parameters for flexible function signatures
+fn createMessage(prefix = "[INFO]", ...parts) {
+    let msg = prefix;
+    foreach (part in parts) {
+        msg = msg + " " + part;
+    }
+    return msg;
+}
+
+print(createMessage());
+print(createMessage("[ERROR]", "Failed", "to", "load"));
+print(createMessage("[DEBUG]", "x=", 10));
+
+print("Overload simulation passed!");

@@ -1,0 +1,79 @@
+// Interface Validation Tests - 接口验证测试
+
+// Test 1: Interface with method signature (correct)
+// 测试1：接口正确定义方法签名
+interface Drawable {
+    function draw();
+    function getColor();
+}
+
+class Circle <- (Drawable) {
+    function draw() {
+        print("Drawing a circle");
+    }
+    
+    function getColor() {
+        return "red";
+    }
+}
+
+let c = new Circle();
+c.draw();
+print("Color: " + c.getColor());
+
+// Test 2: Multiple methods in interface
+// 测试2：接口包含多个方法
+interface Vehicle {
+    function start();
+    function stop();
+    function getSpeed();
+}
+
+class Car <- (Vehicle) {
+    function constructor() {
+        this.speed = 0;
+    }
+    
+    function start() {
+        print("Car starting...");
+        this.speed = 10;
+    }
+    
+    function stop() {
+        print("Car stopping...");
+        this.speed = 0;
+    }
+    
+    function getSpeed() {
+        return this.speed;
+    }
+}
+
+let car = new Car();
+car.start();
+print("Speed: " + car.getSpeed());
+car.stop();
+
+// Test 3: Class with interface and base class
+// 测试3：类同时继承基类和接口
+class Animal {
+    function makeSound() {
+        print("Some sound");
+    }
+}
+
+interface Flyable {
+    function fly();
+}
+
+class Bird <- (Animal, Flyable) {
+    function fly() {
+        print("Bird is flying");
+    }
+}
+
+let bird = new Bird();
+bird.makeSound();
+bird.fly();
+
+print("All interface tests passed!");

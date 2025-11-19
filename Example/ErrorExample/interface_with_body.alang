@@ -1,0 +1,10 @@
+// Interface Error Test 1: Interface with function body (should fail)
+// 接口错误测试1：接口中定义完整函数体（应该失败）
+
+interface BadInterface {
+    function doSomething() {
+        print("This should not be allowed!");
+    }
+}
+
+print("This should not be reached");

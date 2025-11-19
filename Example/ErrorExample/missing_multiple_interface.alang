@@ -1,0 +1,19 @@
+// Interface Error Test 3: Multiple interfaces, missing one method (should fail)
+// 接口错误测试3：多个接口，缺少其中一个方法（应该失败）
+
+interface Readable {
+    function read();
+}
+
+interface Writable {
+    function write();
+}
+
+// This class only implements read(), missing write()
+class File <- (Readable, Writable) {
+    function read() {
+        return "File content";
+    }
+}
+
+let f = new File();

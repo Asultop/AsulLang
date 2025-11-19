@@ -1,0 +1,55 @@
+// Default Parameters Examples
+
+// Example 1: Basic default parameter
+fn greet(name, greeting = "Hello") {
+    print(greeting + ", " + name + "!");
+}
+
+greet("Alice");
+greet("Bob", "Hi");
+
+// Example 2: Multiple default parameters
+fn createUser(name, age = 18, role = "user") {
+    return {name: name, age: age, role: role};
+}
+
+let user1 = createUser("Alice");
+print(user1);
+
+let user2 = createUser("Bob", 25);
+print(user2);
+
+// Example 3: Default parameters with expressions
+fn power(base, exponent = 2) {
+    let result = 1;
+    let i = 0;
+    while (i < exponent) {
+        result = result * base;
+        i = i + 1;
+    }
+    return result;
+}
+
+print(power(3));
+print(power(3, 3));
+
+// Example 4: Lambda with defaults
+let multiply = [](a, b = 1) {
+    return a * b;
+};
+
+print(multiply(5));
+print(multiply(5, 3));
+
+// Example 5: Default with rest parameters
+fn printList(title = "My List", ...items) {
+    print("--- " + title + " ---");
+    foreach (item in items) {
+        print("  - " + item);
+    }
+}
+
+printList("Shopping", "Milk", "Bread");
+printList();
+
+print("All tests passed!");

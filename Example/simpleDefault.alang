@@ -1,0 +1,9 @@
+// Simple default parameter test
+
+fn test(a, b = 5) {
+    print(a);
+    print(b);
+}
+
+test(10);
+test(10, 20);

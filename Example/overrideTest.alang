@@ -1,0 +1,29 @@
+// Test method override
+
+class Animal {
+    function speak() {
+        println("Animal makes a sound");
+    }
+}
+interface Drink{
+    function drinking();//{
+        // println("drinking");
+    //};
+}
+class Dog <- (Animal,Drink) {
+    function speak() {
+        println("Dog barks");
+    }
+    function drinking(){
+        println("Dog drinking");
+    }
+    // function 
+}
+
+let animal = new Animal();
+animal.speak();  // Animal makes a sound
+
+let dog = new Dog();
+dog.speak();  // Dog barks (override)
+dog.drinking();
+println("Override test passed!");

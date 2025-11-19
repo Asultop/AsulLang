@@ -1,0 +1,16 @@
+// Interface Error Test 2: Class not implementing interface method (should fail)
+// 接口错误测试2：类未实现接口方法（应该失败）
+
+interface Printable {
+    function print();
+    function getName();
+}
+
+// This class only implements one method, missing getName()
+class Document <- (Printable) {
+    function print() {
+        print("Printing document");
+    }
+}
+
+let doc = new Document();

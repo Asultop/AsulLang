@@ -320,6 +320,177 @@ println(concat("-", "a", "b", "c"));  // 输出: a-b-c
 
 示例请参考 `Example/restParamsExample.alang` 和 `Example/restParamsAdvanced.alang`。
 
+**Default Parameters（默认参数）**
+
+ALang 支持默认参数，允许为函数参数指定默认值。当调用函数时未提供某个参数，将使用其默认值：
+
+```javascript
+// 基础用法：带默认值的问候函数
+function greet(name, greeting = "Hello") {
+    println(greeting, name);
+}
+
+greet("Alice");              // 输出: Hello Alice
+greet("Bob", "Hi");          // 输出: Hi Bob
+
+// 多个默认参数
+function createUser(name, age = 18, role = "user") {
+    return {
+        name: name,
+        age: age,
+        role: role
+    };
+}
+
+let user1 = createUser("Alice");               // {name: "Alice", age: 18, role: "user"}
+let user2 = createUser("Bob", 25);            // {name: "Bob", age: 25, role: "user"}
+let user3 = createUser("Charlie", 30, "admin"); // {name: "Charlie", age: 30, role: "admin"}
+
+// 在 Lambda 表达式中使用
+let multiply = [](a, b = 1) {
+    return a * b;
+};
+
+println(multiply(5));      // 输出: 5
+println(multiply(5, 3));   // 输出: 15
+
+// 默认参数可以是表达式（在调用时计算）
+let counter = 0;
+function increment(step = 1) {
+    counter = counter + step;
+    return counter;
+}
+
+println(increment());     // 1
+println(increment(5));    // 6
+println(increment());     // 7
+
+// 默认参数与 Rest 参数结合
+function createList(title = "My List", ...items) {
+    println("---", title, "---");
+    foreach (item in items) {
+        println("  -", item);
+    }
+}
+
+createList("Shopping List", "Milk", "Bread", "Eggs");
+// 输出:
+// --- Shopping List ---
+//   - Milk
+//   - Bread
+//   - Eggs
+
+createList();  // 使用默认 title，items 为空数组
+// 输出:
+// --- My List ---
+```
+
+重要规则：
+- 默认参数必须在所有必需参数之后
+- 默认参数必须在 rest 参数之前
+- 参数顺序：必需参数 → 默认参数 → rest 参数
+- 默认值表达式在函数调用时计算，不是在定义时
+- 可以使用任何表达式作为默认值（常量、变量、函数调用等）
+
+示例请参考 `Example/defaultParamsExample.alang`。
+
+**Method Override（方法重写）和 Function Overloading（函数重载）**
+
+ALang 支持面向对象编程中的方法重写，以及通过默认参数模拟函数重载：
+
+**方法重写（Method Override）**
+
+子类可以重写（覆盖）父类的方法，调用子类实例时将执行子类版本的方法：
+
+```javascript
+// 方法重写示例
+class Animal {
+    function speak() {
+        println("Animal makes a sound");
+    }
+}
+
+class Dog <- (Animal) {
+    // 重写父类的 speak 方法
+    function speak() {
+        println("Dog barks: Woof!");
+    }
+}
+
+class Cat <- (Animal) {
+    // 重写父类的 speak 方法
+    function speak() {
+        println("Cat meows: Meow!");
+    }
+}
+
+let animal = new Animal();
+animal.speak();  // 输出: Animal makes a sound
+
+let dog = new Dog();
+dog.speak();     // 输出: Dog barks: Woof!
+
+let cat = new Cat();
+cat.speak();     // 输出: Cat meows: Meow!
+```
+
+重要特性：
+- 子类方法自动覆盖父类同名方法
+- 不需要特殊的 `override` 关键字
+- 支持多继承场景下的方法覆盖（后继承的类优先）
+
+**函数重载模拟（通过默认参数）**
+
+ALang 作为动态类型语言，不支持传统的基于类型的函数重载，但可以通过**默认参数**和**Rest参数**模拟重载效果：
+
+```javascript
+// 使用默认参数模拟重载
+function greet(name = null, greeting = "Hello") {
+    if (name == null) {
+        println("Hello!");
+    } else {
+        println(greeting, name + "!");
+    }
+}
+
+greet();                    // 输出: Hello!
+greet("Alice");            // 输出: Hello Alice!
+greet("Bob", "Hi");        // 输出: Hi Bob!
+
+// 使用 Rest 参数模拟可变参数重载
+function sum(...numbers) {
+    if (numbers.len() == 0) {
+        return 0;
+    }
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total;
+}
+
+println(sum());           // 输出: 0
+println(sum(5));          // 输出: 5
+println(sum(1, 2, 3));    // 输出: 6
+
+// 结合默认参数和 Rest 参数
+function createMessage(prefix = "[INFO]", ...parts) {
+    let msg = prefix;
+    foreach (part in parts) {
+        msg = msg + " " + part;
+    }
+    return msg;
+}
+
+println(createMessage());                    // [INFO]
+println(createMessage("[ERROR]", "Failed")); // [ERROR] Failed
+println(createMessage("[DEBUG]", "x:", 10)); // [DEBUG] x: 10
+```
+
+通过这种方式，可以实现类似函数重载的灵活性，而无需为每个参数组合定义单独的函数。
+
+示例请参考 `Example/overrideTest.alang` 和 `Example/overloadTest.alang`。
+
 **模块与文件导入**
 - 支持相对/绝对路径导入：`import "path/to/module"`（后缀 `.alang` 可省略）
 - 相对路径基于主脚本文件所在目录（可通过宿主调用 `setImportBaseDir()` 设置）
@@ -660,24 +831,121 @@ println(d.twice());   // 22
 
 ## 接口（interface）与动态派发
 
-- 声明：
-	- `interface Name;`
-	- `interface Name { function ping(a); function pong(); }`（仅签名，分号结尾）
-- 使用：可被类以多继承方式继承，如 `class D <- (Base, Name) { ... }`；接口本身不提供实现，但参与类型结构与方法查找。
+接口用于定义类必须实现的方法契约。ALang 支持接口声明、多接口继承，并在类定义时验证接口实现的完整性。
 
-示例：
+**声明语法：**
+- 空接口：`interface Name;`
+- 带方法签名的接口：`interface Name { function method1(); function method2(param); }`
 
-```js
-interface Inter { function ping(a); };
+**重要规则：**
 
-class Base { function ping(a) { println("Base.ping", a); } }
+1. **接口只能声明方法签名，不能包含函数体**
+   ```javascript
+   // ✅ 正确：只有签名，用分号结束
+   interface Drawable {
+       function draw();
+       function getColor();
+   }
+   
+   // ❌ 错误：接口方法不能有函数体
+   interface BadInterface {
+       function doSomething() {  // 错误！
+           print("Not allowed");
+       }
+   }
+   ```
+   
+   如果在接口中定义函数体，会报错：
+   ```
+   Interface methods cannot have function bodies. Use ';' instead of '{...}'
+   Method 'doSomething' in interface 'BadInterface' should be declared as: function doSomething(...);
+   ```
 
-class D <- (Base, Inter) { function pong() { println("D.pong"); } }
+2. **实现接口的类必须实现所有方法**
+   ```javascript
+   interface Printable {
+       function print();
+       function getName();
+   }
+   
+   // ✅ 正确：实现了所有方法
+   class Document <- (Printable) {
+       function print() {
+           println("Printing document");
+       }
+       
+       function getName() {
+           return "Document";
+       }
+   }
+   
+   // ❌ 错误：缺少 getName() 方法
+   class BadDocument <- (Printable) {
+       function print() {
+           println("Printing");
+       }
+       // 缺少 getName() 实现
+   }
+   ```
+   
+   如果缺少方法实现，会报错：
+   ```
+   Class 'BadDocument' must implement interface method 'getName' from 'Printable'
+   ```
 
-let d = new D();
-d.ping(7); // 动态派发到 Base.ping
-d.pong();
-```
+3. **支持多接口继承**
+   ```javascript
+   interface Readable {
+       function read();
+   }
+   
+   interface Writable {
+       function write();
+   }
+   
+   class File <- (Readable, Writable) {
+       function read() {
+           return "File content";
+       }
+       
+       function write() {
+           println("Writing to file");
+       }
+   }
+   ```
+
+4. **接口可以与类混合继承**
+   ```javascript
+   class Base {
+       function baseMethod() {
+           println("Base method");
+       }
+   }
+   
+   interface Flyable {
+       function fly();
+   }
+   
+   // 同时继承类和接口
+   class Bird <- (Base, Flyable) {
+       function fly() {
+           println("Bird is flying");
+       }
+   }
+   ```
+
+**使用场景：**
+- 定义类的行为契约
+- 实现多态性
+- 确保类实现必需的方法
+- 代码规范和类型安全
+
+**验证时机：**
+接口实现的验证在类定义时进行（编译时），而非运行时。这确保了在使用类之前所有必需的方法都已实现。
+
+示例请参考 `Example/interfaceExample.alang` 和 `Example/interfaceValidationTest.alang`。
+
+错误示例请参考 `Example/ErrorExample/interface_*.alang`。
 
 ## 宿主原生类注册（C++）
 

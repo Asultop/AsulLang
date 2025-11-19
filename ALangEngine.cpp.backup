@@ -487,6 +487,7 @@ struct Environment : std::enable_shared_from_this<Environment> {
 		auto it = values.find(name);
 		if (it != values.end()) return it->second;
 		if (parent) return parent->get(name);
+		// This error is caught and formatted by the interpreter
 		throw std::runtime_error("Undefined variable '" + name + "'");
 	}
 };
@@ -638,8 +639,7 @@ private:
 		if (check(type)) return advance();
 		const Token& tok = peek();
 		std::ostringstream oss;
-		oss << "[Parse] " << message << " at line " << tok.line << ", column " << tok.column << "\n";
-		oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+		oss << "[Parse] " << message << " at line " << tok.line << ", column " << tok.column;
 		throw std::runtime_error(oss.str());
 	}
 
@@ -762,8 +762,8 @@ private:
 			if (check(TokenType::LeftBrace)) {
 				const Token& tok = peek();
 				std::ostringstream oss;
-				oss << "Interface methods cannot have function bodies. Use ';' instead of '{...}' at line " << tok.line << ", column " << tok.column << "\n";
-				oss << "Method '" << mname << "' in interface '" << st->name << "' should be declared as: function " << mname << "(...);";
+				oss << "[Parse] Interface methods cannot have function bodies at line " << tok.line << ", column " << tok.column << "\n";
+				oss << "Hint: Method '" << mname << "' in interface '" << st->name << "' should be declared as: function " << mname << "(...);";
 				throw std::runtime_error(oss.str());
 			}
 			consume(TokenType::Semicolon, "Expect ';' after interface method signature");
@@ -864,7 +864,10 @@ private:
 				bool isRest = false;
 				if (match({TokenType::Ellipsis})) {
 					if (hasRest) {
-						throw std::runtime_error("Only one rest parameter allowed");
+						const Token& tok = previous();
+						std::ostringstream oss;
+						oss << "[Parse] Only one rest parameter allowed at line " << tok.line << ", column " << tok.column;
+						throw std::runtime_error(oss.str());
 					}
 					isRest = true;
 					hasRest = true;
@@ -878,22 +881,34 @@ private:
 				ExprPtr defaultValue = nullptr;
 				if (match({TokenType::Equal})) {
 					if (isRest) {
-						throw std::runtime_error("Rest parameter cannot have a default value");
+						const Token& tok = previous();
+						std::ostringstream oss;
+						oss << "[Parse] Rest parameter cannot have a default value at line " << tok.line << ", column " << tok.column;
+						throw std::runtime_error(oss.str());
 					}
 					if (hasRest) {
-						throw std::runtime_error("Default parameter cannot come after rest parameter");
+						const Token& tok = previous();
+						std::ostringstream oss;
+						oss << "[Parse] Default parameter cannot come after rest parameter at line " << tok.line << ", column " << tok.column;
+						throw std::runtime_error(oss.str());
 					}
 					defaultValue = assignment();  // 解析默认值表达式
 					hasDefault = true;
 				} else if (hasDefault && !isRest) {
-					throw std::runtime_error("Required parameter cannot follow default parameter");
+					const Token& tok = previous();
+					std::ostringstream oss;
+					oss << "[Parse] Required parameter cannot follow default parameter at line " << tok.line << ", column " << tok.column;
+					throw std::runtime_error(oss.str());
 				}
 				
 				params.emplace_back(pname, ptype, isRest, defaultValue);
 				
 				// Rest parameter must be last
 				if (isRest && !check(TokenType::RightParen)) {
-					throw std::runtime_error("Rest parameter must be last");
+					const Token& tok = peek();
+					std::ostringstream oss;
+					oss << "[Parse] Rest parameter must be last at line " << tok.line << ", column " << tok.column;
+					throw std::runtime_error(oss.str());
 				}
 			} while (match({TokenType::Comma}));
 		}
@@ -970,16 +985,13 @@ private:
 		// foreach (varName in iterable) body
 		consume(TokenType::LeftParen, "Expect '(' after 'foreach'");
 		
-		if (!check(TokenType::Identifier)) {
-			const Token& tok = peek();
-			std::ostringstream oss;
-			oss << "Expect variable name in foreach at line " << tok.line << "\n";
-			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
-			throw std::runtime_error(oss.str());
-		}
-		std::string varName = advance().lexeme;
-		
-		consume(TokenType::In, "Expect 'in' after variable name in foreach");
+	if (!check(TokenType::Identifier)) {
+		const Token& tok = peek();
+		std::ostringstream oss;
+		oss << "Expect variable name in foreach at line " << tok.line << ", column " << tok.column;
+		throw std::runtime_error(oss.str());
+	}
+	std::string varName = advance().lexeme;		consume(TokenType::In, "Expect 'in' after variable name in foreach");
 		
 		ExprPtr iterable = expression();
 		consume(TokenType::RightParen, "Expect ')' after foreach clauses");
@@ -1020,17 +1032,14 @@ private:
 					defaultBody.push_back(statement());
 				}
 				
-				cases.push_back({nullptr, defaultBody}); // nullptr indicates default case
-			} else {
-				const Token& tok = peek();
-				std::ostringstream oss;
-				oss << "Expect 'case' or 'default' in switch body at line " << tok.line << "\n";
-				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
-				throw std::runtime_error(oss.str());
-			}
+			cases.push_back({nullptr, defaultBody}); // nullptr indicates default case
+		} else {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect 'case' or 'default' in switch body at line " << tok.line << ", column " << tok.column;
+			throw std::runtime_error(oss.str());
 		}
-		
-		consume(TokenType::RightBrace, "Expect '}' after switch body");
+	}		consume(TokenType::RightBrace, "Expect '}' after switch body");
 		return std::make_shared<SwitchStmt>(expr, cases);
 	}
 
@@ -1108,8 +1117,7 @@ private:
 			{
 				const Token& tok = op;
 				std::ostringstream oss;
-				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
-				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				oss << "[Parse] Invalid assignment target at line " << tok.line << ", column " << tok.column;
 				throw std::runtime_error(oss.str());
 			}
 		}
@@ -1128,8 +1136,7 @@ private:
 			{
 				const Token& tok = previous();
 				std::ostringstream oss;
-				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
-				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				oss << "[Parse] Invalid assignment target at line " << tok.line << ", column " << tok.column;
 				throw std::runtime_error(oss.str());
 			}
 		}
@@ -1144,15 +1151,12 @@ private:
 			Token questionToken = previous();
 			auto thenBranch = expression();  // 递归调用 expression 以支持嵌套
 			
-			if (!match({TokenType::Colon})) {
-				const Token& tok = peek();
-				std::ostringstream oss;
-				oss << "Expect ':' after then branch in ternary operator at line " << tok.line << "\n";
-				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
-				throw std::runtime_error(oss.str());
-			}
-			
-			auto elseBranch = conditional();  // 右结合，支持 a ? b : c ? d : e
+		if (!match({TokenType::Colon})) {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect ':' after then branch in ternary operator at line " << tok.line << ", column " << tok.column;
+			throw std::runtime_error(oss.str());
+		}			auto elseBranch = conditional();  // 右结合，支持 a ? b : c ? d : e
 			return std::make_shared<ConditionalExpr>(expr, thenBranch, elseBranch, questionToken.line, questionToken.column, std::max(1, questionToken.length));
 		}
 		
@@ -1299,17 +1303,18 @@ private:
 				bool hasDefault = false;
 				if (!check(TokenType::RightParen)) {
 					do {
-						// Check for rest parameter: ...paramName
-						bool isRest = false;
-						if (match({TokenType::Ellipsis})) {
-							if (hasRest) {
-								throw std::runtime_error("Only one rest parameter allowed");
-							}
-							isRest = true;
-							hasRest = true;
+					// Check for rest parameter: ...paramName
+					bool isRest = false;
+					if (match({TokenType::Ellipsis})) {
+						if (hasRest) {
+							const Token& tok = previous();
+							std::ostringstream oss;
+							oss << "[Parse] Only one rest parameter allowed at line " << tok.line << ", column " << tok.column;
+							throw std::runtime_error(oss.str());
 						}
-						
-						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+						isRest = true;
+						hasRest = true;
+					}						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
 						std::optional<std::string> ptype = std::nullopt;
 						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
 						
@@ -1317,18 +1322,27 @@ private:
 						ExprPtr defaultValue = nullptr;
 						if (match({TokenType::Equal})) {
 							if (isRest) {
-								throw std::runtime_error("Rest parameter cannot have a default value");
+								const Token& tok = previous();
+								std::ostringstream oss;
+								oss << "[Parse] Rest parameter cannot have a default value at line " << tok.line << ", column " << tok.column << "\n";
+								oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+								throw std::runtime_error(oss.str());
 							}
 							if (hasRest) {
-								throw std::runtime_error("Default parameter cannot come after rest parameter");
+								const Token& tok = previous();
+								std::ostringstream oss;
+								oss << "[Parse] Default parameter cannot come after rest parameter at line " << tok.line << ", column " << tok.column << "\n";
+								oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+								throw std::runtime_error(oss.str());
 							}
 							defaultValue = assignment();
 							hasDefault = true;
 						} else if (hasDefault && !isRest) {
-							throw std::runtime_error("Required parameter cannot follow default parameter");
-						}
-						
-						params.emplace_back(pname, ptype, isRest, defaultValue);
+				const Token& tok = previous();
+				std::ostringstream oss;
+				oss << "[Parse] Required parameter cannot follow default parameter at line " << tok.line << ", column " << tok.column;
+				throw std::runtime_error(oss.str());
+			}						params.emplace_back(pname, ptype, isRest, defaultValue);
 						
 						// Rest parameter must be last
 						if (isRest && !check(TokenType::RightParen)) {
@@ -1409,8 +1423,7 @@ private:
 		{
 			const Token& tok = peek();
 			std::ostringstream oss;
-			oss << "Expect expression at line " << tok.line << ", column " << tok.column << "\n";
-			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			oss << "Expect expression at line " << tok.line << ", column " << tok.column;
 			throw std::runtime_error(oss.str());
 		}
 	}
@@ -2470,17 +2483,15 @@ public:
 									break;
 								}
 							}
-						}
-						if (!implemented) {
-							std::ostringstream oss;
-							oss << "Class '" << c->name << "' must implement interface method '" << methodName << "' from '" << super->name << "'";
-							throw std::runtime_error(oss.str());
-						}
-					}
+				}
+				if (!implemented) {
+					std::ostringstream oss;
+					oss << "[Runtime] Class '" << c->name << "' must implement interface method '" << methodName << "' from '" << super->name << "'";
+					throw std::runtime_error(oss.str());
 				}
 			}
-			
-			env->define(c->name, klass);
+		}
+	}			env->define(c->name, klass);
 			return;
 		}
 		if (auto ext = std::dynamic_pointer_cast<ExtendStmt>(stmt)) {
@@ -3400,80 +3411,71 @@ static std::string colorize(const std::string& key, const std::string& text, con
 }
 
 static std::string sanitizeHeaderMsg(const std::string& msg) {
-	// 统一头部信息：去掉位置信息（at line / column / length），只保留简短描述
+	// Remove ", column N" and ", length M" from header text, keep "line N" if present
 	std::string s = msg;
-	// 仅处理第一行作为头部
-	size_t nl = s.find('\n');
-	if (nl != std::string::npos) s = s.substr(0, nl);
-
-	auto removeKeyNumber = [&](const char* key){
+	// operate only on the first line for caret-context messages; but safe to run on whole
+	auto removeSegment = [&](const char* key){
 		size_t p = 0;
 		while ((p = s.find(key, p)) != std::string::npos) {
-			size_t start = p;
 			size_t end = p + std::strlen(key);
 			while (end < s.size() && isspace(static_cast<unsigned char>(s[end]))) end++;
 			while (end < s.size() && isdigit(static_cast<unsigned char>(s[end]))) end++;
-			// 去掉前导的", "
+			// Remove preceding comma and space if present
+			size_t start = p;
 			if (start >= 2 && s[start-2] == ',' && s[start-1] == ' ') start -= 2;
 			s.erase(start, end - start);
 		}
 	};
-
-	// 去掉 "at line N"（含可选前导空格）
-	{
-		size_t p = 0;
-		while ((p = s.find(" at line ", p)) != std::string::npos) {
-			size_t start = p;
-			p += 9; // len(" at line ")
-			size_t end = p;
-			while (end < s.size() && isdigit(static_cast<unsigned char>(s[end]))) end++;
-			s.erase(start, end - start);
-		}
-	}
-
-	// 去掉 ", column N" 与 ", length M"
-	removeKeyNumber("column");
-	removeKeyNumber("length");
-
-	// 修剪多余空格
-	while (!s.empty() && (s.back() == ' ' || s.back() == ',')) s.pop_back();
+	removeSegment("column");
+	removeSegment("length");
 	return s;
 }
 
 static void printErrorWithContext(const std::string& src, const std::string& msg, const std::string& filename = std::string()) {
-	// 分离首行（头部）与后续详细信息（如 Stack 或提示）
-	std::string cleanMsg = msg;
-	std::string headerLine = cleanMsg;
-	std::string extraLines;
-	size_t firstNl = cleanMsg.find('\n');
-	if (firstNl != std::string::npos) {
-		headerLine = cleanMsg.substr(0, firstNl);
-		extraLines = cleanMsg.substr(firstNl + 1);
-	}
-
-	// 从头部提取行列信息（支持 "line N, column M" 或 "at line N"）
+    // Extract multi-line message parts: header line + optional body lines (like hints)
+    std::vector<std::string> msgLines;
+    {
+        std::istringstream iss(msg);
+        std::string line;
+        while (std::getline(iss, line)) {
+            msgLines.push_back(line);
+        }
+    }
+    
+    // Use first line as the header message (contains line/column info)
+    std::string cleanMsg = msgLines.empty() ? msg : msgLines[0];
+    
+    // Collect additional lines (hints, etc.) that don't contain '^' (caret lines)
+    std::vector<std::string> extraLines;
+    for (size_t i = 1; i < msgLines.size(); ++i) {
+        if (msgLines[i].find('^') == std::string::npos) {
+            extraLines.push_back(msgLines[i]);
+        }
+    }
+    
+    // Try to extract line and column numbers: patterns like "line N, column M" or "at line N"
 	int line = -1, col = 1, width = 1;
-	size_t p = headerLine.find("line ");
+	size_t p = cleanMsg.find("line ");
 	if (p != std::string::npos) {
 		p += 5;
 		size_t q = p;
-		while (q < headerLine.size() && isdigit(static_cast<unsigned char>(headerLine[q]))) q++;
+		while (q < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[q]))) q++;
 		if (q > p) {
-			line = std::stoi(headerLine.substr(p, q - p));
-			size_t cpos = headerLine.find("column ", q);
+			line = std::stoi(cleanMsg.substr(p, q - p));
+			size_t cpos = cleanMsg.find("column ", q);
 			if (cpos != std::string::npos) {
 				cpos += 7;
 				size_t r = cpos;
-				while (r < headerLine.size() && isdigit(static_cast<unsigned char>(headerLine[r]))) r++;
-				if (r > cpos) col = std::stoi(headerLine.substr(cpos, r - cpos));
+				while (r < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[r]))) r++;
+				if (r > cpos) col = std::stoi(cleanMsg.substr(cpos, r - cpos));
 			}
 			// try parse length
-			size_t lpos = headerLine.find("length ", q);
+			size_t lpos = cleanMsg.find("length ", q);
 			if (lpos != std::string::npos) {
 				lpos += 7;
 				size_t r2 = lpos;
-				while (r2 < headerLine.size() && isdigit(static_cast<unsigned char>(headerLine[r2]))) r2++;
-				if (r2 > lpos) width = std::max(1, std::stoi(headerLine.substr(lpos, r2 - lpos)));
+				while (r2 < cleanMsg.size() && isdigit(static_cast<unsigned char>(cleanMsg[r2]))) r2++;
+				if (r2 > lpos) width = std::max(1, std::stoi(cleanMsg.substr(lpos, r2 - lpos)));
 			}
 		}
 	}
@@ -3507,21 +3509,19 @@ static void printErrorWithContext(const std::string& src, const std::string& msg
 							   + colorize("lineValue", std::to_string(line), "CYAN")
 							   + colorize("lineLabel", std::string(": "), "YELLOW");
 		int prefixLen = 5 + static_cast<int>(std::to_string(line).size()) + 2; // "line " + digits + ": "
-		std::cerr << head << " " << sanitizeHeaderMsg(headerLine) << "\n"
+		std::cerr << head << " " << sanitizeHeaderMsg(cleanMsg) << "\n"
 				  << (filePrefix.empty() ? std::string() : filePrefix) << linePrefix << codeLine << "\n"
-				  << std::string((int)(filePrefix.empty() ? 0 : 0) + prefixLen + (col > 1 ? col - 1 : 0), ' ') << caretStr
-				  << std::endl;
-		if (!extraLines.empty()) {
-			// 若附加消息包含 '^'（可能自带代码/插入符），避免与我们生成的上下文重复输出
-			if (extraLines.find('^') == std::string::npos) {
-				std::cerr << extraLines << std::endl;
-			}
+				  << std::string((int)(filePrefix.empty() ? 0 : 0) + prefixLen + (col > 1 ? col - 1 : 0), ' ') << caretStr;
+		// Print any extra lines (like hints)
+		for (const auto& extra : extraLines) {
+			std::cerr << "\n" << extra;
 		}
+		std::cerr << std::endl;
 		return;
 	}
 	// Fallback
 	std::string head = colorize("header", std::string("[ALang Error]"), "RED");
-	std::cerr << head << " " << sanitizeHeaderMsg(headerLine) << std::endl;
+	std::cerr << head << " " << sanitizeHeaderMsg(cleanMsg) << std::endl;
 }
 
 void ALangEngine::execute(const std::string& code) {

@@ -1,0 +1,141 @@
+// Interface Usage Example - 接口使用示例
+// 演示如何正确使用接口功能和常见错误
+
+print("=== Interface Usage Examples ===");
+print("");
+
+// 示例 1: 基本接口定义和实现
+print("Example 1: Basic Interface");
+print("----------------------------");
+
+interface Shape {
+    function getArea();
+    function getPerimeter();
+}
+
+class Rectangle <- (Shape) {
+    function constructor(width, height) {
+        this.width = width;
+        this.height = height;
+    }
+    
+    function getArea() {
+        return this.width * this.height;
+    }
+    
+    function getPerimeter() {
+        return 2 * (this.width + this.height);
+    }
+}
+
+let rect = new Rectangle(5, 3);
+print("Rectangle area: " + rect.getArea());
+print("Rectangle perimeter: " + rect.getPerimeter());
+print("");
+
+// 示例 2: 多个接口
+print("Example 2: Multiple Interfaces");
+print("-------------------------------");
+
+interface Serializable {
+    function serialize();
+}
+
+interface Cloneable {
+    function clone();
+}
+
+class Data <- (Serializable, Cloneable) {
+    function constructor(value) {
+        this.value = value;
+    }
+    
+    function serialize() {
+        return "{value:" + this.value + "}";
+    }
+    
+    function clone() {
+        let copy = new Data(this.value);
+        return copy;
+    }
+}
+
+let data = new Data(42);
+print("Serialized: " + data.serialize());
+let copy = data.clone();
+print("Cloned value: " + copy.value);
+print("");
+
+// 示例 3: 接口 + 基类继承
+print("Example 3: Interface + Base Class");
+print("----------------------------------");
+
+class Logger {
+    function log(msg) {
+        print("[LOG] " + msg);
+    }
+}
+
+interface Saveable {
+    function save();
+}
+
+class Document <- (Logger, Saveable) {
+    function constructor(name) {
+        this.name = name;
+    }
+    
+    function save() {
+        this.log("Saving " + this.name);
+        print("Document saved!");
+    }
+}
+
+let doc = new Document("report.txt");
+doc.save();
+print("");
+
+// 示例 4: 接口作为契约
+print("Example 4: Interface as Contract");
+print("---------------------------------");
+
+interface Database {
+    function connect();
+    function disconnect();
+    function query(sql);
+}
+
+class MySQLDatabase <- (Database) {
+    function connect() {
+        print("Connecting to MySQL...");
+    }
+    
+    function disconnect() {
+        print("Disconnecting from MySQL...");
+    }
+    
+    function query(sql) {
+        print("Executing: " + sql);
+        return "result";
+    }
+}
+
+let db = new MySQLDatabase();
+db.connect();
+let result = db.query("SELECT * FROM users");
+print("Query result: " + result);
+db.disconnect();
+print("");
+
+print("=== All examples completed successfully! ===");
+print("");
+print("常见错误提示：");
+print("1. 接口方法定义要用分号结尾，不要用花括号");
+print("   正确：function method();");
+print("   错误：function method() { }");
+print("");
+print("2. 实现接口的类必须实现所有方法");
+print("   否则会报错：Class 'XXX' must implement interface method 'YYY'");
+print("");
+print("3. 可以同时继承多个接口和基类");
+print("   语法：class MyClass <- (BaseClass, Interface1, Interface2)");
