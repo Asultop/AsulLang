@@ -1,0 +1,38 @@
+println("== 类型比较示例 ==");
+
+// 基本类型与强制转换
+println("1 == '1':", 1 == "1");
+println("1 === '1':", 1 === "1");
+println("'123' == 123:", "123" == 123);
+println("'123' === 123:", "123" === 123);
+println("true == 1:", true == 1);
+println("true === 1:", true === 1);
+println("null == null:", null == null);
+println("null === null:", null === null);
+
+// 数组与引用比较
+let a = [1,2];
+let b = [1,2];
+let c = a;
+println("[1,2] == [1,2]:", a == b);
+println("[1,2] === [1,2]:", a === b);
+println("a === c:", a === c);
+println("a == c:", a == c);
+
+// 对象字段顺序与结构/引用
+let o1 = { x: 1, y: 2 };
+let o2 = { y: 2, x: 1 };
+println("{x:1,y:2} == {y:2,x:1}:", o1 == o2);
+println("{x:1,y:2} === {y:2,x:1}:", o1 === o2);
+
+// 对象到原始值的转换（toString 的简单示例）
+let obj = { toString: []() { return "5"; } };
+println("obj == 5:", obj == 5);
+println("obj === 5:", obj === 5);
+
+// 布尔与字符串
+println("false == '0':", false == "0");
+println("false === '0':", false === "0");
+
+// 结束
+println("== 比较示例结束 ==");

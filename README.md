@@ -1,43 +1,97 @@
 # ALang 简易解释器
 
-一个用 C++17 实现的极简解释器 (ALang)，支持：
+ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标用于嵌入式脚本扩展与实验性语言特性验证。核心代码位于 `ALangEngine.cpp`/`ALangEngine.h`，命令行入口为 `Main.cpp`。
 
-- 变量声明：`let/var/const`（目前不区分可变性）
+**主要特性**
 - 基本类型：number、string、boolean、null、array、object
-- 表达式：`+ - * / %`，比较与相等（严格按类型），逻辑 `&& || !`
-- 访问与赋值：标识符、属性访问 `obj.a`、下标访问 `a[i]`，可作为赋值左值
-- 语句：表达式语句、`if/else`、`while`、`for`、`break`、`continue`、`return`、块 `{}`
-- 函数：`function name(a,b){...}`，带作用域闭包
-- 内置：`print(...)`（不换行）、`println(...)`（换行）、`len(x)`、`push(arr, ...values)`、`sleep(ms)`
-- 方法风格内置：字符串/数组/对象支持 `len()`，数组支持 `push(...)`，例如：`"abc".len()`, `[1,2].len()`, `{a:1}.len()`, `[1].push(2,3)`
-- 类系统：`class` 定义、`new` 实例化、构造器 `constructor`、多继承 `class A <- (B, C)`、扩展已有类 `extends Name { ... }`
-- 匿名函数（lambda）：`[](x, y){ ... }`，可直接作为回调传入
-- 异步模型：`await`、`async function`、事件循环（任务队列）、`go` 语句、Promise.then/catch 链式（返回新 Promise）、`Promise.resolve/reject`
-- 计算属性名：对象字面量支持 `{ [expr]: value }`
-- 接口：`interface Name { function sig(...); }`，可被 `class X <- (Base, Name)` 继承用于动态派发
-- 字符串插值：`"Hello ${name}, v=${expr}"`
- - 包与导入：`import/from` 多种导入形式（内置 `Math` 包）
+- 变量与作用域：`let/var/const`（当前实现未严格区分可变性）
+- 表达式与语句：算术、比较、逻辑运算；`if/else`、`while`、`for`、`break`/`continue`、`return`、块语句
+- 函数与闭包：`function`、匿名 lambda `[](args){}`、函数作为一等值
+- 类与继承：`class`、`new`、构造器 `constructor`、多继承语法 `class A <- (B, C)`、`extends` 扩展
+- 接口：`interface` 用作方法签名与多继承占位
+- 异步与事件循环：`async/await`、`Promise`、`then/catch`、`go` 将任务投递到事件循环
+- 元编程：`eval(string)` 与 `quote(string)`，支持 token 级别的源码修改与 `apply()`
+- 模块与导入：文件导入与包导入 (`import` / `from`)，示例见 `Example/` 目录
 
-## 快速开始
+**仓库结构（主要）**
+- `Main.cpp`：CLI 入口，初始化引擎并执行脚本
+- `ALangEngine.h` / `ALangEngine.cpp`：解释器实现、运行时与标准内置
+- `Example/`：语言特性示例脚本
+- `AsulFormatString/`：用于格式化输出的辅助库
 
-### 编译
+**快速开始**
 
-使用 g++（或 MSVC）编译，需要 C++17：
+构建（在仓库根目录）：
 
-```pwsh
-# g++（如使用 MSYS2/MinGW 或 WSL）
-g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang.exe
-
-# MSVC（开发者命令行）
-cl /std:c++17 /O2 Main.cpp ALangEngine.cpp /Fe:alang.exe
+```bash
+bash build.sh
 ```
 
-### 运行
+说明：`build.sh` 会用编译器（如 g++）编译 `Main.cpp` 与 `ALangEngine.cpp`。也可以手动使用：
 
-```pwsh
-# 运行指定脚本文件
-.\n+alang.exe .\Example\example.alang
+```bash
+g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
+```
 
+运行：
+
+```bash
+# 运行单个示例文件
+./alang Example/example.alang
+
+# 运行其它示例
+./alang Example/lambdaExample.alang
+./alang Example/evalExample.alang
+```
+
+如果脚本使用了异步（`then/catch` / `go`），宿主（CLI）通常在脚本执行后调用 `runEventLoopUntilIdle()` 来处理事件循环任务（CLI 已在 `Main.cpp` 中演示此调用）。
+
+**常用内置函数**
+- `print(...args)`、`println(...args)`：输出（后者换行）
+- `len(x)`：字符串/数组/对象的长度
+- `push(arr, ...values)`：向数组追加元素
+- `sleep(ms)`：返回在 `ms` 毫秒后 resolve 的 Promise
+
+**模块与文件导入**
+- 支持相对/绝对路径导入：`import "path/to/module"`（后缀 `.alang` 可省略）
+- 相对路径基于主脚本文件所在目录（可通过宿主调用 `setImportBaseDir()` 设置）
+- 多次导入去重以避免重复执行
+
+**宿主 (C++) 集成要点**
+ALang 提供简单的宿主注册接口（在 `ALangEngine.h` 中声明）：
+
+- `using NativeValue = std::variant<std::monostate,double,std::string,bool>`：宿主与脚本之间的值桥接仅支持基元类型
+- `using NativeFunc = std::function<NativeValue(const std::vector<NativeValue>&, void* thisHandle)>`
+- `registerClass(const std::string& className, NativeFunc constructor, const std::unordered_map<std::string, NativeFunc>& methods, const std::vector<std::string>& baseClasses = {})`：注册原生类
+- `callFunction(const std::string& functionName, const std::vector<NativeValue>& args)`：从 C++ 调用脚本全局函数
+- `setGlobal(const std::string& name, const NativeValue& value)` / `registerFunction(...)`：设置全局变量和注册宿主函数
+- `runEventLoopUntilIdle()`：驱动事件循环以处理 `then`/`go` 等异步任务
+
+示例（摘自 `Main.cpp`）：
+
+```cpp
+engine.registerClass(
+	"Math",
+	/* constructor */ [](const std::vector<ALangEngine::NativeValue>&, void*){ return ALangEngine::NativeValue{std::monostate{}}; },
+	/* methods */ std::unordered_map<std::string, ALangEngine::NativeFunc>{
+		{"sum", [](const std::vector<ALangEngine::NativeValue>& args, void*){ /* ... */ }},
+		{"abs", [](const std::vector<ALangEngine::NativeValue>& args, void*){ /* ... */ }}
+	}
+);
+```
+
+**示例脚本**
+请查看 `Example/` 目录（含大量示例：`lambdaExample.alang`、`quoteExample.alang`、`evalExample.alang`、`interfaceExample.alang` 等）。
+
+**开发与调试**
+- 代码主要位于 `ALangEngine.cpp`，包含词法、解析、执行与运行时实现。阅读该文件可以了解语言实现细节与扩展点。
+
+**许可**
+项目以仓库内的 `LICENSE` 文件为准。
+
+---
+
+如果你希望我将 README 翻译为英文、补充 API 细节或生成更结构化的文档（例如 `docs/`），我可以继续完善。
 # 运行更多示例
 .
 \alang.exe .\lambdaExample.alang
@@ -77,6 +131,40 @@ println(obj.a);         // => 1
 obj["c"] = 7;
 println(obj);           // => {c: 7, b: hi, a: 1} （键顺序未定义）
 ```
+
+## eval 与 quote（代码文本操作）
+
+ALang 提供两个用于在运行时处理源代码文本的内置：`eval(string)` 与 `quote(string)`，常用于元编程或简单宏式变换。
+
+- `eval(string)`：在一个子环境中解析并执行传入的代码片段（不会向外部环境泄漏变量）。
+	- 若传入是单个表达式，返回该表达式的值。
+	- 若传入是多语句且最后一条是表达式，返回最后表达式的值；若最后一条不是表达式（例如以分号结尾的语句），返回 `null`。
+	- 解析策略有容错：尝试完整解析；若失败会尝试追加分号或作为单表达式片段解析。
+
+- `quote(string)`：将源代码字符串词法化，返回一个对象 `{ tokens, source, apply }`：
+	- `tokens`：数组，每个 token 为对象，字段包括 `token`（Token 名称，如 `Number`/`Identifier`/`Plus`/`Semicolon`/`String`/`Let`/`False` 等）、`lexeme`（原始文本）、`line`、`column`、`length`。
+	- 你可以在 `tokens` 上就地修改 `token`/`lexeme` 或替换整个数组，然后调用 `apply()` 将重建的源码执行（在子环境中），`apply()` 的返回语义同 `eval`（最后语句值或 `null`）。
+
+示例要点：
+- 若希望 `apply()` 返回一个值，请确保重建的代码的最后一条语句是一个裸表达式（例如 `expr`），而非 `println(...)`（`println` 返回 `null`）。
+- `quote` 适合做 Token 级的修改（如替换运算符、替换标识符、插入/删除 token 片段、拼接多段代码），但请谨慎处理字符串字面量中的引号转义（示例中通过直接构造 `String` token 避免嵌套引号问题）。
+
+运行示例：
+```bash
+# 构建（在 repo 根目录）
+bash build.sh
+
+# 运行基础 eval 示例
+./alang Example/evalExample.alang
+
+# 运行简单 quote 示例
+./alang Example/quoteExample.alang
+
+# 运行进阶 quote 示例（复杂 token 级改写、拼接、模板生成）
+./alang Example/quote_complex.alang
+```
+
+更多示例请参阅 `Example/` 目录下的 `quoteExample.alang`, `quote_complex.alang`, `evalExample.alang`。
 
 ## 计算属性名
 
@@ -385,9 +473,9 @@ if (std::holds_alternative<double>(ret)) {
 ## 限制
 
 - 已支持常用方法风格（如 `arr.push(...)`、`"s".len()`），但无原型链与动态派发
-- 无对象/数组字面量中的计算属性名与展开
+- 支持对象/数组字面量中的计算属性名与展开（`[expr]` 与 `...expr`）
 - 无 `for-of`/`for-in`，仅 C 风格 `for`
-- `==` 实现为严格相等（按类型）
+- `==` 实现为类似 ECMAScript 的抽象相等（带类型强制），`===` 为严格相等（按类型与引用）
 - 支持语言级异常（throw / try...catch），但暂不支持 finally；`go` 中异常被吞掉；宿主未提供统一日志钩子
 
 ## 结构

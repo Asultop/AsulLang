@@ -1,0 +1,25 @@
+// quote 基础示例：展示 tokens 结构、修改后再 apply
+println("== quote 基础示例 ==");
+
+let src = "let x = 5; x + 10";
+println("源代码: ${src}");
+let q = quote(src);
+let tokens = q.tokens;
+println("token 数量: ${len(tokens)}");
+
+println("\n-- 原始 tokens --");
+for (let i = 0; i < len(tokens); i = i + 1) {
+    let tk = tokens[i];
+    println(i, ": ", tk.token, " lexeme='", tk.lexeme, "' @", tk.line, ":", tk.column, " len=", tk.length);
+}
+
+println("\n-- 修改 Plus -> Minus 后 tokens --");
+for (let i = 0; i < len(tokens); i = i + 1) {
+    let tk = tokens[i];
+    if (tk.token == "Plus") { tk.token = "Minus"; tk.lexeme = "-"; }
+    println(i, ": ", tk.token, " lexeme='", tk.lexeme, "'");
+}
+
+println("\napply 执行结果: ", q.apply());
+println("== quote 基础示例结束 ==");
+

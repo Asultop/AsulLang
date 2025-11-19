@@ -1,0 +1,105 @@
+// quote 进阶示例：多个场景展示 token 级变换
+println("== quote 进阶示例 ==");
+
+// 1) 条件替换：把 DEBUG 标识符替换为 false，从而移除调试分支
+// 注意：当前字符串字面量不支持在外层字符串中直接写 \"...\"，
+// 这里避免内层字符串，直接打印数值。
+let src1 = "let sum = 0; if (DEBUG) { println(sum); } sum + 1";
+let q1 = quote(src1);
+for (let i = 0; i < len(q1.tokens); i = i + 1) {
+    let tk = q1.tokens[i];
+    if (tk.token == "Identifier" && tk.lexeme == "DEBUG") {
+        tk.token = "False"; // 关键字 false
+        tk.lexeme = "false";
+    }
+}
+println("1) 条件替换后结果: ", q1.apply());
+
+// 2) 常量折叠：把任意 Number + Number 折叠为单个 Number
+// 定义 x，避免 apply 时出现未定义标识符错误
+let x = 10;
+let src2 = "1 + 2 + 3 + x";
+let q2 = quote(src2);
+let ts2 = q2.tokens;
+let new2 = [];
+let i2 = 0;
+while (i2 < len(ts2)) {
+    let a = ts2[i2];
+    if (i2 + 2 < len(ts2)) {
+        let op = ts2[i2 + 1];
+        let b = ts2[i2 + 2];
+        if (a.token == "Number" && op.token == "Plus" && b.token == "Number") {
+            // 计算常量和
+            let va = eval(a.lexeme);
+            let vb = eval(b.lexeme);
+            let sum = va + vb;
+            // 用一个新 token 替代三元组
+            let numTok = quote("0").tokens[0];
+            numTok.token = "Number";
+            numTok.lexeme = "" + sum;
+            push(new2, numTok);
+            i2 = i2 + 3;
+            continue;
+        }
+    }
+    // 否则原样拷贝
+    push(new2, a);
+    i2 = i2 + 1;
+}
+q2.tokens = new2;
+println("2) 常量折叠后结果: ", q2.apply());
+
+// 3) 片段拼接：把多段 tokens 连接起来形成一段新代码
+let p1 = quote("let msg = ");
+// 构造一个 String token 和一个分号 token，避免在字符串里嵌套引号
+let tStr = quote("0").tokens[0]; tStr.token = "String"; tStr.lexeme = "Hello";
+let tSemi = quote(";").tokens[0];
+let p3 = quote(" println(msg);");
+let merged = [];
+// 追加函数，拼接三个片段的 tokens
+function appendTokens(dst, src) {
+    for (let i = 0; i < len(src.tokens); i = i + 1) push(dst, src.tokens[i]);
+}
+appendTokens(merged, p1);
+push(merged, tStr);
+push(merged, tSemi);
+appendTokens(merged, p3);
+let q3 = quote("");
+q3.tokens = merged;
+println("3) 片段拼接执行结果: ", q3.apply());
+
+// 4) 函数生成：模板 + 注入标识符 + 在 return 语句前插入 ` + 1`
+let fname = "mulAdd";
+let tmpl = quote("function f(a, b) { return a * b; }");
+let ts4 = tmpl.tokens;
+// 把函数名 f 改成 fname
+for (let i = 0; i < len(ts4); i = i + 1) {
+    let tk = ts4[i];
+    if (tk.token == "Identifier" && tk.lexeme == "f") { tk.lexeme = fname; break; }
+}
+// 在 ';' 之前插入 " + 1" 片段
+let plusOne = quote(" + 1").tokens;
+let out4 = [];
+for (let i = 0; i < len(ts4); i = i + 1) {
+    let tk = ts4[i];
+    if (tk.token == "Semicolon") {
+        // 先插入 + 1，再插入分号本身
+        for (let j = 0; j < len(plusOne); j = j + 1) push(out4, plusOne[j]);
+        push(out4, tk);
+    } else {
+        push(out4, tk);
+    }
+}
+// 在同一段代码中追加一次调用，避免作用域不泄漏问题
+let callTpl = quote(" println(f(6, 7));");
+for (let i = 0; i < len(callTpl.tokens); i = i + 1) {
+    let tk = callTpl.tokens[i];
+    if (tk.token == "Identifier" && tk.lexeme == "f") { tk.lexeme = fname; }
+}
+let out4plus = [];
+for (let i = 0; i < len(out4); i = i + 1) push(out4plus, out4[i]);
+for (let i = 0; i < len(callTpl.tokens); i = i + 1) push(out4plus, callTpl.tokens[i]);
+tmpl.tokens = out4plus;
+println("4) 函数生成与调用结果: ", tmpl.apply());
+
+println("== quote 进阶示例结束 ==");

@@ -1,0 +1,27 @@
+println("-- quote edit + apply demo --");
+
+let src = "let x = 5; x + 10";
+let q = quote(src);
+println("original src: ", src);
+println("original apply: ", q.apply());
+
+let tokens = q.tokens;
+// 把常量 10 改成 100；并演示也可以把 + 改成 *（任选一种或两种）
+for (let i = 0; i < len(tokens); i = i + 1) {
+    let tk = tokens[i];
+    // 改数字 10 -> 100
+    if (tk.token == "Number" && tk.lexeme == "10") {
+        tk.lexeme = "100";
+    }
+    // 可选：把 + 改为 *
+    // if (tk.token == "Plus") {
+    //     tk.token = "Star";
+    //     tk.lexeme = "*";
+    // }
+}
+
+println("after edit apply: ", q.apply());
+
+let b: quote("'string'").apply() = 100;
+println("b = ${b} , b.type() = ${b.type()}");
+println("\n quoteType = ",quote("b.type()").apply());

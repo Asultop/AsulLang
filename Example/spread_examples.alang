@@ -1,0 +1,20 @@
+println("== Spread 与 计算属性示例 ==");
+
+// 数组展开
+let a = [1,2];
+let b = [3,4];
+let c = [...a, ...b, 5];
+println("c:", c); // 期望 [1,2,3,4,5]
+
+// 对象展开
+let o1 = { x: 1, y: 2 };
+let o2 = { y: 9, z: 3 };
+let o3 = { ...o1, ...o2, w: 7 };
+println("o3.x, o3.y, o3.z, o3.w:", o3.x, o3.y, o3.z, o3.w); // x:1, y:9, z:3, w:7
+
+// 计算属性名
+let key = "dyn";
+let obj = { [key]: 42, ["k" + "ey2"]: 100 };
+println("obj.dyn, obj.key2:", obj.dyn, obj.key2);
+
+println("== 示例结束 ==");
