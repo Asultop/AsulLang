@@ -38,16 +38,19 @@ enum class TokenType {
 	Comma, Semicolon, Colon, Dot,
 	Plus, Minus, Star, Slash, Percent,
 	Tilde,
-	Bang, Equal, Less, Greater,
+	Bang, Equal, Less, Greater, Question,
 	// One, two or three char
 	BangEqual, StrictNotEqual, EqualEqual, StrictEqual, LessEqual, GreaterEqual, LeftArrow,
 	Arrow,
 	Ellipsis,
 	AndAnd, OrOr,
+	// Increment/Decrement and Compound Assignment
+	PlusPlus, MinusMinus,
+	PlusEqual, MinusEqual, StarEqual, SlashEqual, PercentEqual,
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, ForEach, In, Break, Continue, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
+	Let, Var, Const, Function, Return, If, Else, While, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
 	EndOfFile
 };
 
@@ -165,6 +168,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 			{"function", TokenType::Function}, {"return", TokenType::Return},
 			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While},
 			{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+			{"switch", TokenType::Switch}, {"case", TokenType::Case}, {"default", TokenType::Default},
 			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
 			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
 			{"await", TokenType::Await},
@@ -272,18 +276,31 @@ size_t startLineStart = lineStart;  // Save starting line position
 		case ',': add(TokenType::Comma); break;
 		case ';': add(TokenType::Semicolon); break;
 		case ':': add(TokenType::Colon); break;
+		case '?': add(TokenType::Question); break;
 		case '.':
 			// support spread '...'
 			if (match('.') && match('.')) add(TokenType::Ellipsis);
 			else add(TokenType::Dot);
 			break;
-		case '+': add(TokenType::Plus); break;
+		case '+':
+			if (match('+')) add(TokenType::PlusPlus);
+			else if (match('=')) add(TokenType::PlusEqual);
+			else add(TokenType::Plus);
+			break;
 		case '-':
 			if (match('>')) add(TokenType::Arrow);
+			else if (match('-')) add(TokenType::MinusMinus);
+			else if (match('=')) add(TokenType::MinusEqual);
 			else add(TokenType::Minus);
 			break;
-		case '*': add(TokenType::Star); break;
-		case '%': add(TokenType::Percent); break;
+		case '*':
+			if (match('=')) add(TokenType::StarEqual);
+			else add(TokenType::Star);
+			break;
+		case '%':
+			if (match('=')) add(TokenType::PercentEqual);
+			else add(TokenType::Percent);
+			break;
 		case '!': {
 			if (match('=')) {
 				if (match('=')) add(TokenType::StrictNotEqual);
@@ -336,7 +353,10 @@ size_t startLineStart = lineStart;  // Save starting line position
 				<< lineStr << "\n" << caret.str();
 			throw std::runtime_error(oss.str());
 		} break;
-		case '/': add(TokenType::Slash); break;
+		case '/':
+			if (match('=')) add(TokenType::SlashEqual);
+			else add(TokenType::Slash);
+			break;
 		case '"': string(); break;
 		default:
 			if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1); int len = static_cast<int>(current - start); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len}); }
@@ -515,8 +535,10 @@ struct LiteralExpr : Expr { Value value; explicit LiteralExpr(Value v): value(st
 struct VariableExpr : Expr { std::string name; int line{0}; int column{1}; int length{1}; VariableExpr(std::string n, int l, int c, int len): name(std::move(n)), line(l), column(c), length(len){} };
 struct AssignExpr : Expr { std::string name; ExprPtr value; int line{0}; AssignExpr(std::string n, ExprPtr v, int l): name(std::move(n)), value(std::move(v)), line(l){} };
 struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r): op(std::move(o)), right(std::move(r)){} };
+struct UpdateExpr : Expr { Token op; ExprPtr operand; bool isPrefix; int line{0}, column{1}, length{1}; UpdateExpr(Token o, ExprPtr e, bool pre, int l, int c, int len): op(std::move(o)), operand(std::move(e)), isPrefix(pre), line(l), column(c), length(len){} };
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
 struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
+struct ConditionalExpr : Expr { ExprPtr condition; ExprPtr thenBranch; ExprPtr elseBranch; int line{0}, column{1}, length{1}; ConditionalExpr(ExprPtr c, ExprPtr t, ExprPtr e, int l, int col, int len): condition(std::move(c)), thenBranch(std::move(t)), elseBranch(std::move(e)), line(l), column(col), length(len){} };
 struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; CallExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
 struct NewExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; NewExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
 struct GetPropExpr : Expr { ExprPtr object; std::string name; int line{0}, column{1}, length{1}; GetPropExpr(ExprPtr o, std::string n, int l, int c0, int len): object(std::move(o)), name(std::move(n)), line(l), column(c0), length(len){} };
@@ -550,6 +572,15 @@ struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
 struct ForEachStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForEachStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
+struct SwitchStmt : Stmt {
+	struct CaseClause {
+		ExprPtr value; // null for default case
+		std::vector<StmtPtr> body;
+	};
+	ExprPtr expr;
+	std::vector<CaseClause> cases;
+	SwitchStmt(ExprPtr e, std::vector<CaseClause> c): expr(std::move(e)), cases(std::move(c)){}
+};
 struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
 struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
 struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
@@ -843,6 +874,7 @@ private:
 		if (match({TokenType::While})) return whileStatement();
 		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::ForEach})) return forEachStatement();
+		if (match({TokenType::Switch})) return switchStatement();
 		if (match({TokenType::Return})) return returnStatement();
 		if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
 		// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
@@ -906,6 +938,52 @@ private:
 		return std::make_shared<ForEachStmt>(varName, iterable, body);
 	}
 
+	StmtPtr switchStatement() {
+		// switch (expr) { case val: ... case val2: ... default: ... }
+		consume(TokenType::LeftParen, "Expect '(' after 'switch'");
+		ExprPtr expr = expression();
+		consume(TokenType::RightParen, "Expect ')' after switch expression");
+		consume(TokenType::LeftBrace, "Expect '{' after switch header");
+		
+		std::vector<SwitchStmt::CaseClause> cases;
+		
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			if (match({TokenType::Case})) {
+				// case value:
+				ExprPtr caseValue = expression();
+				consume(TokenType::Colon, "Expect ':' after case value");
+				
+				// Collect statements until next case/default or closing brace
+				std::vector<StmtPtr> caseBody;
+				while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !isAtEnd()) {
+					caseBody.push_back(statement());
+				}
+				
+				cases.push_back({caseValue, caseBody});
+			} else if (match({TokenType::Default})) {
+				// default:
+				consume(TokenType::Colon, "Expect ':' after 'default'");
+				
+				// Collect statements until next case or closing brace
+				std::vector<StmtPtr> defaultBody;
+				while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !isAtEnd()) {
+					defaultBody.push_back(statement());
+				}
+				
+				cases.push_back({nullptr, defaultBody}); // nullptr indicates default case
+			} else {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "Expect 'case' or 'default' in switch body at line " << tok.line << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+		}
+		
+		consume(TokenType::RightBrace, "Expect '}' after switch body");
+		return std::make_shared<SwitchStmt>(expr, cases);
+	}
+
 	StmtPtr returnStatement() {
 		Token kw = previous();
 		ExprPtr val;
@@ -948,7 +1026,44 @@ private:
 	ExprPtr expression() { return assignment(); }
 
 	ExprPtr assignment() {
-		auto expr = logicalOr();
+		auto expr = conditional();
+		
+		// 复合赋值运算符：+=, -=, *=, /=, %=
+		if (match({TokenType::PlusEqual, TokenType::MinusEqual, TokenType::StarEqual, TokenType::SlashEqual, TokenType::PercentEqual})) {
+			Token op = previous();
+			auto value = assignment();
+			
+			// 转换为 x = x op value
+			TokenType binaryOp;
+			switch (op.type) {
+				case TokenType::PlusEqual: binaryOp = TokenType::Plus; break;
+				case TokenType::MinusEqual: binaryOp = TokenType::Minus; break;
+				case TokenType::StarEqual: binaryOp = TokenType::Star; break;
+				case TokenType::SlashEqual: binaryOp = TokenType::Slash; break;
+				case TokenType::PercentEqual: binaryOp = TokenType::Percent; break;
+				default: binaryOp = TokenType::Plus; break;
+			}
+			Token binaryToken{binaryOp, op.lexeme, op.line};
+			auto binaryExpr = std::make_shared<BinaryExpr>(expr, binaryToken, value);
+			
+			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+				return std::make_shared<AssignExpr>(var->name, binaryExpr, var->line);
+			}
+			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+				return std::make_shared<SetPropExpr>(getp->object, getp->name, binaryExpr, getp->line, getp->column, getp->length);
+			}
+			if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+				return std::make_shared<SetIndexExpr>(idx->object, idx->index, binaryExpr, idx->line, idx->column, idx->length);
+			}
+			{
+				const Token& tok = op;
+				std::ostringstream oss;
+				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+		}
+		
 		if (match({TokenType::Equal})) {
 			auto value = assignment();
 			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
@@ -968,6 +1083,29 @@ private:
 				throw std::runtime_error(oss.str());
 			}
 		}
+		return expr;
+	}
+
+	ExprPtr conditional() {
+		// 三元运算符：condition ? thenExpr : elseExpr
+		auto expr = logicalOr();
+		
+		if (match({TokenType::Question})) {
+			Token questionToken = previous();
+			auto thenBranch = expression();  // 递归调用 expression 以支持嵌套
+			
+			if (!match({TokenType::Colon})) {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "Expect ':' after then branch in ternary operator at line " << tok.line << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+			
+			auto elseBranch = conditional();  // 右结合，支持 a ? b : c ? d : e
+			return std::make_shared<ConditionalExpr>(expr, thenBranch, elseBranch, questionToken.line, questionToken.column, std::max(1, questionToken.length));
+		}
+		
 		return expr;
 	}
 
@@ -1032,6 +1170,12 @@ private:
 	}
 
 	ExprPtr unary() {
+		// 前置递增/递减：++x, --x
+		if (match({TokenType::PlusPlus, TokenType::MinusMinus})) {
+			Token op = previous();
+			auto operand = unary();
+			return std::make_shared<UpdateExpr>(op, operand, true, op.line, op.column, std::max(1, op.length));
+		}
 		if (match({TokenType::Bang, TokenType::Minus})) {
 			Token op = previous();
 			auto right = unary();
@@ -1042,7 +1186,17 @@ private:
 			auto inner = unary();
 			return std::make_shared<AwaitExpr>(inner, awTok.line, awTok.column, std::max(1, awTok.length));
 		}
-		return call();
+		return postfix();
+	}
+
+	ExprPtr postfix() {
+		auto expr = call();
+		// 后置递增/递减：x++, x--
+		if (match({TokenType::PlusPlus, TokenType::MinusMinus})) {
+			Token op = previous();
+			return std::make_shared<UpdateExpr>(op, expr, false, op.line, op.column, std::max(1, op.length));
+		}
+		return expr;
 	}
 
 	ExprPtr finishCall(ExprPtr callee) {
@@ -1541,6 +1695,98 @@ public:
 				std::ostringstream oss; oss << ex.what() << " at line " << un->op.line << ", column " << un->op.column << ", length " << std::max(1, un->op.length); throw std::runtime_error(oss.str());
 			}
 		}
+		if (auto update = std::dynamic_pointer_cast<UpdateExpr>(expr)) {
+			// 处理递增/递减运算符：++x, --x, x++, x--
+			try {
+				// 获取当前值
+				Value oldValue;
+				std::string varName;
+				std::shared_ptr<Object> objPtr;
+				std::string propName;
+				std::shared_ptr<Array> arrPtr;
+				Value indexValue;
+				bool isVar = false, isProp = false, isIndex = false;
+				
+				if (auto var = std::dynamic_pointer_cast<VariableExpr>(update->operand)) {
+					oldValue = env->get(var->name);
+					varName = var->name;
+					isVar = true;
+				} else if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(update->operand)) {
+					Value obj = evaluate(getp->object);
+					if (auto po = std::get_if<std::shared_ptr<Object>>(&obj)) {
+						objPtr = *po;
+						propName = getp->name;
+						if (objPtr && objPtr->find(propName) != objPtr->end()) {
+							oldValue = (*objPtr)[propName];
+						} else {
+							oldValue = Value{std::monostate{}};
+						}
+						isProp = true;
+					} else if (auto inst = std::get_if<std::shared_ptr<Instance>>(&obj)) {
+						if (*inst) {
+							auto it = (*inst)->fields.find(getp->name);
+							if (it != (*inst)->fields.end()) {
+								oldValue = it->second;
+							} else {
+								oldValue = Value{std::monostate{}};
+							}
+							// 处理实例字段更新需要特殊处理
+							throw std::runtime_error("Update operators on instance properties not yet fully supported");
+						}
+					} else {
+						throw std::runtime_error("Cannot apply update operator to non-object property");
+					}
+				} else if (auto idx = std::dynamic_pointer_cast<IndexExpr>(update->operand)) {
+					Value obj = evaluate(idx->object);
+					indexValue = evaluate(idx->index);
+					if (auto pa = std::get_if<std::shared_ptr<Array>>(&obj)) {
+						arrPtr = *pa;
+						if (!arrPtr) throw std::runtime_error("Cannot index null array");
+						int i = static_cast<int>(getNumber(indexValue, "array index"));
+						if (i < 0 || i >= static_cast<int>(arrPtr->size())) {
+							throw std::runtime_error("Array index out of range");
+						}
+						oldValue = (*arrPtr)[i];
+						isIndex = true;
+					} else if (auto po = std::get_if<std::shared_ptr<Object>>(&obj)) {
+						objPtr = *po;
+						propName = keyFromValue(indexValue);
+						if (objPtr && objPtr->find(propName) != objPtr->end()) {
+							oldValue = (*objPtr)[propName];
+						} else {
+							oldValue = Value{std::monostate{}};
+						}
+						isProp = true;
+					} else {
+						throw std::runtime_error("Cannot apply update operator to non-indexable value");
+					}
+				} else {
+					throw std::runtime_error("Invalid operand for update operator");
+				}
+				
+				// 计算新值
+				double numValue = getNumber(oldValue, "update operator");
+				double newNumValue = (update->op.type == TokenType::PlusPlus) ? numValue + 1 : numValue - 1;
+				Value newValue{newNumValue};
+				
+				// 更新值
+				if (isVar) {
+					env->assign(varName, newValue);
+				} else if (isProp && objPtr) {
+					(*objPtr)[propName] = newValue;
+				} else if (isIndex && arrPtr) {
+					int i = static_cast<int>(getNumber(indexValue, "array index"));
+					(*arrPtr)[i] = newValue;
+				}
+				
+				// 返回值：前置返回新值，后置返回旧值
+				return update->isPrefix ? newValue : Value{numValue};
+			} catch (const std::exception& ex) {
+				std::ostringstream oss;
+				oss << ex.what() << " at line " << update->line << ", column " << update->column << ", length " << update->length;
+				throw std::runtime_error(oss.str());
+			}
+		}
 		if (auto bin = std::dynamic_pointer_cast<BinaryExpr>(expr)) {
 			Value l = evaluate(bin->left); Value r = evaluate(bin->right);
 			try {
@@ -1610,6 +1856,21 @@ public:
 			Value l = evaluate(lg->left);
 			if (lg->op.type == TokenType::OrOr) return isTruthy(l) ? l : evaluate(lg->right);
 			else return !isTruthy(l) ? l : evaluate(lg->right);
+		}
+		if (auto cond = std::dynamic_pointer_cast<ConditionalExpr>(expr)) {
+			// 三元运算符：condition ? thenBranch : elseBranch
+			try {
+				Value condValue = evaluate(cond->condition);
+				if (isTruthy(condValue)) {
+					return evaluate(cond->thenBranch);
+				} else {
+					return evaluate(cond->elseBranch);
+				}
+			} catch (const std::exception& ex) {
+				std::ostringstream oss;
+				oss << ex.what() << " in ternary operator at line " << cond->line << ", column " << cond->column;
+				throw std::runtime_error(oss.str());
+			}
 		}
 		if (auto aw = std::dynamic_pointer_cast<AwaitExpr>(expr)) {
 			Value v = evaluate(aw->expr);
@@ -1888,6 +2149,42 @@ public:
 				}
 			} else {
 				throw std::runtime_error("foreach requires an iterable (array, object, or string)");
+			}
+			return;
+		}
+		if (auto sw = std::dynamic_pointer_cast<SwitchStmt>(stmt)) {
+			// switch (expr) { case val: ... default: ... }
+			Value switchValue = evaluate(sw->expr);
+			
+			bool matched = false;
+			bool fallThrough = false;
+			
+			try {
+				for (const auto& caseClause : sw->cases) {
+					// Check if this is a matching case or if we're in fall-through mode
+					if (!matched && !fallThrough) {
+						if (caseClause.value == nullptr) {
+							// This is the default case - matches if no previous case matched
+							matched = true;
+						} else {
+							// Evaluate case value and compare
+							Value caseValue = evaluate(caseClause.value);
+							if (isStrictEqual(switchValue, caseValue)) {
+								matched = true;
+							}
+						}
+					}
+					
+					// Execute case body if matched or in fall-through
+					if (matched || fallThrough) {
+						for (const auto& s : caseClause.body) {
+							execute(s);
+						}
+						fallThrough = true; // Enable fall-through for subsequent cases
+					}
+				}
+			} catch (const BreakSignal&) {
+				// Break out of switch
 			}
 			return;
 		}

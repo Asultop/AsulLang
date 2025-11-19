@@ -1,0 +1,76 @@
+// 增量运算符边缘情况测试
+
+println("== 测试1: 链式递增 ==");
+var a = 0;
+var result = ++a + ++a + ++a;  // 1 + 2 + 3 = 6
+println("result =", result, ", a =", a);  // result=6, a=3
+
+println("\n== 测试2: 混合前置后置 ==");
+var b = 5;
+var r1 = b++;  // r1=5, b=6
+var r2 = ++b;  // r2=7, b=7
+var r3 = b--;  // r3=7, b=6
+var r4 = --b;  // r4=5, b=5
+println("r1=", r1, ", r2=", r2, ", r3=", r3, ", r4=", r4, ", b=", b);
+
+println("\n== 测试3: 在 if 条件中 ==");
+var count = 0;
+if (++count > 0) {
+    println("count after ++count:", count);  // 1
+}
+if (count++ < 2) {
+    println("count in condition:", count - 1, ", after:", count);  // 1, 2
+}
+
+println("\n== 测试4: 数组中的复合操作 ==");
+var nums = [10, 20, 30];
+nums[0] += 5;   // 15
+nums[1] *= 2;   // 40
+nums[2] /= 3;   // 10
+println("Modified array:", nums);
+
+println("\n== 测试5: 对象属性复合赋值 ==");
+var stats = {hp: 100, mp: 50, xp: 0};
+stats["hp"] -= 25;     // 75
+stats["mp"] += 10;     // 60
+stats["xp"] *= 2;      // 0
+println("Stats:", stats);
+
+println("\n== 测试6: 循环计数器 ==");
+var sum = 0;
+for (var i = 1; i <= 5; i++) {
+    sum += i;
+}
+println("Sum 1 to 5:", sum);  // 15
+
+println("\n== 测试7: while 循环递减 ==");
+var countdown = 5;
+while (countdown > 0) {
+    println("countdown:", countdown);
+    countdown--;
+}
+
+println("\n== 测试8: 复合赋值链 ==");
+var x = 10;
+x += 5;   // 15
+x *= 2;   // 30
+x -= 10;  // 20
+x /= 4;   // 5
+x %= 3;   // 2
+println("Final x:", x);
+
+println("\n== 测试9: 表达式中的优先级 ==");
+var p = 2;
+var q = 3;
+var res = p++ * q++;  // 2 * 3 = 6, then p=3, q=4
+println("res =", res, ", p =", p, ", q =", q);
+
+println("\n== 测试10: 数组累加 ==");
+var data = [1, 2, 3, 4, 5];
+var total = 0;
+foreach (val in data) {
+    total += val;
+}
+println("Total:", total);  // 15
+
+println("\n== 所有测试通过 ==");

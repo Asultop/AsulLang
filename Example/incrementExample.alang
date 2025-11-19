@@ -1,0 +1,84 @@
+// 增量运算符和复合赋值运算符示例
+
+println("== 前置递增/递减 ==");
+var a = 5;
+println("a =", a);
+println("++a =", ++a);  // 先加后返回，返回 6
+println("a =", a);      // a 现在是 6
+println("--a =", --a);  // 先减后返回，返回 5
+println("a =", a);      // a 现在是 5
+
+println("\n== 后置递增/递减 ==");
+var b = 10;
+println("b =", b);
+println("b++ =", b++);  // 先返回后加，返回 10
+println("b =", b);      // b 现在是 11
+println("b-- =", b--);  // 先返回后减，返回 11
+println("b =", b);      // b 现在是 10
+
+println("\n== 在表达式中使用 ==");
+var x = 5;
+var y = ++x * 2;        // x 先增加到 6，然后 6 * 2
+println("x =", x, ", y =", y);
+
+var p = 3;
+var q = p++ * 2;        // 先用 3 * 2，然后 p 增加到 4
+println("p =", p, ", q =", q);
+
+println("\n== 复合赋值运算符 ==");
+var n = 10;
+println("n =", n);
+
+n += 5;
+println("n += 5, n =", n);  // 15
+
+n -= 3;
+println("n -= 3, n =", n);  // 12
+
+n *= 2;
+println("n *= 2, n =", n);  // 24
+
+n /= 4;
+println("n /= 4, n =", n);  // 6
+
+n %= 4;
+println("n %= 4, n =", n);  // 2
+
+println("\n== 在循环中使用 ==");
+println("使用 i++ 的 for 循环:");
+for (var i = 0; i < 5; i++) {
+    println("i =", i);
+}
+
+println("\n使用 ++i 的 for 循环:");
+for (var j = 0; j < 5; ++j) {
+    println("j =", j);
+}
+
+println("\n== 数组元素递增 ==");
+var arr = [1, 2, 3, 4, 5];
+println("原数组:", arr);
+arr[0]++;
+println("arr[0]++ 后:", arr);
+++arr[2];
+println("++arr[2] 后:", arr);
+
+println("\n== 对象属性递增 ==");
+var obj = {count: 0, value: 10};
+println("原对象:", obj);
+obj["count"]++;
+println("obj.count++ 后:", obj);
+obj["value"] += 5;
+println("obj.value += 5 后:", obj);
+
+println("\n== 复合表达式 ==");
+var c = 0;
+var result = (++c) + (c++) + (++c);
+// ++c: c=1, 返回1
+// c++: 返回1, c=2
+// ++c: c=3, 返回3
+// 总和: 1 + 1 + 3 = 5
+println("(++c) + (c++) + (++c) =", result);
+println("最终 c =", c);
+
+println("\n== 增量运算符示例结束 ==");

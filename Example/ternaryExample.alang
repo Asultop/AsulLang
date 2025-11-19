@@ -1,0 +1,125 @@
+// 三元运算符（条件表达式）示例
+
+println("== 基础用法 ==");
+var a = 10;
+var b = 20;
+var max = a > b ? a : b;
+println("max(", a, ",", b, ") =", max);
+
+var min = a < b ? a : b;
+println("min(", a, ",", b, ") =", min);
+
+println("\n== 布尔值测试 ==");
+var isPositive = 5 > 0 ? true : false;
+println("5 > 0 ?", isPositive);
+
+var sign = -3 > 0 ? "positive" : "negative or zero";
+println("sign of -3:", sign);
+
+println("\n== 在变量赋值中使用 ==");
+var age = 18;
+var status = age >= 18 ? "adult" : "minor";
+println("age:", age, ", status:", status);
+
+age = 15;
+status = age >= 18 ? "adult" : "minor";
+println("age:", age, ", status:", status);
+
+println("\n== 嵌套三元运算符 ==");
+var score = 85;
+var grade = score >= 90 ? "A" : 
+            score >= 80 ? "B" : 
+            score >= 70 ? "C" : 
+            score >= 60 ? "D" : "F";
+println("score:", score, ", grade:", grade);
+
+score = 73;
+grade = score >= 90 ? "A" : 
+        score >= 80 ? "B" : 
+        score >= 70 ? "C" : 
+        score >= 60 ? "D" : "F";
+println("score:", score, ", grade:", grade);
+
+println("\n== 在表达式中使用 ==");
+var x = 5;
+var y = 10;
+var result = (x > y ? x : y) * 2;
+println("(", x, ">", y, "?", x, ":", y, ") * 2 =", result);
+
+println("\n== 函数参数中使用 ==");
+function describe(n) {
+    return n > 0 ? "positive" : n < 0 ? "negative" : "zero";
+}
+println("describe(5):", describe(5));
+println("describe(-3):", describe(-3));
+println("describe(0):", describe(0));
+
+println("\n== 数组元素选择 ==");
+var arr1 = [1, 2, 3];
+var arr2 = [4, 5, 6];
+var useFirst = true;
+var selected = useFirst ? arr1 : arr2;
+println("useFirst:", useFirst, ", selected:", selected);
+
+useFirst = false;
+selected = useFirst ? arr1 : arr2;
+println("useFirst:", useFirst, ", selected:", selected);
+
+println("\n== 对象属性选择 ==");
+var obj1 = {name: "Alice", age: 30};
+var obj2 = {name: "Bob", age: 25};
+var isAlice = true;
+var person = isAlice ? obj1 : obj2;
+println("person:", person);
+
+println("\n== 默认值设置 ==");
+var input = null;
+var value = input != null ? input : "default";
+println("input:", input, ", value:", value);
+
+input = 42;
+value = input != null ? input : "default";
+println("input:", input, ", value:", value);
+
+println("\n== 条件计数 ==");
+var count = 0;
+for (var i = 1; i <= 10; i++) {
+    count = i % 2 == 0 ? count + 1 : count;
+}
+println("偶数个数 (1-10):", count);
+
+println("\n== 字符串拼接 ==");
+var n = 5;
+var message = "There " + (n == 1 ? "is" : "are") + " " + n + " item" + (n == 1 ? "" : "s");
+println(message);
+
+n = 1;
+message = "There " + (n == 1 ? "is" : "are") + " " + n + " item" + (n == 1 ? "" : "s");
+println(message);
+
+println("\n== 与逻辑运算符结合 ==");
+var enabled = true;
+var hasPermission = false;
+var canAccess = enabled && hasPermission ? "allowed" : "denied";
+println("enabled:", enabled, ", hasPermission:", hasPermission, ", access:", canAccess);
+
+enabled = true;
+hasPermission = true;
+canAccess = enabled && hasPermission ? "allowed" : "denied";
+println("enabled:", enabled, ", hasPermission:", hasPermission, ", access:", canAccess);
+
+println("\n== 返回值中使用 ==");
+function abs(x) {
+    return x >= 0 ? x : -x;
+}
+println("abs(5):", abs(5));
+println("abs(-8):", abs(-8));
+
+println("\n== 复杂嵌套 ==");
+var p = 10;
+var q = 20;
+var r = 15;
+var largest = p > q ? (p > r ? p : r) : (q > r ? q : r);
+println("largest of", p, ",", q, ",", r, ":", largest);
+
+println("\n== 三元运算符示例结束 ==");

@@ -6,6 +6,7 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 - 基本类型：number、string、boolean、null、array、object
 - 变量与作用域：`let/var/const`（当前实现未严格区分可变性）
 - 表达式与语句：算术、比较、逻辑运算；`if/else`、`while`、`for`、`foreach`、`break`/`continue`、`return`、块语句
+- 运算符：增量运算符（`++`、`--`）、复合赋值（`+=`、`-=`、`*=`、`/=`、`%=`）
 - 函数与闭包：`function`、匿名 lambda `[](args){}`、函数作为一等值
 - 类与继承：`class`、`new`、构造器 `constructor`、多继承语法 `class A <- (B, C)`、`extends` 扩展
 - 接口：`interface` 用作方法签名与多继承占位
@@ -74,6 +75,175 @@ foreach (ch in "Hello") {
 ```
 
 支持 `break` 和 `continue` 控制流程。示例请参考 `Example/foreachExample.alang` 和 `Example/foreachAdvanced.alang`。
+
+**增量运算符和复合赋值**
+
+ALang 支持常见的增量和复合赋值运算符：
+
+```javascript
+// 前置递增/递减（先更新后返回）
+var x = 5;
+println(++x);  // 输出 6，x 变成 6
+println(--x);  // 输出 5，x 变成 5
+
+// 后置递增/递减（先返回后更新）
+var y = 10;
+println(y++);  // 输出 10，y 变成 11
+println(y--);  // 输出 11，y 变成 10
+
+// 复合赋值运算符
+var n = 10;
+n += 5;   // n = n + 5
+n -= 3;   // n = n - 3
+n *= 2;   // n = n * 2
+n /= 4;   // n = n / 4
+n %= 3;   // n = n % 3
+
+// 在循环中使用
+for (var i = 0; i < 10; i++) {
+    println(i);
+}
+
+// 对数组元素和对象属性也适用
+var arr = [1, 2, 3];
+arr[0]++;              // arr 变成 [2, 2, 3]
+
+var obj = {count: 0};
+obj["count"] += 5;     // obj.count 变成 5
+```
+
+示例请参考 `Example/incrementExample.alang`。
+
+**三元运算符（条件表达式）**
+
+ALang 支持三元运算符 `condition ? trueValue : falseValue`，用于简洁的条件表达式：
+
+```javascript
+// 基础用法
+let max = (a > b) ? a : b;
+let min = (a < b) ? a : b;
+
+// 在赋值中使用
+let age = 18;
+let status = (age >= 18) ? "adult" : "minor";
+
+// 嵌套三元运算符
+let score = 85;
+let grade = (score >= 90) ? "A" :
+            (score >= 80) ? "B" :
+            (score >= 70) ? "C" :
+            (score >= 60) ? "D" : "F";
+
+// 在函数参数中使用
+println((x > 0) ? "positive" : "negative or zero");
+
+// 默认值设置
+let value = (input != null) ? input : "default";
+```
+
+三元运算符可以嵌套使用，但为了代码可读性，复杂的条件判断建议使用 `if-else` 或 `switch` 语句。示例请参考 `Example/ternaryExample.alang`。
+
+**Switch/Case 语句**
+
+ALang 支持 switch 语句进行多路分支选择，使用严格相等（`===`）进行匹配：
+
+```javascript
+// 基础用法
+let day = 3;
+switch (day) {
+    case 1:
+        println("星期一");
+        break;
+    case 2:
+        println("星期二");
+        break;
+    case 3:
+        println("星期三");
+        break;
+    default:
+        println("其他");
+        break;
+}
+
+// 字符串匹配
+let fruit = "apple";
+switch (fruit) {
+    case "apple":
+        println("苹果: 5元/斤");
+        break;
+    case "banana":
+        println("香蕉: 3元/斤");
+        break;
+    default:
+        println("水果不在列表中");
+        break;
+}
+
+// Fall-through（不使用 break 时继续执行下一个 case）
+let month = 2;
+switch (month) {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+    case 10:
+    case 12:
+        println("31天");
+        break;
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+        println("30天");
+        break;
+    case 2:
+        println("28天");
+        break;
+}
+
+// 在函数中使用
+function calculate(op, a, b) {
+    switch (op) {
+        case "+":
+            return a + b;
+        case "-":
+            return a - b;
+        case "*":
+            return a * b;
+        case "/":
+            return a / b;
+        default:
+            return null;
+    }
+}
+
+// Switch 嵌套
+switch (category) {
+    case "electronics":
+        println("电子产品:");
+        switch (item) {
+            case "laptop":
+                println("笔记本电脑");
+                break;
+            case "phone":
+                println("手机");
+                break;
+        }
+        break;
+    case "books":
+        println("图书类");
+        break;
+}
+```
+
+注意事项：
+- 使用 `break` 终止当前 case，否则会 fall-through 到下一个 case
+- 匹配使用严格相等（`===`），不进行类型转换
+- `default` 分支是可选的，匹配所有未被 case 捕获的值
+- 如需在 case 中声明变量，请使用代码块 `{ let x = ...; }`
+
+示例请参考 `Example/switchExample.alang` 和 `Example/switchAdvanced.alang`。
 
 **模块与文件导入**
 - 支持相对/绝对路径导入：`import "path/to/module"`（后缀 `.alang` 可省略）
