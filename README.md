@@ -44,6 +44,17 @@ g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
 # 运行其它示例
 ./alang Example/lambdaExample.alang
 ./alang Example/evalExample.alang
+
+// 简短 JSON 使用示例
+```alang
+import json;
+
+let j = { name: "Alice", age: 30, tags: ["dev", "rust"], active: true };
+println(json.stringify(j));
+
+let p = json.parse(json.stringify(j));
+println(p.name);
+```
 ```
 
 如果脚本使用了异步（`then/catch` / `go`），宿主（CLI）通常在脚本执行后调用 `runEventLoopUntilIdle()` 来处理事件循环任务（CLI 已在 `Main.cpp` 中演示此调用）。

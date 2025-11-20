@@ -1,0 +1,26 @@
+// == JSON 示例 ==
+// 演示 `import json;`、`json.stringify` 与 `json.parse` 的基本用法
+
+import json;
+
+// 直接使用对象/数组字面量构造要序列化的结构
+let j = { name: "赵锐宇翔", age: 18, tags: ["friend", "bestFriend"], active: true, loveState: "trueLove" };
+
+// 序列化为 JSON 字符串并输出
+let s = json.stringify(j);
+println(s);
+
+// 直接访问对象字段
+println(j.name);
+println(j.age + 2);
+println(j.tags[0]);
+println(j.active);
+println(j.loveState);
+
+// 解析回对象并验证字段
+let p = json.parse(s);
+println(p);
+println(p.name);
+println(p.age);
+
+// 结束示例

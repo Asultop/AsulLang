@@ -155,6 +155,35 @@ ALang 提供了一组全局可用的内置函数：
 ```alang
 import std.time.*; // 或者使用 std.time.nowISO() 等完全限定名
 ```
+
+## JSON 支持 (包: `json`)
+
+ALang 提供内建的 `json` 包用于在 ALang 值与 JSON 文本之间互相转换。包名为 `json`，可以使用简洁导入语法：
+
+```alang
+import json;
+```
+
+主要 API：
+
+- `json.stringify(value)`：把 ALang 值序列化为 JSON 字符串。支持 `object`、`array`、`string`、`number`、`boolean` 与 `null`。对象的键将以字符串形式输出；函数与未序列化的宿主类型会被忽略或引发错误（视具体值而定）。
+- `json.parse(text)`：把合法的 JSON 字符串解析为 ALang 值（`object`、`array`、`string`、`number`、`boolean`、`null`）。解析错误会抛出异常并包含位置提示。
+
+示例：
+
+```alang
+import json;
+
+let obj = { name: "Alice", age: 30, tags: ["dev", "rust"], active: true, meta: null };
+let s = json.stringify(obj);
+print(s);
+
+let parsed = json.parse(s);
+print(parsed.name);
+```
+
+示例脚本：`Example/jsonExample.alang`
+
 | `len` | `x` | 返回字符串字符数、数组元素数或对象键值对数。 |
 | `quote` | `str` | 将代码字符串解析为 Token 列表对象，包含 `apply()` 方法可重新执行。 |
 | `push` | `arr, ...values` | 向数组末尾追加元素，返回新长度。 |
