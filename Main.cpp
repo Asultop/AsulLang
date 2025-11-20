@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
 		{"lineLabel", "YELLOW"},
 		{"lineValue", "CYAN"}
 	});
+	// 其上是默认值 (如果不进行额外配置的话)
 
 	// 注册一个原生类：Math，提供 sum(a,b) 与 abs(x)
 	engine.registerClass(
@@ -44,16 +45,17 @@ int main(int argc, char* argv[]) {
 
 	std::string code;
 	if (argc > 1) {
-		// 设置 import 相对路径基准为主脚本所在目录
+		// 先读取脚本内容（使用传入路径，不依赖当前工作目录变更）
+		std::ifstream in(argv[1]);
+		if (!in) { std::cerr << "Cannot open file: " << argv[1] << std::endl; return 1; }
+		std::ostringstream ss; ss << in.rdbuf(); code = ss.str();
+		// 设置 import 相对路径基准与进程工作目录为脚本所在目录，便于脚本内部的相对路径访问（文件 I/O 与后续 import）
 		try {
 			std::filesystem::path inPath(argv[1]);
 			std::filesystem::path base = inPath.has_parent_path() ? inPath.parent_path() : std::filesystem::current_path();
 			engine.setImportBaseDir(base.string());
+			std::filesystem::current_path(base);
 		} catch (...) { /* ignore base dir errors */ }
-
-		std::ifstream in(argv[1]);
-		if (!in) { std::cerr << "Cannot open file: " << argv[1] << std::endl; return 1; }
-		std::ostringstream ss; ss << in.rdbuf(); code = ss.str();
 	} else {
 		// 示例脚本（含原生类 Math 的调用；await/sleep；async/go/then 示例）
 		code = R"( 
@@ -95,6 +97,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	try {
+		// 设置脚本位置
 		engine.execute(code);
 		// 从 C++ 调用脚本函数：add(1, 2)
 		// auto r = engine.callFunction("add", { 1.0, 2.0 });

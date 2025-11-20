@@ -1,5 +1,5 @@
-// 示例：类型注解（可选）与 '~' 适配/接口匹配语法
-// 说明：'~' 用于检查值是否实现了目标接口（支持类实例、普通对象的接口匹配）
+// 示例：类型注解（可选）与 '=~=' 接口匹配语法
+// 说明：'=~=' 用于检查值是否实现了目标接口（支持类实例、普通对象的接口匹配）
 
 // 定义接口：声明 'obj' 方法签名（仅定义接口，无具体实现）
 interface objInter {
@@ -17,8 +17,8 @@ class Derived <- objInter {
 // 参数 v: objInter → 声明参数需符合 objInter 接口规范
 // -> None → 声明返回值类型为 None（与 null 兼容）
 function doWork(v: objInter) -> None {
-    // '~' 接口匹配检查：判断 v 是否实现了 objInter 接口
-    if (v ~ objInter) {
+    // '=~=' 接口匹配检查：判断 v 是否实现了 objInter 接口
+    if (v =~= objInter) {
         // 匹配成功：安全调用接口声明的 obj() 方法
         v.obj();
     } else {
@@ -47,7 +47,7 @@ let NotObj = {
     }
 };
 // 检查普通对象是否匹配 objInter 接口（只要包含接口声明的方法即可匹配）
-if (o ~ objInter) {
+if (o =~= objInter) {
     o.obj();
 };
 doWork(NotObj);

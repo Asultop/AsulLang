@@ -43,6 +43,7 @@ enum class TokenType {
 	Bang, Equal, Less, Greater, Question,
 	// One, two or three char
 	BangEqual, StrictNotEqual, EqualEqual, StrictEqual, LessEqual, GreaterEqual, LeftArrow,
+	MatchInterface, // '=~=' binary operator for interface/class descriptor matching
 	ShiftLeft, ShiftRight,
 	Arrow,
 	Ellipsis,
@@ -313,10 +314,15 @@ size_t startLineStart = lineStart;  // Save starting line position
 			break;
 		}
 		case '=': {
-			if (match('=')) {
-				if (match('=')) add(TokenType::StrictEqual);
-				else add(TokenType::EqualEqual);
-			} else add(TokenType::Equal);
+				// Support '=~=' composite operator for interface matching before checking equality operators
+				if (peek() == '~' && peekNext() == '=') {
+					advance(); // consume '~'
+					advance(); // consume '='
+					add(TokenType::MatchInterface);
+				} else if (match('=')) {
+					if (match('=')) add(TokenType::StrictEqual);
+					else add(TokenType::EqualEqual);
+				} else add(TokenType::Equal);
 			break;
 		}
 		case '<': {
@@ -1330,7 +1336,7 @@ private:
 
 	ExprPtr comparison() {
 		auto expr = shift();
-		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual, TokenType::Tilde})) {
+		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual, TokenType::MatchInterface})) {
 			Token op = previous();
 			auto right = shift();
 			expr = std::make_shared<BinaryExpr>(expr, op, right);
@@ -2089,13 +2095,13 @@ public:
 					long long rv = static_cast<long long>(getNumber(r, ">> right"));
 					return Value{ static_cast<double>(lv >> rv) };
 				}
-				case TokenType::Tilde: {
-					// Adapter/interface matching: right operand must be a ClassInfo (interface or class descriptor)
+				case TokenType::MatchInterface: {
+					// Interface/class descriptor matching via '=~=' operator
 					if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(r)) {
-						throw std::runtime_error("'~' right-hand side must be an interface/class descriptor");
+						throw std::runtime_error("'=~=' right-hand side must be an interface/class descriptor");
 					}
 					auto target = std::get<std::shared_ptr<ClassInfo>>(r);
-					// If left is an instance, check its class (and supers) for presence of all required methods
+					// Instance: verify all required methods exist in its class chain
 					if (auto pins = std::get_if<std::shared_ptr<Instance>>(&l)) {
 						if (!*pins || !(*pins)->klass) return Value{false};
 						for (auto &kv : target->methods) {
@@ -2105,7 +2111,7 @@ public:
 						}
 						return Value{true};
 					}
-					// If left is a plain object, check it has the named properties (functions or values)
+					// Plain object: check it contains all interface method names as properties
 					if (auto po = std::get_if<std::shared_ptr<Object>>(&l)) {
 						if (!*po) return Value{false};
 						for (auto &kv : target->methods) {
@@ -2114,7 +2120,6 @@ public:
 						}
 						return Value{true};
 					}
-					// Otherwise, no match
 					return Value{false};
 				}
 				default: break;
@@ -3551,6 +3556,319 @@ public:
 			return Value{std::monostate{}};
 		};
 		(*ioPkg)["println"] = Value{printlnFn};
+
+		// File I/O helpers: readFile(path), writeFile(path, data), appendFile(path, data), exists(path), listDir(path)
+		auto readFileFn = std::make_shared<Function>();
+		readFileFn->isBuiltin = true;
+		readFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("readFile expects 1 argument (path string)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("readFile path must be string");
+			std::string path = std::get<std::string>(args[0]);
+			std::ifstream in(path, std::ios::in | std::ios::binary);
+			if (!in) {
+				std::ostringstream oss; oss << "Failed to open file for reading: " << path; throw std::runtime_error(oss.str());
+			}
+			std::ostringstream buffer; buffer << in.rdbuf();
+			return Value{buffer.str()};
+		};
+		(*ioPkg)["readFile"] = Value{readFileFn};
+
+		auto writeFileFn = std::make_shared<Function>();
+		writeFileFn->isBuiltin = true;
+		writeFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 2) throw std::runtime_error("writeFile expects 2 arguments (path, data)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("writeFile path must be string");
+			std::string path = std::get<std::string>(args[0]);
+			std::string data = toString(args[1]);
+			std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc);
+			if (!out) { std::ostringstream oss; oss << "Failed to open file for writing: " << path; throw std::runtime_error(oss.str()); }
+			out << data;
+			return Value{true};
+		};
+		(*ioPkg)["writeFile"] = Value{writeFileFn};
+
+		auto appendFileFn = std::make_shared<Function>();
+		appendFileFn->isBuiltin = true;
+		appendFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 2) throw std::runtime_error("appendFile expects 2 arguments (path, data)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("appendFile path must be string");
+			std::string path = std::get<std::string>(args[0]);
+			std::string data = toString(args[1]);
+			std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::app);
+			if (!out) { std::ostringstream oss; oss << "Failed to open file for appending: " << path; throw std::runtime_error(oss.str()); }
+			out << data;
+			return Value{true};
+		};
+		(*ioPkg)["appendFile"] = Value{appendFileFn};
+
+		auto existsFn = std::make_shared<Function>();
+		existsFn->isBuiltin = true;
+		existsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("exists expects 1 argument (path string)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("exists path must be string");
+			std::string path = std::get<std::string>(args[0]);
+			return Value{ std::filesystem::exists(path) };
+		};
+		(*ioPkg)["exists"] = Value{existsFn};
+
+		auto listDirFn = std::make_shared<Function>();
+		listDirFn->isBuiltin = true;
+		listDirFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("listDir expects 1 argument (path string)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("listDir path must be string");
+			std::string path = std::get<std::string>(args[0]);
+			std::error_code ec;
+			if (!std::filesystem::exists(path, ec)) throw std::runtime_error("Directory does not exist: " + path);
+			if (!std::filesystem::is_directory(path, ec)) throw std::runtime_error("Not a directory: " + path);
+			auto arr = std::make_shared<Array>();
+			for (auto &entry : std::filesystem::directory_iterator(path, ec)) {
+				if (ec) break;
+				std::string name = entry.path().filename().string();
+				arr->push_back(Value{name});
+			}
+			return Value{arr};
+		};
+		(*ioPkg)["listDir"] = Value{listDirFn};
+
+		// Built-in File class
+		{
+			auto fileClass = std::make_shared<ClassInfo>();
+			fileClass->name = "File";
+			// constructor(path)
+			auto ctor = std::make_shared<Function>();
+			ctor->isBuiltin = true;
+			ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 1) throw std::runtime_error("File.constructor expects 1 argument (path)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("File path must be string");
+				std::string path = std::get<std::string>(args[0]);
+				// store path in this.fields["path"]
+				Value thisVal = closure->get("this");
+				if (!std::holds_alternative<std::shared_ptr<Instance>>(thisVal)) throw std::runtime_error("this is not instance in File.constructor");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				inst->fields["path"] = Value{path};
+				return Value{std::monostate{}};
+			};
+			fileClass->methods["constructor"] = ctor;
+			// read()
+			auto readM = std::make_shared<Function>(); readM->isBuiltin = true; readM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("File.read expects 0 arguments");
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::ifstream in(path, std::ios::in | std::ios::binary); if (!in) throw std::runtime_error("File.read cannot open: " + path);
+				std::ostringstream buf; buf << in.rdbuf(); return Value{buf.str()};
+			}; fileClass->methods["read"] = readM;
+			// write(data)
+			auto writeM = std::make_shared<Function>(); writeM->isBuiltin = true; writeM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 1) throw std::runtime_error("File.write expects 1 argument (data)");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::string data = toString(args[0]);
+				std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc); if (!out) throw std::runtime_error("File.write cannot open: " + path);
+				out << data; return Value{true};
+			}; fileClass->methods["write"] = writeM;
+			// append(data)
+			auto appendM = std::make_shared<Function>(); appendM->isBuiltin = true; appendM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 1) throw std::runtime_error("File.append expects 1 argument (data)");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::string data = toString(args[0]);
+				std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::app); if (!out) throw std::runtime_error("File.append cannot open: " + path);
+				out << data; return Value{true};
+			}; fileClass->methods["append"] = appendM;
+			// exists()
+			auto existsM = std::make_shared<Function>(); existsM->isBuiltin = true; existsM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("File.exists expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				return Value{ std::filesystem::exists(path) };
+			}; fileClass->methods["exists"] = existsM;
+			// size()
+			auto sizeM = std::make_shared<Function>(); sizeM->isBuiltin = true; sizeM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("File.size expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::error_code ec; auto sz = std::filesystem::file_size(path, ec); if (ec) return Value{ -1.0 }; return Value{ static_cast<double>(sz) };
+			}; fileClass->methods["size"] = sizeM;
+			// delete()
+			auto deleteM = std::make_shared<Function>(); deleteM->isBuiltin = true; deleteM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("File.delete expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::error_code ec; bool ok = std::filesystem::remove(path, ec); if (ec) return Value{false}; return Value{ok};
+			}; fileClass->methods["delete"] = deleteM;
+			// rename(newPath)
+			auto renameM = std::make_shared<Function>(); renameM->isBuiltin = true; renameM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("File.rename expects 1 argument (newPath)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("File.rename newPath must be string");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string oldPath = std::get<std::string>(inst->fields["path"]); std::string newPath = std::get<std::string>(args[0]);
+				std::error_code ec; std::filesystem::rename(oldPath, newPath, ec); if (ec) return Value{false}; inst->fields["path"] = Value{newPath}; return Value{true};
+			}; fileClass->methods["rename"] = renameM;
+			// readBytes()
+			auto readBytesM = std::make_shared<Function>(); readBytesM->isBuiltin = true; readBytesM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("File.readBytes expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::ifstream in(path, std::ios::binary); if (!in) throw std::runtime_error("File.readBytes cannot open: " + path);
+				std::vector<unsigned char> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+				auto arr = std::make_shared<Array>(); arr->reserve(buf.size());
+				for (auto c : buf) arr->push_back(Value{ static_cast<double>(c) });
+				return Value{arr};
+			}; fileClass->methods["readBytes"] = readBytesM;
+			// writeBytes(array)
+			auto writeBytesM = std::make_shared<Function>(); writeBytesM->isBuiltin = true; writeBytesM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("File.writeBytes expects 1 argument (array of byte numbers)");
+				if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("File.writeBytes expects array");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+				std::ofstream out(path, std::ios::binary | std::ios::trunc); if (!out) throw std::runtime_error("File.writeBytes cannot open: " + path);
+				for (auto &v : *arr) {
+					double d = getNumber(v, "File.writeBytes element"); unsigned char c = static_cast<unsigned char>(static_cast<int>(d) & 0xFF); out.put(static_cast<char>(c));
+				}
+				return Value{true};
+			}; fileClass->methods["writeBytes"] = writeBytesM;
+			// appendBytes(array)
+			auto appendBytesM = std::make_shared<Function>(); appendBytesM->isBuiltin = true; appendBytesM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("File.appendBytes expects 1 argument (array)");
+				if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("File.appendBytes expects array");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+				std::ofstream out(path, std::ios::binary | std::ios::app); if (!out) throw std::runtime_error("File.appendBytes cannot open: " + path);
+				for (auto &v : *arr) { double d = getNumber(v, "File.appendBytes element"); unsigned char c = static_cast<unsigned char>(static_cast<int>(d) & 0xFF); out.put(static_cast<char>(c)); }
+				return Value{true};
+			}; fileClass->methods["appendBytes"] = appendBytesM;
+			// open(mode) -> FileStream instance
+			auto openM = std::make_shared<Function>(); openM->isBuiltin = true; openM->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("File.open expects 1 argument (mode)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("File.open mode must be string");
+				std::string mode = std::get<std::string>(args[0]);
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				auto streamClassIt = stdRoot->find("io.FileStream");
+				std::shared_ptr<ClassInfo> streamClass;
+				if (streamClassIt != stdRoot->end()) {
+					if (std::holds_alternative<std::shared_ptr<Object>>(streamClassIt->second)) {
+						// nested object structure: std.io.FileStream stored in std.io package
+					}
+				}
+				// find in std.io package
+				auto ioPkgLocal = ensurePackage("std.io");
+				auto itFS = ioPkgLocal->find("FileStream");
+				if (itFS == ioPkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(itFS->second)) throw std::runtime_error("FileStream class not found");
+				streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
+				auto fsInst = std::make_shared<Instance>(); fsInst->klass = streamClass; fsInst->fields["path"] = Value{path}; fsInst->fields["mode"] = Value{mode}; fsInst->fields["pos"] = Value{0.0}; fsInst->fields["closed"] = Value{false}; return Value{fsInst};
+			}; fileClass->methods["open"] = openM;
+			(*ioPkg)["File"] = Value{fileClass};
+		}
+
+		// Built-in Dir class
+		{
+			auto dirClass = std::make_shared<ClassInfo>();
+			dirClass->name = "Dir";
+			auto ctor = std::make_shared<Function>(); ctor->isBuiltin = true; ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 1) throw std::runtime_error("Dir.constructor expects 1 argument (path)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("Dir path must be string");
+				std::string path = std::get<std::string>(args[0]);
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				inst->fields["path"] = Value{path}; return Value{std::monostate{}};
+			}; dirClass->methods["constructor"] = ctor;
+			// list()
+			auto listM = std::make_shared<Function>(); listM->isBuiltin = true; listM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("Dir.list expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::error_code ec; if (!std::filesystem::exists(path, ec)) throw std::runtime_error("Dir.list path does not exist: " + path);
+				if (!std::filesystem::is_directory(path, ec)) throw std::runtime_error("Dir.list not a directory: " + path);
+				auto arr = std::make_shared<Array>();
+				for (auto &entry : std::filesystem::directory_iterator(path, ec)) { if (ec) break; arr->push_back(Value{ entry.path().filename().string() }); }
+				return Value{arr};
+			}; dirClass->methods["list"] = listM;
+			// exists()
+			auto existsM = std::make_shared<Function>(); existsM->isBuiltin = true; existsM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("Dir.exists expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				return Value{ std::filesystem::exists(path) };
+			}; dirClass->methods["exists"] = existsM;
+			// create()
+			auto createM = std::make_shared<Function>(); createM->isBuiltin = true; createM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (!args.empty()) throw std::runtime_error("Dir.create expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]);
+				std::error_code ec; bool ok = std::filesystem::create_directories(path, ec); if (ec) throw std::runtime_error("Dir.create failed: " + path); return Value{ ok };
+			}; dirClass->methods["create"] = createM;
+			// delete() recursive
+			auto deleteDirM = std::make_shared<Function>(); deleteDirM->isBuiltin = true; deleteDirM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("Dir.delete expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]); std::error_code ec; auto count = std::filesystem::remove_all(path, ec); if (ec) return Value{ -1.0 }; return Value{ static_cast<double>(count) };
+			}; dirClass->methods["delete"] = deleteDirM;
+			// rename(newPath)
+			auto renameDirM = std::make_shared<Function>(); renameDirM->isBuiltin = true; renameDirM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Dir.rename expects 1 argument (newPath)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("Dir.rename newPath must be string");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string oldPath = std::get<std::string>(inst->fields["path"]); std::string newPath = std::get<std::string>(args[0]); std::error_code ec; std::filesystem::rename(oldPath, newPath, ec); if (ec) return Value{false}; inst->fields["path"] = Value{newPath}; return Value{true};
+			}; dirClass->methods["rename"] = renameDirM;
+			// walk() recursive list
+			auto walkM = std::make_shared<Function>(); walkM->isBuiltin = true; walkM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("Dir.walk expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string base = std::get<std::string>(inst->fields["path"]); std::error_code ec; if (!std::filesystem::exists(base, ec) || !std::filesystem::is_directory(base, ec)) throw std::runtime_error("Dir.walk invalid directory: " + base);
+				auto arr = std::make_shared<Array>();
+				for (auto &entry : std::filesystem::recursive_directory_iterator(base, ec)) { if (ec) break; std::string rel = std::filesystem::relative(entry.path(), base, ec).string(); arr->push_back(Value{rel}); }
+				return Value{arr};
+			}; dirClass->methods["walk"] = walkM;
+			(*ioPkg)["Dir"] = Value{dirClass};
+		}
+
+		// FileStream class (lightweight streaming wrapper)
+		{
+			auto fsClass = std::make_shared<ClassInfo>(); fsClass->name = "FileStream";
+			// read(n)
+			auto fsRead = std::make_shared<Function>(); fsRead->isBuiltin = true; fsRead->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("FileStream.read expects 1 argument (n bytes)");
+				double dn = getNumber(args[0], "FileStream.read n"); if (dn < 0) throw std::runtime_error("FileStream.read n must be >=0"); size_t n = static_cast<size_t>(dn);
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				bool closed = std::get<bool>(inst->fields["closed"]); if (closed) throw std::runtime_error("FileStream.read on closed stream");
+				std::string mode = std::get<std::string>(inst->fields["mode"]); if (mode != "r") throw std::runtime_error("FileStream.read only valid in 'r' mode");
+				std::string path = std::get<std::string>(inst->fields["path"]); double posd = std::get<double>(inst->fields["pos"]); size_t pos = static_cast<size_t>(posd);
+				std::ifstream in(path, std::ios::binary); if (!in) throw std::runtime_error("FileStream.read cannot open: " + path);
+				in.seekg(static_cast<std::streamoff>(pos)); std::vector<unsigned char> buf; buf.resize(n);
+				in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(n)); size_t got = static_cast<size_t>(in.gcount()); buf.resize(got); inst->fields["pos"] = Value{ static_cast<double>(pos + got) };
+				auto arr = std::make_shared<Array>(); arr->reserve(buf.size()); for (auto c : buf) arr->push_back(Value{ static_cast<double>(c) }); return Value{arr};
+			}; fsClass->methods["read"] = fsRead;
+			// write(array or string)
+			auto fsWrite = std::make_shared<Function>(); fsWrite->isBuiltin = true; fsWrite->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("FileStream.write expects 1 argument (string or byte array)");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				bool closed = std::get<bool>(inst->fields["closed"]); if (closed) throw std::runtime_error("FileStream.write on closed stream");
+				std::string mode = std::get<std::string>(inst->fields["mode"]); if (mode != "a" && mode != "w") throw std::runtime_error("FileStream.write only valid in 'a' or 'w' mode");
+				std::string path = std::get<std::string>(inst->fields["path"]); std::ofstream out(path, std::ios::binary | (mode == "a" ? std::ios::app : std::ios::trunc)); if (!out) throw std::runtime_error("FileStream.write cannot open: " + path);
+				if (std::holds_alternative<std::string>(args[0])) {
+					out << std::get<std::string>(args[0]); inst->fields["pos"] = Value{ static_cast<double>(std::filesystem::file_size(path)) }; return Value{true};
+				}
+				if (std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
+					auto arr = std::get<std::shared_ptr<Array>>(args[0]); for (auto &v : *arr){ double d = getNumber(v, "FileStream.write element"); unsigned char c = static_cast<unsigned char>(static_cast<int>(d) & 0xFF); out.put(static_cast<char>(c)); }
+					inst->fields["pos"] = Value{ static_cast<double>(std::filesystem::file_size(path)) }; return Value{true};
+				}
+				throw std::runtime_error("FileStream.write unsupported argument type");
+			}; fsClass->methods["write"] = fsWrite;
+			// eof()
+			auto fsEof = std::make_shared<Function>(); fsEof->isBuiltin = true; fsEof->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("FileStream.eof expects 0 arguments"); Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string path = std::get<std::string>(inst->fields["path"]); bool closed = std::get<bool>(inst->fields["closed"]); if (closed) return Value{true};
+				std::error_code ec; auto sz = std::filesystem::file_size(path, ec); if (ec) return Value{true}; double posd = std::get<double>(inst->fields["pos"]); return Value{ posd >= static_cast<double>(sz) };
+			}; fsClass->methods["eof"] = fsEof;
+			// close()
+			auto fsClose = std::make_shared<Function>(); fsClose->isBuiltin = true; fsClose->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("FileStream.close expects 0 arguments"); Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal); inst->fields["closed"] = Value{true}; return Value{true};
+			}; fsClass->methods["close"] = fsClose;
+			(*ioPkg)["FileStream"] = Value{fsClass};
+		}
 		importPackageSymbols("std.io");
 
 		// len(x): string/array/object长度
@@ -3604,6 +3922,7 @@ public:
 					case TokenType::ShiftLeft: tname = "ShiftLeft"; break;
 					case TokenType::ShiftRight: tname = "ShiftRight"; break;
 					case TokenType::Tilde: tname = "Tilde"; break;
+					case TokenType::MatchInterface: tname = "MatchInterface"; break;
 					case TokenType::Bang: tname = "Bang"; break;
 					case TokenType::Equal: tname = "Equal"; break;
 					case TokenType::Less: tname = "Less"; break;

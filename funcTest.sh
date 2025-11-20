@@ -57,6 +57,9 @@ func_files=(
     "STLExample.alang"
     "staticMethodExample.alang"
     "bitwiseExample.alang"
+    "fileIOExample.alang"
+    "fileIOClassExample.alang"
+    "fileIOAdvancedExample.alang"
 )
 
 # Counter for passed/failed tests

@@ -1,0 +1,54 @@
+// == 高级文件与目录 I/O 示例 (File, Dir, FileStream) ==
+// 所有操作限定在 File/ 子目录下，不污染根目录
+
+let store = new std.io.Dir("File");
+if (!store.exists()) {
+    store.create();
+};
+
+// 基础文件操作
+let f = new std.io.File("File/adv_test.bin");
+if (f.exists()) {
+    f.delete();
+};
+println("存在(初始):", f.exists());
+f.write("ABC"); // 写入字符串
+f.append("DEF"); // 追加字符串
+println("内容:", f.read()); // 当前内容: ABCDEF
+println("文本写入后大小:", f.size());
+f.writeBytes([0,1,2,3]); // 覆盖写入字节
+f.appendBytes([255,254]); // 追加字节
+println("字节写入后大小:", f.size());
+let bytes = f.readBytes();
+println("读取字节长度:", len(bytes));
+f.rename("File/adv_test2.bin");
+println("旧文件是否存在:", (new std.io.File("File/adv_test.bin")).exists());
+println("新文件是否存在:", f.exists());
+
+// 流式读写
+let fsWrite = f.open("w");
+fsWrite.write("HelloStreamData");
+fsWrite.close();
+let fs = f.open("r");
+let chunk1 = fs.read(5);
+let chunk2 = fs.read(6);
+let chunk3 = fs.read(100);
+println("分块长度:", len(chunk1), len(chunk2), len(chunk3));
+println("读取结束(eof):", fs.eof());
+fs.close();
+
+// 目录操作与递归遍历
+let d = new std.io.Dir("File/adv_dir/subA/subB");
+if (d.exists()) {
+    d.delete();
+};
+println("目录创建前是否存在:", d.exists());
+println("递归创建结果:", d.create());
+println("目录创建后是否存在:", d.exists());
+let root = new std.io.Dir("File/adv_dir");
+let paths = root.walk();
+println("遍历路径数量:", len(paths));
+let removed = root.delete();
+println("删除条目数量:", removed);
+println("目录删除后是否存在:", root.exists());
+println("== 高级文件与目录 I/O 示例结束 ==");

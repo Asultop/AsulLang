@@ -1,0 +1,24 @@
+// == File & Dir 类使用示例 ==
+// 文件与目录对象操作全部放入 File/ 子目录
+let store = new std.io.Dir("File");
+if (!store.exists()) {
+	store.create();
+};
+
+let f = new std.io.File("File/class_io_test.txt");
+println("exists before write:", f.exists());
+f.write("Hello");
+f.append(" World\n");
+println("exists after write:", f.exists());
+println("content read:", f.read());
+println("size:", f.size());
+
+let d = new std.io.Dir("File/test_dir/sub");
+println("dir exists before create:", d.exists());
+println("create dir result:", d.create());
+println("dir exists after create:", d.exists());
+
+let fileRoot = new std.io.Dir("File");
+let items = fileRoot.list();
+println("File/ entries count:", len(items));
+println("== File & Dir 类使用示例结束 ==");

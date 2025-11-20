@@ -228,14 +228,76 @@ obj["count"] += 5;     // obj.count 变成 5
 2. 加减 `+ -`
 3. 移位 `<< >>`
 4. 比较 `> >= < <=`
-5. 等于 / 不等 `== != === !==`
-6. 按位与 `&`
-7. 按位异或 `^`
-8. 按位或 `|`
-9. 逻辑与 `&&`
-10. 逻辑或 `||`
+5. 接口匹配 `=~=` （判断左值是否实现右侧接口/类声明）
+6. 等于 / 不等 `== != === !==`
+7. 按位与 `&`
+8. 按位异或 `^`
+9. 按位或 `|`
+10. 逻辑与 `&&`
+11. 逻辑或 `||`
 
 示例文件：`Example/bitwiseExample.alang`
+
+接口匹配运算符：`a =~= SomeInterface`
+
+含义：若左侧是类实例，检查其类及父类是否包含接口声明的全部方法；若左侧是普通对象，则检查对象是否含有这些方法名（属性存在即可）。右侧必须是接口或类描述符。示例参见 `Example/type_and_match_example.alang`。
+
+**文件 I/O (std.io)**
+
+`std.io` 包默认导入，新增以下文件与目录操作函数（文本按 UTF-8 处理）：
+
+| 函数 | 说明 | 示例 | 返回 |
+|------|------|------|------|
+| `readFile(path)` | 读取整个文件内容 | `readFile("a.txt")` | `string` |
+| `writeFile(path, data)` | 覆盖写入文本 | `writeFile("a.txt", "Hello")` | `true` |
+| `appendFile(path, data)` | 末尾追加文本 | `appendFile("a.txt", " World")` | `true` |
+| `exists(path)` | 判断路径是否存在 | `exists("a.txt")` | `boolean` |
+| `listDir(path)` | 列出目录项（文件/子目录名数组） | `listDir(".")` | `array` |
+
+面向对象封装：提供 `std.io.File` 与 `std.io.Dir` 类，便于链式与实例化管理。
+
+`new std.io.File(path)` 方法：
+| 方法 | 说明 |
+|------|------|
+| `write(data)` | 覆盖写入文件内容 |
+| `append(data)` | 追加写入到文件末尾 |
+| `read()` | 读取全部内容返回字符串 |
+| `exists()` | 判断文件是否存在 |
+| `size()` | 返回文件大小（字节），失败返回 -1 |
+| `delete()` | 删除文件，返回是否成功 |
+| `rename(newPath)` | 重命名文件，成功返回 true |
+| `readBytes()` | 以字节数组形式读取整个文件 |
+| `writeBytes(array)` | 覆盖写入字节数组到文件 |
+| `appendBytes(array)` | 追加字节数组到文件末尾 |
+| `open(mode)` | 返回 `FileStream` 实例，`mode` 为 `r` / `w` / `a` |
+
+`new std.io.Dir(path)` 方法：
+| 方法 | 说明 |
+|------|------|
+| `create()` | 递归创建目录，返回是否创建成功 |
+| `list()` | 返回目录内文件/子目录名数组（非递归） |
+| `exists()` | 判断目录是否存在 |
+| `delete()` | 递归删除目录及其内容，返回删除的条目数或 -1 失败 |
+| `rename(newPath)` | 重命名目录，成功返回 true |
+| `walk()` | 递归遍历，返回相对路径数组 |
+`FileStream` 流式读写：
+| 方法 | 说明 |
+|------|------|
+| `read(n)` | 在 `r` 模式下读取最多 n 字节为数组，维护内部位置 |
+| `write(data)` | 在 `w` 模式覆盖写或 `a` 模式追加写（字符串或字节数组） |
+| `eof()` | 到达文件末尾或已关闭返回 true |
+| `close()` | 关闭流，后续读写抛出异常 |
+
+示例：`Example/fileIOAdvancedExample.alang`
+
+示例：`Example/fileIOClassExample.alang`
+
+注意：
+- 失败会抛出异常（例如文件不存在、路径不是目录等）。
+- 所有写入为覆盖或追加模式的二进制/文本直接输出，未自动添加换行。
+- 不提供文件删除/重命名，可后续扩展。
+
+示例：`Example/fileIOExample.alang`。
 
 
 **三元运算符（条件表达式）**

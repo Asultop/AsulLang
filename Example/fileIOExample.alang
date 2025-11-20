@@ -1,0 +1,20 @@
+// == 基础文件 I/O 示例 ==
+// 所有测试文件放入 File/ 子目录，保持工作目录整洁
+// (std.io 默认已导入，无需显式 import)
+let store = new std.io.Dir("File");
+if (!store.exists()) {
+	store.create();
+};
+let path = "File/io_test.txt";
+writeFile(path, "Hello");
+appendFile(path, " World\n");
+println("exists:", exists(path));
+println("content:", readFile(path));
+let entries = listDir("File");
+println("File/ entries count:", len(entries));
+if (!exists(path)) {
+	println("写入失败");
+};
+let data = readFile(path);
+println("read back length:", len(data));
+println("== 基础文件 I/O 示例结束 ==");
