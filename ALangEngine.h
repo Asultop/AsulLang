@@ -1,7 +1,6 @@
 #ifndef ALANGENGINE_H
 #define ALANGENGINE_H
 
-
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -13,19 +12,13 @@ public:
     ALangEngine();
     ~ALangEngine();
     void initialize();
-    // 执行一段JS源码
     void execute(const std::string& code);
-    // 兼容旧接口：执行最近一次设置的源码（若有）
     void execute();
-    // 加载源码（供execute()无参调用）
     void setSource(const std::string& code);
     void registerModule(const char* moduleName, std::function<void()> initFunc);
-    // 错误输出颜色映射配置（键：header/code/caret/label/value）
     void setErrorColorMap(const std::unordered_map<std::string, std::string>& colorMap);
-    // 设置 import 的相对路径基准目录（默认使用当前工作目录）。
     void setImportBaseDir(const std::string& dir);
 
-    // 宿主原生类注册（简化版）：仅支持基本类型（null/number/string/bool）参数与返回
     using NativeValue = std::variant<std::monostate,double,std::string,bool>;
     using NativeFunc = std::function<NativeValue(const std::vector<NativeValue>&, void* thisHandle)>;
     void registerClass(
@@ -35,28 +28,64 @@ public:
         const std::vector<std::string>& baseClasses = {}
     );
 
-    // 从宿主侧调用脚本中的全局函数（仅基元参数与返回值）
     NativeValue callFunction(
         const std::string& functionName,
         const std::vector<NativeValue>& args
     );
 
-    // 运行事件循环直到空闲（处理 then/catch、go 任务）
+    // Bridge: safe HostValue wrapper for host-facing APIs. Hosts can use
+    // HostValue and the HostFunc signatures to interact with engine values
+    // without the engine exposing its internal Value layout.
+    class HostValue {
+    public:
+        enum class Type { Null, Number, String, Bool, Opaque };
+        HostValue(): t(Type::Null), num(0), str(), b(false), opaque(nullptr) {}
+        static HostValue Null() { return HostValue(); }
+        static HostValue Number(double v) { HostValue h; h.t = Type::Number; h.num = v; return h; }
+        static HostValue String(const std::string& s) { HostValue h; h.t = Type::String; h.str = s; return h; }
+        static HostValue Bool(bool v) { HostValue h; h.t = Type::Bool; h.b = v; return h; }
+        static HostValue Opaque(void* p) { HostValue h; h.t = Type::Opaque; h.opaque = p; return h; }
+
+        Type type() const { return t; }
+        double asNumber() const { return num; }
+        const std::string& asString() const { return str; }
+        bool asBool() const { return b; }
+        void* asOpaque() const { return opaque; }
+    private:
+        Type t{Type::Null};
+        double num{0};
+        std::string str;
+        bool b{false};
+        void* opaque{nullptr};
+    };
+
+    using HostFunc = std::function<HostValue(const std::vector<HostValue>&, void* thisHandle)>;
+
+    void registerClassValue(
+        const std::string& className,
+        HostFunc constructor,
+        const std::unordered_map<std::string, HostFunc>& methods,
+        const std::vector<std::string>& baseClasses = {}
+    );
+
+    HostValue callFunctionValue(
+        const std::string& functionName,
+        const std::vector<HostValue>& args
+    );
+
     void runEventLoopUntilIdle();
 
-    // --- Host registration APIs ---
-    // 设置全局变量（支持: null/number/string/bool）
     void setGlobal(const std::string& name, const NativeValue& value);
-    // 注册全局函数（C++ 实现的内建函数）
+    // Variant that accepts HostValue bridge for host-facing APIs
+    void setGlobalValue(const std::string& name, const HostValue& value);
     void registerFunction(const std::string& name, NativeFunc func);
-    // 注册接口：仅声明方法名集合（无实现，作为多继承父类占位）
+    void registerFunctionValue(const std::string& name, HostFunc func);
     void registerInterface(const std::string& name, const std::vector<std::string>& methodNames);
 private:
     struct Impl;
-    Impl* impl; // PImpl以隐藏实现细节，减少头文件依赖
+    Impl* impl;
 
 protected:
-
 
 };
 

@@ -1,7 +1,7 @@
 // == 导入系统示例 ==
 
 // 1) 导入语法：import 包名.(成员1, 成员2, ...)
-// import Math.(pi, abs);
+import Math.(pi, abs);
 println("pi:", pi, ", abs(-3):", abs(-3));
 
 // 2) 导入语法：import (包名.成员1, 包名.成员2, ...)

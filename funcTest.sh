@@ -53,6 +53,7 @@ func_files=(
     "type_comparison.alang"
     "map_example.alang"
     "containers_example.alang"
+    "STLExample.alang"
 )
 
 # Counter for passed/failed tests

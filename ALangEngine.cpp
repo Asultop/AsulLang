@@ -381,7 +381,11 @@ size_t startLineStart = lineStart;  // Save starting line position
 };
 
 // ----------- Runtime Values and Environment -----------
+// ----------- Runtime Values and Environment -----------
 
+// Internal runtime Value and related forward declarations.
+// Keep these definitions in the .cpp so the public header doesn't need
+// to expose the full interpreter Value type.
 struct Function;
 struct PromiseState;
 
@@ -391,13 +395,14 @@ using Object = std::unordered_map<std::string, struct ValueTag>;
 struct ClassInfo;
 struct Instance;
 
-// forward for variant recursive types
+// Recursive variant wrapper to allow shared_ptr recursive types.
 struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>,std::shared_ptr<ClassInfo>,std::shared_ptr<Instance>,std::shared_ptr<PromiseState>> {
 	using variant::variant;
 };
 
 using Value = ValueTag;
 
+// Helper functions operating on the internal `Value` type.
 inline std::string typeOf(const Value& v) {
 	switch (v.index()) {
 	case 0: return "null";
@@ -507,16 +512,12 @@ inline size_t valueHash(const Value& v) {
 }
 
 // Functor wrappers to use Value as key in unordered_map/set
-struct ValueHash {
-	size_t operator()(const Value& v) const noexcept { return valueHash(v); }
-};
-struct ValueEq {
-	bool operator()(const Value& a, const Value& b) const noexcept { return valueEqual(a, b); }
-};
+struct ValueHash { size_t operator()(const Value& v) const noexcept { return valueHash(v); } };
+struct ValueEq { bool operator()(const Value& a, const Value& b) const noexcept { return valueEqual(a, b); } };
 
 // Native container holder types (used by host-backed classes)
-struct NativeMap { std::unordered_map<Value, Value, ValueHash, ValueEq> m; std::vector<Value> order; };
-struct NativeSet { std::unordered_set<Value, ValueHash, ValueEq> s; std::vector<Value> order; };
+struct NativeMap { std::unordered_map<Value, Value, ValueHash, ValueEq> m; std::vector<Value> order; std::unordered_map<Value, size_t, ValueHash, ValueEq> index; };
+struct NativeSet { std::unordered_set<Value, ValueHash, ValueEq> s; std::vector<Value> order; std::unordered_map<Value, size_t, ValueHash, ValueEq> index; };
 struct NativeDeque { std::deque<Value> d; };
 struct NativeStack { std::vector<Value> v; };
 
@@ -3426,11 +3427,7 @@ public:
 		// ---- Builtin containers and helpers ----
 		// Provide native host-backed classes: Map, Set, Deque, Stack
 		{
-			// Native map: unordered_map for O(1) lookup + vector for insertion order
-			struct NativeMap {
-				std::unordered_map<Value, Value, ValueHash, ValueEq> m;
-				std::vector<Value> order;
-			};
+			// NativeMap is defined at file-scope (shared index for O(1) deletions)
 
 			auto mapClass = std::make_shared<ClassInfo>(); mapClass->name = "Map";
 
@@ -3454,6 +3451,7 @@ public:
 				auto it = nm->m.find(args[0]);
 				if (it == nm->m.end()) {
 					nm->order.push_back(args[0]);
+					nm->index[args[0]] = nm->order.size() - 1;
 				}
 				nm->m[args[0]] = args[1];
 				return Value{std::monostate{}};
@@ -3491,8 +3489,19 @@ public:
 				auto it = nm->m.find(args[0]);
 				if (it == nm->m.end()) return Value{false};
 				nm->m.erase(it);
-				// remove from order vector
-				nm->order.erase(std::remove_if(nm->order.begin(), nm->order.end(), [&](const Value& v){ return valueEqual(v, args[0]); }), nm->order.end());
+				// O(1) removal from order via swap-with-back using index map
+				auto idxIt = nm->index.find(args[0]);
+				if (idxIt != nm->index.end()) {
+					size_t pos = idxIt->second;
+					size_t last = nm->order.size() - 1;
+					if (pos != last) {
+						Value swapped = nm->order[last];
+						nm->order[pos] = swapped;
+						nm->index[swapped] = pos;
+					}
+					nm->order.pop_back();
+					nm->index.erase(idxIt);
+				}
 				return Value{true};
 			};
 			mapClass->methods["delete"] = delFn;
@@ -3502,7 +3511,7 @@ public:
 			mapClass->methods["size"] = sizeFn;
 
 			// map.clear()
-			auto clearFn = std::make_shared<Function>(); clearFn->isBuiltin = true; clearFn->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto nm = static_cast<NativeMap*>(ie->nativeHandle); nm->m.clear(); nm->order.clear(); return Value{std::monostate{}}; };
+			auto clearFn = std::make_shared<Function>(); clearFn->isBuiltin = true; clearFn->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto nm = static_cast<NativeMap*>(ie->nativeHandle); nm->m.clear(); nm->order.clear(); nm->index.clear(); return Value{std::monostate{}}; };
 			mapClass->methods["clear"] = clearFn;
 
 			// map.keys()
@@ -3534,20 +3543,37 @@ public:
 			globals->define("map", mapCtor);
 
 			// ---- Set (native) ----
-			struct NativeSet { std::unordered_set<Value, ValueHash, ValueEq> s; std::vector<Value> order; };
 			auto setClass = std::make_shared<ClassInfo>(); setClass->name = "Set";
 			auto setAdd = std::make_shared<Function>(); setAdd->isBuiltin = true;
 			setAdd->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
 				if (args.size()!=1) throw std::runtime_error("set.add expects 1 argument");
 				InstanceExt* ie = getThisInstanceExt(clos);
 				auto ns = static_cast<NativeSet*>(ie->nativeHandle);
-				if (ns->s.find(args[0]) == ns->s.end()) { ns->s.insert(args[0]); ns->order.push_back(args[0]); }
+				if (ns->s.find(args[0]) == ns->s.end()) { ns->s.insert(args[0]); ns->order.push_back(args[0]); ns->index[args[0]] = ns->order.size() - 1; }
 				return Value{std::monostate{}};
 			};
 			setClass->methods["add"] = setAdd;
 			auto setHas = std::make_shared<Function>(); setHas->isBuiltin = true; setHas->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value { if (args.size()!=1) throw std::runtime_error("set.has expects 1 arg"); InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeSet*>(ie->nativeHandle); return Value{ ns->s.find(args[0]) != ns->s.end() }; };
 			setClass->methods["has"] = setHas;
-			auto setDelete = std::make_shared<Function>(); setDelete->isBuiltin = true; setDelete->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value { if (args.size()!=1) throw std::runtime_error("set.delete expects 1 arg"); InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeSet*>(ie->nativeHandle); auto it=ns->s.find(args[0]); if (it==ns->s.end()) return Value{false}; ns->s.erase(it); ns->order.erase(std::remove_if(ns->order.begin(), ns->order.end(), [&](const Value& v){ return valueEqual(v, args[0]); }), ns->order.end()); return Value{true}; };
+			auto setDelete = std::make_shared<Function>(); setDelete->isBuiltin = true; setDelete->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+				if (args.size()!=1) throw std::runtime_error("set.delete expects 1 arg");
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto ns = static_cast<NativeSet*>(ie->nativeHandle);
+				auto it = ns->s.find(args[0]); if (it == ns->s.end()) return Value{false}; ns->s.erase(it);
+				auto idxIt = ns->index.find(args[0]);
+				if (idxIt != ns->index.end()) {
+					size_t pos = idxIt->second;
+					size_t last = ns->order.size() - 1;
+					if (pos != last) {
+						Value swapped = ns->order[last];
+						ns->order[pos] = swapped;
+						ns->index[swapped] = pos;
+					}
+					ns->order.pop_back();
+					ns->index.erase(idxIt);
+				}
+				return Value{true};
+			};
 			setClass->methods["delete"] = setDelete;
 			auto setSize = std::make_shared<Function>(); setSize->isBuiltin = true; setSize->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeSet*>(ie->nativeHandle); return Value{ static_cast<double>(ns->s.size()) }; };
 			setClass->methods["size"] = setSize;
@@ -3633,7 +3659,7 @@ public:
 
 			// keysSorted(container [, comparator]) -> array of keys sorted by default rules or comparator
 			auto keysSortedFn = std::make_shared<Function>(); keysSortedFn->isBuiltin = true;
-			keysSortedFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value{
+			keysSortedFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value{
 				if (args.size() < 1 || args.size() > 2) throw std::runtime_error("keysSorted expects 1 or 2 arguments");
 				// extract keys depending on container shape
 				auto keysArr = std::make_shared<Array>();
@@ -3734,7 +3760,19 @@ public:
 					if (useComparator) {
 						try {
 							std::vector<Value> cargs; cargs.push_back(A); cargs.push_back(B);
-							Value res = cmpFn->builtin(cargs, cmpFn->closure);
+							Value res{std::monostate{}};
+							if (cmpFn->isBuiltin) {
+								res = cmpFn->builtin(cargs, cmpFn->closure);
+							} else {
+								// Execute interpreted comparator function
+								auto local = std::make_shared<Environment>(cmpFn->closure);
+								// bind parameters
+								for (size_t i=0;i<cmpFn->params.size() && i<cargs.size();++i) local->define(cmpFn->params[i], cargs[i]);
+								for (size_t i=cargs.size(); i<cmpFn->params.size(); ++i) local->define(cmpFn->params[i], Value{std::monostate{}});
+								try {
+									executeBlock(cmpFn->body, local);
+								} catch (const ReturnSignal& rs) { res = rs.value; }
+							}
 							if (auto pd = std::get_if<double>(&res)) {
 								double d = *pd; if (d < 0) return -1; if (d > 0) return 1; return 0;
 							}
@@ -3980,6 +4018,44 @@ static ALangEngine::NativeValue valueToNative(const Value& v) {
 	return ALangEngine::NativeValue{std::monostate{}};
 }
 
+// Host <-> internal value marshaling for HostValue bridge
+static ALangEngine::HostValue valueToHost(const Value& v) {
+	using HV = ALangEngine::HostValue;
+	if (std::holds_alternative<std::monostate>(v)) return HV::Null();
+	if (auto d = std::get_if<double>(&v)) return HV::Number(*d);
+	if (auto s = std::get_if<std::string>(&v)) return HV::String(*s);
+	if (auto b = std::get_if<bool>(&v)) return HV::Bool(*b);
+	// For complex types, expose an opaque pointer to the underlying Value
+	return HV::Opaque((void*)&v);
+}
+
+static Value hostToValue(const ALangEngine::HostValue& hv) {
+	using HV = ALangEngine::HostValue;
+	switch (hv.type()) {
+		case HV::Type::Null: return Value{std::monostate{}};
+		case HV::Type::Number: return Value{hv.asNumber()};
+		case HV::Type::String: return Value{hv.asString()};
+		case HV::Type::Bool: return Value{hv.asBool()};
+		case HV::Type::Opaque: {
+			void* p = hv.asOpaque();
+			if (!p) return Value{std::monostate{}};
+			// Assume opaque points to a Value allocated/managed by the engine
+			return *reinterpret_cast<Value*>(p);
+		}
+	}
+	return Value{std::monostate{}};
+}
+
+static ALangEngine::NativeValue hostValueToNative(const ALangEngine::HostValue& hv) {
+	Value v = hostToValue(hv);
+	return valueToNative(v);
+}
+
+static ALangEngine::HostValue nativeToHostValue(const ALangEngine::NativeValue& nv) {
+	Value v = nativeToValue(nv);
+	return valueToHost(v);
+}
+
 void ALangEngine::registerClass(
 	const std::string& className,
 	NativeFunc constructor,
@@ -4042,6 +4118,48 @@ void ALangEngine::registerClass(
 	impl->interpreter.globalsEnv()->define(className, klass);
 }
 
+void ALangEngine::registerClassValue(
+	const std::string& className,
+	HostFunc constructor,
+	const std::unordered_map<std::string, HostFunc>& methods,
+	const std::vector<std::string>& baseClasses
+) {
+	// Wrap HostFunc into NativeFunc by marshaling
+	ALangEngine::NativeFunc ctorWrap = nullptr;
+	if (constructor) {
+		ctorWrap = [constructor](const std::vector<ALangEngine::NativeValue>& na, void* thisHandle)->ALangEngine::NativeValue {
+			std::vector<ALangEngine::HostValue> ha; ha.reserve(na.size());
+			for (auto& a : na) ha.push_back(nativeToHostValue(a));
+			auto ret = constructor(ha, thisHandle);
+			return hostValueToNative(ret);
+		};
+	}
+
+	std::unordered_map<std::string, ALangEngine::NativeFunc> nativeMethods;
+	for (auto& kv : methods) {
+		if (!kv.second) continue;
+		nativeMethods[kv.first] = [hf = kv.second](const std::vector<ALangEngine::NativeValue>& na, void* thisHandle)->ALangEngine::NativeValue {
+			std::vector<ALangEngine::HostValue> ha; ha.reserve(na.size());
+			for (auto& a : na) ha.push_back(nativeToHostValue(a));
+			auto ret = hf(ha, thisHandle);
+			return hostValueToNative(ret);
+		};
+	}
+
+	// Delegate to existing registerClass
+	registerClass(className, ctorWrap, nativeMethods, baseClasses);
+}
+
+ALangEngine::HostValue ALangEngine::callFunctionValue(
+	const std::string& functionName,
+	const std::vector<HostValue>& args
+) {
+	std::vector<NativeValue> na; na.reserve(args.size());
+	for (auto& a : args) na.push_back(hostValueToNative(a));
+	NativeValue nv = callFunction(functionName, na);
+	return nativeToHostValue(nv);
+}
+
 ALangEngine::NativeValue ALangEngine::callFunction(
 	const std::string& functionName,
 	const std::vector<NativeValue>& args
@@ -4085,6 +4203,29 @@ void ALangEngine::registerFunction(const std::string& name, NativeFunc func) {
 		for (auto& a : args) na.push_back(valueToNative(a));
 		auto ret = func(na, nullptr);
 		return nativeToValue(ret);
+	};
+	impl->interpreter.globalsEnv()->define(name, fn);
+}
+
+void ALangEngine::setGlobalValue(const std::string& name, const HostValue& value) {
+	try {
+		Value v = hostToValue(value);
+		impl->interpreter.globalsEnv()->define(name, v);
+	} catch (const std::exception& ex) {
+		printErrorWithContext(impl->source, std::string("setGlobalValue: ") + ex.what());
+		throw;
+	}
+}
+
+void ALangEngine::registerFunctionValue(const std::string& name, HostFunc func) {
+	if (!func) return;
+	auto fn = std::make_shared<Function>();
+	fn->isBuiltin = true;
+	fn->builtin = [func](const std::vector<Value>& args, std::shared_ptr<Environment> /*clos*/) -> Value {
+		std::vector<ALangEngine::HostValue> ha; ha.reserve(args.size());
+		for (auto& a : args) ha.push_back(valueToHost(a));
+		auto ret = func(ha, nullptr);
+		return hostToValue(ret);
 	};
 	impl->interpreter.globalsEnv()->define(name, fn);
 }

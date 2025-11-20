@@ -1,0 +1,48 @@
+// STL containers 示例：Map / Set / Deque / Stack / keysSorted
+println("=== STL Example ===");
+
+// 基本 Map 使用与 keysSorted
+let m = map();
+m.set(3, "three");
+m.set(1, "one");
+m.set(2, "two");
+println("map.keys():", m.keys());
+println("keysSorted default:", keysSorted(m));
+// comparator 返回数值，负表示 a<b，正表示 a>b
+println("keysSorted numeric desc:", keysSorted(m, [](a, b) { return b - a; }));
+
+// 自定义类作为键（按指针身份区分）
+class Key {
+    function constructor(x) { this.x = x; }
+    function toString() { return "Key(" + this.x + ")"; }
+}
+let k1 = new Key(10);
+let k2 = new Key(20);
+m.set(k1, "k1_value");
+m.set(k2, "k2_value");
+println("m.get(k1):", m.get(k1));
+println("m.get(k2):", m.get(k2));
+println("all keys (stable):", m.keys());
+println("keysSorted after instances:", keysSorted(m));
+
+// Set 使用
+let s = set();
+s.add("a"); s.add("b"); s.add("a");
+println("set values:", s.values());
+s.delete("a");
+println("set values after delete:", s.values());
+
+// Deque 使用
+let dq = deque();
+dq.push(1); dq.push(2); dq.unshift(0);
+println("deque values:", dq);
+println("deque pop:", dq.pop());
+println("deque shift:", dq.shift());
+
+// Stack 使用
+let st = stack();
+st.push(10); st.push(20);
+println("stack peek:", st.peek());
+println("stack pop:", st.pop());
+
+println("=== STL Example Done ===");

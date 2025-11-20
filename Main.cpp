@@ -31,12 +31,12 @@ int main(int argc, char* argv[]) {
 		std::unordered_map<std::string, ALangEngine::NativeFunc>{
 			{"sum", [](const std::vector<ALangEngine::NativeValue>& args, void* /*thisHandle*/){
 				double a = 0, b = 0;
-				if (args.size() > 0 && std::holds_alternative<double>(args[0])) a = std::get<double>(args[0]);
-				if (args.size() > 1 && std::holds_alternative<double>(args[1])) b = std::get<double>(args[1]);
+				if (args.size() > 0) if (auto p = std::get_if<double>(&args[0])) a = *p;
+				if (args.size() > 1) if (auto p = std::get_if<double>(&args[1])) b = *p;
 				return ALangEngine::NativeValue{a + b};
 			}},
 			{"abs", [](const std::vector<ALangEngine::NativeValue>& args, void* /*thisHandle*/){
-				double x = 0; if (!args.empty() && std::holds_alternative<double>(args[0])) x = std::get<double>(args[0]);
+				double x = 0; if (!args.empty()) if (auto p = std::get_if<double>(&args[0])) x = *p;
 				return ALangEngine::NativeValue{ std::fabs(x) };
 			}},
 		}
