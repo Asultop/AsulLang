@@ -14,6 +14,8 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 - 元编程：`eval(string)` 与 `quote(string)`，支持 token 级别的源码修改与 `apply()`
 - 模块与导入：文件导入与包导入 (`import` / `from`)，示例见 `Example/` 目录
 
+> 📖 **详细文档**：有关 Token、类型系统及完整 API 列表，请参阅 [ALang 技术参考手册](ALang_Technical_Reference.md)。
+
 **仓库结构（主要）**
 - `Main.cpp`：CLI 入口，初始化引擎并执行脚本
 - `ALangEngine.h` / `ALangEngine.cpp`：解释器实现、运行时与标准内置
