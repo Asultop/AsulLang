@@ -53,6 +53,100 @@ g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
 - `push(arr, ...values)`：向数组追加元素
 - `sleep(ms)`：返回在 `ms` 毫秒后 resolve 的 Promise
 
+**数组方法**
+
+ALang 数组支持现代函数式编程方法，所有回调函数接收 `(element, index, array)` 三个参数：
+
+```javascript
+let numbers = [1, 2, 3, 4, 5];
+
+// map - 转换每个元素
+let doubled = numbers.map([](x) { return x * 2; });
+println(doubled);  // [2, 4, 6, 8, 10]
+
+// filter - 过滤元素
+let evens = numbers.filter([](x) { return x % 2 == 0; });
+println(evens);  // [2, 4]
+
+// reduce - 归约为单个值
+let sum = numbers.reduce([](acc, x) { return acc + x; }, 0);
+println(sum);  // 15
+
+// find - 查找第一个匹配元素
+let firstEven = numbers.find([](x) { return x % 2 == 0; });
+println(firstEven);  // 2
+
+// some - 检查是否至少有一个元素满足条件
+let hasEven = numbers.some([](x) { return x % 2 == 0; });
+println(hasEven);  // true
+
+// every - 检查是否所有元素都满足条件
+let allPositive = numbers.every([](x) { return x > 0; });
+println(allPositive);  // true
+
+// includes - 检查数组是否包含某个值
+let hasThree = numbers.includes(3);
+println(hasThree);  // true
+
+// 链式调用
+let result = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    .filter([](x) { return x % 2 == 0; })
+    .map([](x) { return x * x; })
+    .reduce([](acc, x) { return acc + x; }, 0);
+println(result);  // 220 (2² + 4² + 6² + 8² + 10²)
+```
+
+示例文件：`Example/array_methods_test.alang`
+
+**字符串方法**
+
+ALang 字符串支持常用的文本处理方法：
+
+```javascript
+// split - 分割字符串为数组
+let csv = "apple,banana,orange";
+let fruits = csv.split(",");
+println(fruits);  // [apple, banana, orange]
+
+let sentence = "hello world";
+let words = sentence.split(" ");
+println(words);  // [hello, world]
+
+// 空分隔符分割为字符数组
+let chars = "Hello".split("");
+println(chars);  // [H, e, l, l, o]
+
+// substring - 提取子字符串
+let str = "Hello World";
+let sub1 = str.substring(0, 5);    // "Hello"
+let sub2 = str.substring(6);       // "World"
+let sub3 = str.substring(6, 11);   // "World"
+
+// replace - 替换第一个匹配项
+let original = "Hello World";
+let replaced = original.replace("World", "ALang");
+println(replaced);  // "Hello ALang"
+
+let code = "let x = 10;";
+let updated = code.replace("10", "42");
+println(updated);  // "let x = 42;"
+
+// 实用示例：解析邮箱
+let email = "user@example.com";
+let parts = email.split("@");
+println("用户名:", parts[0]);     // user
+println("域名:", parts[1]);       // example.com
+
+// CSV 解析
+let csvLine = "Alice,25,Engineer";
+let fields = csvLine.split(",");
+println("姓名:", fields[0]);      // Alice
+println("年龄:", fields[1]);      // 25
+println("职业:", fields[2]);      // Engineer
+```
+
+示例文件：`Example/string_methods_test.alang`
+
 **foreach 枚举容器**
 
 `foreach` 语句用于遍历可迭代对象（数组、对象、字符串），语法如下：
