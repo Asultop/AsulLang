@@ -26,4 +26,5 @@ bash build.sh
  - index_assignment_non_array.alang — 对非数组/非对象进行索引赋值（运行时）
  - property_access_non_object.alang — 对非对象进行属性访问（运行时）
  - await_non_promise.alang — 在非 Promise 上使用 await（运行时）
- - import_not_found.alang — import 无法找到/打开文件（加载错误）
+- import_not_found.alang — import 无法找到/打开文件（加载错误）
+- missing_import_math.alang — 未导入 `std.math` 时访问 `abs` 等符号（运行时/符号未定义）

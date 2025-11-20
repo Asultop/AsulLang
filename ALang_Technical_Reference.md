@@ -97,10 +97,11 @@ ALang 提供了一组全局可用的内置函数：
 - **`Promise.resolve(value)`**: 返回一个已解决的 Promise。
 - **`Promise.reject(reason)`**: 返回一个已拒绝的 Promise。
 
-### 4.2 Math
-数学工具库对象。
-- **`Math.pi`**: 圆周率常量。
-- **`Math.abs(x)`**: 返回绝对值。
+### 4.2 std.math
+数学工具库包。
+- **`std.math.pi`**: 圆周率常量。
+- **`std.math.abs(x)`**: 返回绝对值。
+- **`std.math.Math`**: 内置 `Math` 类，可通过 `import std.math.*` 或 `std.math.Math` 构造使用。
 
 ### 4.3 数据结构类
 ALang 内置了基于宿主 C++ 实现的高效数据结构。

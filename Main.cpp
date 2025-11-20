@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
 			function add(a, b) { return a + b; }
 			let x = 10; let y = 20;
 			print("sum:", add(x, y));
+			import std.math.*;
 
 			// 条件与循环
 			let i = 0; let acc = 0;

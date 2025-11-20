@@ -1,20 +1,20 @@
 // == 导入系统示例 ==
 
 // 1) 导入语法：import 包名.(成员1, 成员2, ...)
-import Math.(pi, abs);
+import std.math.(pi, abs);
 println("pi:", pi, ", abs(-3):", abs(-3));
 
 // 2) 导入语法：import (包名.成员1, 包名.成员2, ...)
 import (
-    Math.pi,
-    Math.abs
+    std.math.pi,
+    std.math.abs
 );
 println("再次输出 pi:", pi, ", abs(2):", abs(2));
 
 // 3) 导入语法：from 包名 import 单个成员 | (成员1, 成员2)
-from Math import abs;
+from std.math import abs;
 println("abs(5):", abs(5));
 
 // 4) 导入语法：import 包名.*（通配符导入，导入包内所有成员）
-import Math.*;
+import std.math.*;
 println("通配符导入 -> pi:", pi, ", abs(-7):", abs(-7));

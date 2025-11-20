@@ -1,0 +1,3 @@
+// 未导入 std.math 的成员时使用它们应该报错
+println("尝试调用 abs");
+println("abs(-5) =", abs(-5));

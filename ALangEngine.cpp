@@ -733,6 +733,31 @@ private:
 		return source.substr(startIdx, j - startIdx);
 	}
 
+	std::vector<Token> parseQualifiedIdentifiers(const char* message) {
+		auto first = consume(TokenType::Identifier, message);
+		std::vector<Token> parts{ first };
+		while (peek().type == TokenType::Dot) {
+			size_t saved = current;
+			advance();
+			if (check(TokenType::Identifier)) {
+				parts.push_back(advance());
+			} else {
+				current = saved;
+				break;
+			}
+		}
+		return parts;
+	}
+
+	std::string joinIdentifiers(const std::vector<Token>& parts, size_t begin, size_t end) const {
+		std::string res;
+		for (size_t i = begin; i < end && i < parts.size(); ++i) {
+			if (i > begin) res.push_back('.');
+			res += parts[i].lexeme;
+		}
+		return res;
+	}
+
 	StmtPtr declaration() {
 		if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true); }
 		if (match({TokenType::Function})) return functionDecl(false);
@@ -749,8 +774,8 @@ private:
 		auto imp = std::make_shared<ImportStmt>();
 		if (isFrom) {
 			// from Package import name | from Package import (name1 name2 ...)
-			auto pkgTok = consume(TokenType::Identifier, "Expect package name after 'from'");
-			auto pkg = pkgTok.lexeme;
+			auto pkgParts = parseQualifiedIdentifiers("Expect package name after 'from'");
+			auto pkg = joinIdentifiers(pkgParts, 0, pkgParts.size());
 			consume(TokenType::Import, "Expect 'import' after package name");
 			if (match({TokenType::LeftParen})) {
 				while (!check(TokenType::RightParen) && !isAtEnd()) {
@@ -775,13 +800,13 @@ private:
 					// file import entry from string literal
 					Token t = previous();
 					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
-				} else {
-					auto pkgTok = consume(TokenType::Identifier, "Expect package name");
-					auto pkg = pkgTok.lexeme;
-					consume(TokenType::Dot, "Expect '.' after package name");
-					auto symTok = consume(TokenType::Identifier, "Expect symbol name");
-					ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
-				}
+					} else {
+						auto parts = parseQualifiedIdentifiers("Expect package symbol");
+						if (parts.size() < 2) throw std::runtime_error("import list entries must reference package.symbol");
+						auto symTok = parts.back();
+						auto pkg = joinIdentifiers(parts, 0, parts.size()-1);
+						ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
+					}
 				(void)match({TokenType::Comma});
 			}
 			consume(TokenType::RightParen, "Expect ')' after import list");
@@ -795,24 +820,41 @@ private:
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
-		auto pkgTok = consume(TokenType::Identifier, "Expect package name");
-		auto pkg = pkgTok.lexeme;
-		consume(TokenType::Dot, "Expect '.' after package name");
-		if (match({TokenType::Star})) {
-			Token starTok = previous();
-			ImportStmt::Entry e; e.packageName = pkg; e.symbol = std::string("*"); e.isFile = false; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
+		auto pathParts = parseQualifiedIdentifiers("Expect package name");
+		if (check(TokenType::Dot)) {
+			consume(TokenType::Dot, "Expect '.' after package name");
+			auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size());
+			if (match({TokenType::Star})) {
+				Token starTok = previous();
+				ImportStmt::Entry e; e.packageName = pkgName; e.symbol = std::string("*"); e.isFile = false; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
+				consume(TokenType::Semicolon, "Expect ';' after import statement");
+				return imp;
+			}
+			if (match({TokenType::LeftParen})) {
+				while (!check(TokenType::RightParen) && !isAtEnd()) {
+					auto symTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
+					(void)match({TokenType::Comma});
+				}
+				consume(TokenType::RightParen, "Expect ')' after symbol list");
+				consume(TokenType::Semicolon, "Expect ';' after import statement");
+				return imp;
+			}
+			std::ostringstream oss;
+			oss << "Expect '*' or '(' after package '.' at line " << peek().line << ", column " << peek().column;
+			throw std::runtime_error(oss.str());
+		} else if (pathParts.size() >= 2) {
+			auto symTok = pathParts.back();
+			auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size() - 1);
+			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
+		} else {
+			auto tok = pathParts.back();
+			std::ostringstream oss;
+			oss << "Expect '.' after package name at line " << tok.line << ", column " << tok.column;
+			throw std::runtime_error(oss.str());
 		}
-		consume(TokenType::LeftParen, "Expect '(' after package '.' for symbol list");
-		while (!check(TokenType::RightParen) && !isAtEnd()) {
-			auto symTok = consume(TokenType::Identifier, "Expect symbol name");
-			ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
-			(void)match({TokenType::Comma});
-		}
-		consume(TokenType::RightParen, "Expect ')' after symbol list");
-		consume(TokenType::Semicolon, "Expect ';' after import statement");
-		return imp;
 	}
 	StmtPtr interfaceDeclaration() {
 		// 语法：interface Name ; | interface Name { function sig(...); ... }
@@ -1597,6 +1639,8 @@ struct ExceptionSignal { Value value; std::vector<std::string> stackTrace = {}; 
 class Interpreter {
 public:
 	Interpreter() { globals = std::make_shared<Environment>(); env = globals; installBuiltins(); }
+
+	void registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value);
 
 	void setImportBaseDir(const std::string& base) {
 		try { importBaseDir = std::filesystem::path(base); }
@@ -2701,8 +2745,11 @@ private:
 	std::condition_variable loopCv;
 	std::queue<std::function<void()>> taskQueue;
 	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
+	std::shared_ptr<Object> stdRoot;
 	std::unordered_set<std::string> importedFiles;
-    std::filesystem::path importBaseDir;
+	std::filesystem::path importBaseDir;
+	std::shared_ptr<Object> ensurePackage(const std::string& name);
+	void importPackageSymbols(const std::string& name);
 	// Error context for pretty printing from imported files
 	std::string lastErrorSource;
 	std::string lastErrorFilename;
@@ -3433,14 +3480,17 @@ public:
 	Value tempStorage; // used to hold temporary during Set* operations
 
 	void installBuiltins() {
+		stdRoot = std::make_shared<Object>();
+		globals->define("std", Value{stdRoot});
+
+		auto ioPkg = ensurePackage("std.io");
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
 		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			for (auto& v : args) std::cout << toString(v);
-			// no newline, no separators (flat output)
 			return Value{std::monostate{}};
 		};
-		globals->define("print", printFn);
+		(*ioPkg)["print"] = Value{printFn};
 
 		auto printlnFn = std::make_shared<Function>();
 		printlnFn->isBuiltin = true;
@@ -3449,7 +3499,8 @@ public:
 			std::cout << std::endl;
 			return Value{std::monostate{}};
 		};
-		globals->define("println", printlnFn);
+		(*ioPkg)["println"] = Value{printlnFn};
+		importPackageSymbols("std.io");
 
 		// len(x): string/array/object长度
 		auto lenFn = std::make_shared<Function>();
@@ -3758,8 +3809,8 @@ public:
 
 		// --- Packages ---
 		// Math: pi, abs
-		auto math = std::make_shared<Object>();
-		(*math)["pi"] = Value{ 3.14159265358979323846 };
+		auto mathPkg = ensurePackage("std.math");
+		(*mathPkg)["pi"] = Value{ 3.14159265358979323846 };
 		{
 			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
 			fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
@@ -3767,9 +3818,8 @@ public:
 				double x = getNumber(args[0], "abs x");
 				return Value{ x < 0 ? -x : x };
 			};
-			(*math)["abs"] = fn;
+			(*mathPkg)["abs"] = fn;
 		}
-		packages["Math"] = math;
 
 		// ---- Builtin containers and helpers ----
 		// Provide native host-backed classes: Map, Set, Deque, Stack
@@ -4143,16 +4193,6 @@ public:
 			globals->define("keysSorted", keysSortedFn);
 		}
 
-		// std package
-		std::shared_ptr<Object> stdObj;
-		try {
-			Value v = globals->get("std");
-			if (auto p = std::get_if<std::shared_ptr<Object>>(&v)) stdObj = *p;
-		} catch (...) {}
-		if (!stdObj) {
-			stdObj = std::make_shared<Object>();
-			globals->define("std", Value{stdObj});
-		}
 
 		// Regex class
 		auto regexClass = std::make_shared<ClassInfo>();
@@ -4289,9 +4329,58 @@ public:
 		};
 		regexClass->methods["replace"] = replaceFn;
 
-		(*stdObj)["regex"] = Value{regexClass};
+		auto regexPkg = std::make_shared<Object>();
+		(*regexPkg)["Regex"] = Value{regexClass};
+		packages["std.regex"] = regexPkg;
+		(*stdRoot)["regex"] = Value{regexClass};
 	}
 };
+
+std::shared_ptr<Object> Interpreter::ensurePackage(const std::string& name) {
+	auto it = packages.find(name);
+	if (it != packages.end() && it->second) return it->second;
+	auto pkg = std::make_shared<Object>();
+	packages[name] = pkg;
+	if (stdRoot && name.rfind("std.", 0) == 0) {
+		std::string suffix = name.substr(4);
+		auto parent = stdRoot;
+		size_t pos = 0;
+		while (pos <= suffix.size()) {
+			size_t dot = suffix.find('.', pos);
+			std::string part = suffix.substr(pos, dot == std::string::npos ? suffix.size() - pos : dot - pos);
+			if (part.empty()) break;
+			if (dot == std::string::npos) {
+				(*parent)[part] = Value{pkg};
+				break;
+			}
+			// nested object
+			auto itPart = parent->find(part);
+			std::shared_ptr<Object> next;
+			if (itPart != parent->end() && std::holds_alternative<std::shared_ptr<Object>>(itPart->second)) {
+				next = std::get<std::shared_ptr<Object>>(itPart->second);
+			} else {
+				next = std::make_shared<Object>();
+				(*parent)[part] = Value{next};
+			}
+			parent = next;
+			pos = dot + 1;
+		}
+	}
+	return pkg;
+}
+
+void Interpreter::importPackageSymbols(const std::string& name) {
+	auto it = packages.find(name);
+	if (it == packages.end() || !it->second) return;
+	for (auto& kv : *(it->second)) {
+		env->define(kv.first, kv.second);
+	}
+}
+
+void Interpreter::registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value) {
+	auto pkg = ensurePackage(pkgName);
+	(*pkg)[symbol] = value;
+}
 
 } // namespace
 
@@ -4609,8 +4698,9 @@ void ALangEngine::registerClass(
 		klass->methods[kv.first] = fn;
 	}
 
-	// 注入全局
-	impl->interpreter.globalsEnv()->define(className, klass);
+		// 注入全局
+		impl->interpreter.globalsEnv()->define(className, klass);
+		impl->interpreter.registerPackageSymbol("std.math", className, klass);
 }
 
 void ALangEngine::registerClassValue(

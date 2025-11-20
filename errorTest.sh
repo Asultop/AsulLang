@@ -24,6 +24,7 @@ error_files=(
     "call_non_function.alang"
     "expect_property_name.alang"
     "import_not_found.alang"
+    "missing_import_math.alang"
     "index_assignment_non_array.alang"
     "index_non_array.alang"
     "index_out_of_range.alang"

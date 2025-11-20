@@ -29,7 +29,6 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 ```bash
 bash build.sh
 ```
-
 说明：`build.sh` 会用编译器（如 g++）编译 `Main.cpp` 与 `ALangEngine.cpp`。也可以手动使用：
 
 ```bash
@@ -731,23 +730,23 @@ println("obj.k:${obj.k}");
 
 ## 模块与导入（import/from）
 
-内置包通过 `import`/`from` 导入到当前作用域。当前提供 `Math` 包：`pi`、`abs(x)`。
+内置包通过 `import`/`from` 导入到当前作用域。当前提供 `std.math` 包：`pi`、`abs(x)`。
 
 支持形式：
 
 ```js
 // 1) 指定包内符号列表
-import Math.(pi, abs);
+import std.math.(pi, abs);
 
 // 2) 列出包名+符号的列表（可跨包）
-import (Math.pi, Math.abs);
+import (std.math.pi, std.math.abs);
 
 // 3) from 形式
-from Math import abs;
-from Math import (pi, abs);
+from std.math import abs;
+from std.math import (pi, abs);
 
 // 4) 通配导入
-import Math.*;
+import std.math.*;
 
 println("pi:", pi, ", abs(-3):", abs(-3));
 ```
@@ -764,7 +763,7 @@ import "path/to/module";      // 后缀 .alang 可省略
 
 // 多个文件（可混合）
 import ("modA", "modB");
-import (Math.pi, Math.abs, "utils");
+import (std.math.pi, std.math.abs, "utils");
 
 // 使用导入的符号
 greetA("world");
@@ -1041,7 +1040,7 @@ println(d.twice());   // 22
 
 示例请参考 `Example/interfaceExample.alang` 和 `Example/interfaceValidationTest.alang`。
 
-错误示例请参考 `Example/ErrorExample/interface_*.alang`。
+错误示例请参考 `Example/ErrorExample/`（如 `interface_*.alang` 或新添加的 `missing_import_math.alang`）。
 
 ## 宿主原生类注册（C++）
 
@@ -1082,6 +1081,7 @@ engine.registerClass(
 脚本侧：
 
 ```js
+import std.math.*;
 let m = new Math();
 println("math sum 3+4:", m.sum(3,4));
 println("math abs -5:", m.abs(-5));
