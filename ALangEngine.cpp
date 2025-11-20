@@ -3871,6 +3871,119 @@ public:
 		}
 		importPackageSymbols("std.io");
 
+		// ===== Date & Time (std.time) =====
+		auto timePkg = ensurePackage("std.time");
+
+		// Date class: constructor(epochMillis)
+		{
+			auto dateClass = std::make_shared<ClassInfo>();
+			dateClass->name = "Date";
+			// constructor(epochMillis)
+			auto ctor = std::make_shared<Function>();
+			ctor->isBuiltin = true;
+			ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Date.constructor expects 1 argument (epochMillis)");
+				double ms = getNumber(args[0], "Date.constructor epochMillis");
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				// store epochMillis
+				inst->fields["epochMillis"] = Value{ ms };
+				// compute broken-down UTC time
+				using namespace std::chrono;
+				auto tp = time_point<system_clock, milliseconds>(milliseconds(static_cast<long long>(ms)));
+				auto tt = system_clock::to_time_t(time_point_cast<system_clock::duration>(tp));
+				std::tm tmUTC{};
+#ifdef _WIN32
+				gmtime_s(&tmUTC, &tt);
+#else
+				gmtime_r(&tt, &tmUTC);
+#endif
+				inst->fields["year"] = Value{ static_cast<double>(tmUTC.tm_year + 1900) };
+				inst->fields["month"] = Value{ static_cast<double>(tmUTC.tm_mon + 1) };
+				inst->fields["day"] = Value{ static_cast<double>(tmUTC.tm_mday) };
+				inst->fields["hour"] = Value{ static_cast<double>(tmUTC.tm_hour) };
+				inst->fields["minute"] = Value{ static_cast<double>(tmUTC.tm_min) };
+				inst->fields["second"] = Value{ static_cast<double>(tmUTC.tm_sec) };
+				inst->fields["millisecond"] = Value{ static_cast<double>(static_cast<long long>(ms) % 1000) };
+				// ISO string (UTC, Z)
+				char buf[64];
+				std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03lldZ",
+					(int)(tmUTC.tm_year + 1900),(int)(tmUTC.tm_mon + 1),(int)tmUTC.tm_mday,(int)tmUTC.tm_hour,(int)tmUTC.tm_min,(int)tmUTC.tm_sec,(long long)(static_cast<long long>(ms) % 1000));
+				inst->fields["iso"] = Value{ std::string(buf) };
+				return Value{ std::monostate{} };
+			};
+			dateClass->methods["constructor"] = ctor;
+			// toISO()
+			auto toIsoM = std::make_shared<Function>(); toIsoM->isBuiltin = true; toIsoM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (!args.empty()) throw std::runtime_error("Date.toISO expects 0 arguments");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				return inst->fields["iso"];
+			}; dateClass->methods["toISO"] = toIsoM;
+			// simple accessors (year, month, day, hour, minute, second, millisecond, epochMillis)
+			auto makeFieldGetter = [](const std::string& field){
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [field](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+					if (!args.empty()) throw std::runtime_error("Date." + field + " expects 0 arguments");
+					Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal); return inst->fields[field];
+				}; return fn;
+			};
+			dateClass->methods["getYear"] = makeFieldGetter("year");
+			dateClass->methods["getMonth"] = makeFieldGetter("month");
+			dateClass->methods["getDay"] = makeFieldGetter("day");
+			dateClass->methods["getHour"] = makeFieldGetter("hour");
+			dateClass->methods["getMinute"] = makeFieldGetter("minute");
+			dateClass->methods["getSecond"] = makeFieldGetter("second");
+			dateClass->methods["getMillisecond"] = makeFieldGetter("millisecond");
+			dateClass->methods["getEpochMillis"] = makeFieldGetter("epochMillis");
+			(*timePkg)["Date"] = Value{ dateClass };
+		}
+
+		// nowEpochMillis()
+		auto nowMsFn = std::make_shared<Function>(); nowMsFn->isBuiltin = true; nowMsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (!args.empty()) throw std::runtime_error("nowEpochMillis expects 0 arguments");
+			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+			return Value{ static_cast<double>(ms) };
+		}; (*timePkg)["nowEpochMillis"] = Value{ nowMsFn };
+
+		// nowEpochSeconds()
+		auto nowSecFn = std::make_shared<Function>(); nowSecFn->isBuiltin = true; nowSecFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (!args.empty()) throw std::runtime_error("nowEpochSeconds expects 0 arguments");
+			using namespace std::chrono; auto secs = duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
+			return Value{ static_cast<double>(secs) };
+		}; (*timePkg)["nowEpochSeconds"] = Value{ nowSecFn };
+
+		// nowISO() convenience
+			auto nowIsoFn = std::make_shared<Function>(); nowIsoFn->isBuiltin = true; nowIsoFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (!args.empty()) throw std::runtime_error("nowISO expects 0 arguments");
+			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+			auto tt = system_clock::to_time_t(system_clock::now()); std::tm tmUTC{};
+#ifdef _WIN32
+			gmtime_s(&tmUTC, &tt);
+#else
+			gmtime_r(&tt, &tmUTC);
+#endif
+			char buf[64]; std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03lldZ",
+				(int)(tmUTC.tm_year + 1900),(int)(tmUTC.tm_mon + 1),(int)tmUTC.tm_mday,(int)tmUTC.tm_hour,(int)tmUTC.tm_min,(int)tmUTC.tm_sec,(long long)(ms % 1000));
+			return Value{ std::string(buf) };
+		}; (*timePkg)["nowISO"] = Value{ nowIsoFn };
+
+		// dateFromEpoch(ms) -> Date instance
+		auto dateFromEpochFn = std::make_shared<Function>(); dateFromEpochFn->isBuiltin = true; dateFromEpochFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() != 1) throw std::runtime_error("dateFromEpoch expects 1 argument (epochMillis)");
+			double ms = getNumber(args[0], "dateFromEpoch epochMillis");
+			// get Date class
+			auto timePkgLocal = ensurePackage("std.time");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
+			auto inst = std::make_shared<Instance>(); inst->klass = dateClass;
+			// manual invoke constructor logic (reuse ctor builtin)
+			auto ctorIt = dateClass->methods.find("constructor"); if (ctorIt == dateClass->methods.end()) throw std::runtime_error("Date.constructor missing");
+			auto closureEnv = std::make_shared<Environment>(); closureEnv->define("this", Value{inst});
+			ctorIt->second->builtin({ Value{ ms } }, closureEnv);
+			return Value{ inst };
+		}; (*timePkg)["dateFromEpoch"] = Value{ dateFromEpochFn };
+
+		// 注意: 不将 std.time 自动导入到全局，使用方可通过 `import std.time.*;` 或 `std.time.<name>` 访问
+
 		// len(x): string/array/object长度
 		auto lenFn = std::make_shared<Function>();
 		lenFn->isBuiltin = true;

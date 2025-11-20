@@ -60,6 +60,7 @@ func_files=(
     "fileIOExample.alang"
     "fileIOClassExample.alang"
     "fileIOAdvancedExample.alang"
+    "dateTimeExample.alang"
 )
 
 # Counter for passed/failed tests

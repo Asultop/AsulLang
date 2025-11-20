@@ -120,6 +120,41 @@ ALang 提供了一组全局可用的内置函数：
 | `Dir` | `walk()` | 递归返回所有相对路径。 |
 
 示例参考：`fileIOExample.alang`, `fileIOClassExample.alang`, `fileIOAdvancedExample.alang`。
+
+#### 日期与时间 (std.time)
+
+提供轻量日期/时间支持（UTC）：
+
+| 函数 | 描述 |
+| :-- | :-- |
+| `nowEpochMillis()` | 当前 UTC 时间戳（毫秒）。 |
+| `nowEpochSeconds()` | 当前 UTC 时间戳（秒）。 |
+| `nowISO()` | 当前 UTC ISO8601 字符串，格式 `YYYY-MM-DDTHH:mm:SS.mmmZ`。 |
+| `dateFromEpoch(ms)` | 由毫秒时间戳构造 `Date` 实例。 |
+
+`Date` 类（UTC）字段与方法：
+
+| 方法 | 说明 |
+| :-- | :-- |
+| `toISO()` | 返回构造时的 ISO 字符串。 |
+| `getYear()` | 年 (YYYY)。 |
+| `getMonth()` | 月 (1-12)。 |
+| `getDay()` | 日 (1-31)。 |
+| `getHour()` | 时 (0-23)。 |
+| `getMinute()` | 分 (0-59)。 |
+| `getSecond()` | 秒 (0-59)。 |
+| `getMillisecond()` | 毫秒 (0-999)。 |
+| `getEpochMillis()` | 原始毫秒时间戳。 |
+
+构造用法：`new std.time.Date(epochMillis)` 或 `dateFromEpoch(ms)`。
+
+示例：参见 `dateTimeExample.alang`。
+
+**注意**：`std.time` 并不自动导入到全局（当前默认仅 `std.io` 自动导入）。要使用 `std.time` 中的符号，请在脚本中显式导入：
+
+```alang
+import std.time.*; // 或者使用 std.time.nowISO() 等完全限定名
+```
 | `len` | `x` | 返回字符串字符数、数组元素数或对象键值对数。 |
 | `quote` | `str` | 将代码字符串解析为 Token 列表对象，包含 `apply()` 方法可重新执行。 |
 | `push` | `arr, ...values` | 向数组末尾追加元素，返回新长度。 |
