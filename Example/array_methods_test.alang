@@ -1,0 +1,109 @@
+// 数组方法测试：map / filter / reduce / find / some / every / includes
+
+println("=== 数组方法测试 ===");
+
+// 测试数据
+let numbers = [1, 2, 3, 4, 5];
+let words = ["hello", "world", "alang", "test"];
+
+// 1. map - 转换数组元素
+println("\n== map 测试 ==");
+let doubled = numbers.map([](x) { return x * 2; });
+println("原数组:", numbers);
+println("翻倍后:", doubled);
+
+let upperWords = words.map([](w) { return w; }); // 简化版，实际应转大写但我们没有内置大写函数
+println("单词数组:", upperWords);
+
+// 2. filter - 过滤元素
+println("\n== filter 测试 ==");
+let evens = numbers.filter([](x) { return x % 2 == 0; });
+println("偶数:", evens);
+
+let longWords = words.filter([](w) { return w.len() > 4; });
+println("长度>4的单词:", longWords);
+
+// 3. reduce - 归约/累加
+println("\n== reduce 测试 ==");
+let sum = numbers.reduce([](acc, x) { return acc + x; }, 0);
+println("数组求和:", sum);
+
+let product = numbers.reduce([](acc, x) { return acc * x; }, 1);
+println("数组乘积:", product);
+
+// 不提供初始值
+let sum2 = numbers.reduce([](acc, x) { return acc + x; });
+println("无初始值求和:", sum2);
+
+// 4. find - 查找第一个满足条件的元素
+println("\n== find 测试 ==");
+let firstEven = numbers.find([](x) { return x % 2 == 0; });
+println("第一个偶数:", firstEven);
+
+let firstLongWord = words.find([](w) { return w.len() >= 5; });
+println("第一个长度>=5的单词:", firstLongWord);
+
+let notFound = numbers.find([](x) { return x > 100; });
+println("查找>100的数(不存在):", notFound);
+
+// 5. some - 是否存在满足条件的元素
+println("\n== some 测试 ==");
+let hasEven = numbers.some([](x) { return x % 2 == 0; });
+println("是否有偶数:", hasEven);
+
+let hasLarge = numbers.some([](x) { return x > 10; });
+println("是否有>10的数:", hasLarge);
+
+// 6. every - 是否所有元素都满足条件
+println("\n== every 测试 ==");
+let allPositive = numbers.every([](x) { return x > 0; });
+println("是否全为正数:", allPositive);
+
+let allEven = numbers.every([](x) { return x % 2 == 0; });
+println("是否全为偶数:", allEven);
+
+// 7. includes - 是否包含某个值
+println("\n== includes 测试 ==");
+let has3 = numbers.includes(3);
+println("是否包含3:", has3);
+
+let has10 = numbers.includes(10);
+println("是否包含10:", has10);
+
+let hasHello = words.includes("hello");
+println("是否包含'hello':", hasHello);
+
+// 8. 链式调用示例
+println("\n== 链式调用 ==");
+let result = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    .filter([](x) { return x % 2 == 0; })
+    .map([](x) { return x * x; })
+    .reduce([](acc, x) { return acc + x; }, 0);
+println("1-10中偶数的平方和:", result);
+
+// 9. 带索引参数的回调
+println("\n== 带索引参数 ==");
+let indexed = numbers.map([](val, idx) { return val + idx; });
+println("值+索引:", indexed);
+
+// 10. 复杂对象数组
+println("\n== 对象数组操作 ==");
+let users = [
+    {name: "Alice", age: 25},
+    {name: "Bob", age: 30},
+    {name: "Charlie", age: 35}
+];
+
+let names = users.map([](u) { return u.name; });
+println("用户名列表:", names);
+
+let adults = users.filter([](u) { return u.age >= 30; });
+println("30岁及以上用户数:", adults.len());
+
+let totalAge = users.reduce([](sum, u) { return sum + u.age; }, 0);
+println("年龄总和:", totalAge);
+
+let hasBob = users.some([](u) { return u.name == "Bob"; });
+println("是否有Bob:", hasBob);
+
+println("\n=== 数组方法测试完成 ===");

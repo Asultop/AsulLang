@@ -2870,7 +2870,7 @@ public:
 		}
 		return nullptr;
 	}
-	static Value getProperty(const Value& obj, const std::string& name) {
+	Value getProperty(const Value& obj, const std::string& name) {
 		// Instance: fields then methods
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
 			if (*pins) {
@@ -2905,12 +2905,178 @@ public:
 		if (auto parr = std::get_if<std::shared_ptr<Array>>(&obj)) {
 			if (name == "len") {
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
-				fn->builtin = [a](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(a ? a->size() : 0) }; };
+				fn->builtin = [this,a](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(a ? a->size() : 0) }; };
 				return fn;
 			}
 			if (name == "push") {
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
-				fn->builtin = [a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!a) return Value{0.0}; for (auto& v: args) a->push_back(v); return Value{ static_cast<double>(a->size()) }; };
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!a) return Value{0.0}; for (auto& v: args) a->push_back(v); return Value{ static_cast<double>(a->size()) }; };
+				return fn;
+			}
+			if (name == "map") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{std::monostate{}};
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("map expects a single function argument");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					auto out = std::make_shared<Array>();
+					for (size_t i = 0; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], elem);
+							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						out->push_back(res);
+					}
+					return Value{out};
+				};
+				return fn;
+			}
+			if (name == "filter") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{std::monostate{}};
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("filter expects a single function argument");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					auto out = std::make_shared<Array>();
+					for (size_t i = 0; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], elem);
+							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						if (isTruthy(res)) out->push_back(elem);
+					}
+					return Value{out};
+				};
+				return fn;
+			}
+			if (name == "reduce") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{std::monostate{}};
+					if (args.size() < 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("reduce expects a function and optional initial value");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					Value acc;
+					size_t start = 0;
+					if (args.size() >= 2) { acc = args[1]; } else { if (a->empty()) throw std::runtime_error("reduce of empty array with no initial value"); acc = (*a)[0]; start = 1; }
+					for (size_t i = start; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ acc, elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], acc);
+							if (cb->params.size() > 1) local->define(cb->params[1], elem);
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 3) local->define(cb->params[3], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						acc = res;
+					}
+					return acc;
+				};
+				return fn;
+			}
+			if (name == "find") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{std::monostate{}};
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("find expects a single function argument");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					for (size_t i = 0; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], elem);
+							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						if (isTruthy(res)) return elem;
+					}
+					return Value{std::monostate{}};
+				};
+				return fn;
+			}
+			if (name == "some") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{false};
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("some expects a single function argument");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					for (size_t i = 0; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], elem);
+							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						if (isTruthy(res)) return Value{true};
+					}
+					return Value{false};
+				};
+				return fn;
+			}
+			if (name == "every") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment> env)->Value {
+					if (!a) return Value{true};
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("every expects a single function argument");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					for (size_t i = 0; i < a->size(); ++i) {
+						Value elem = (*a)[i];
+						Value res{std::monostate{}};
+						if (cb->isBuiltin) {
+							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
+							res = cb->builtin(carg, cb->closure);
+						} else {
+							auto local = std::make_shared<Environment>(cb->closure);
+							if (cb->params.size() > 0) local->define(cb->params[0], elem);
+							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
+							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
+							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
+						}
+						if (!isTruthy(res)) return Value{false};
+					}
+					return Value{true};
+				};
+				return fn;
+			}
+			if (name == "includes") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto a = *parr;
+				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (!a) return Value{false};
+					if (args.size() < 1) throw std::runtime_error("includes expects at least 1 argument");
+					for (size_t i = 0; i < a->size(); ++i) { if (valueEqual((*a)[i], args[0])) return Value{true}; }
+					return Value{false};
+				};
 				return fn;
 			}
 			return Value{std::monostate{}};
@@ -2918,6 +3084,64 @@ public:
 		// String synthetic methods
 		if (auto ps = std::get_if<std::string>(&obj)) {
 			if (name == "len") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(s.size()) }; }; return fn; }
+			if (name == "split") {
+				auto s = *ps;
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 1) throw std::runtime_error("split expects a delimiter string");
+					if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("split delimiter must be a string");
+					std::string delim = std::get<std::string>(args[0]);
+					auto out = std::make_shared<Array>();
+					if (delim.empty()) { // split into chars
+						for (char c : s) { out->push_back(Value{ std::string(1, c) }); }
+						return Value{out};
+					}
+					size_t pos = 0, found;
+					while ((found = s.find(delim, pos)) != std::string::npos) {
+						out->push_back(Value{ s.substr(pos, found - pos) });
+						pos = found + delim.size();
+					}
+					out->push_back(Value{ s.substr(pos) });
+					return Value{out};
+				};
+				return fn;
+			}
+			if (name == "substring") {
+				auto s = *ps;
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 1) throw std::runtime_error("substring expects start and optional end");
+					double start = getNumber(args[0], "substring start");
+					size_t si = static_cast<size_t>(std::max(0, static_cast<int>(start)));
+					size_t len = s.size();
+					if (args.size() >= 2) {
+						double end = getNumber(args[1], "substring end");
+						size_t ei = static_cast<size_t>(std::max(0, static_cast<int>(end)));
+						if (ei > len) ei = len;
+						if (si >= ei) return Value{ std::string("") };
+						return Value{ s.substr(si, ei - si) };
+					}
+					if (si >= len) return Value{ std::string("") };
+					return Value{ s.substr(si) };
+				};
+				return fn;
+			}
+			if (name == "replace") {
+				auto s = *ps;
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 2) throw std::runtime_error("replace expects search and replacement strings");
+					if (!std::holds_alternative<std::string>(args[0]) || !std::holds_alternative<std::string>(args[1])) throw std::runtime_error("replace expects string arguments");
+					std::string search = std::get<std::string>(args[0]);
+					std::string repl = std::get<std::string>(args[1]);
+					if (search.empty()) return Value{ s };
+					size_t pos = s.find(search);
+					if (pos == std::string::npos) return Value{ s };
+					std::string out = s.substr(0, pos) + repl + s.substr(pos + search.size());
+					return Value{ out };
+				};
+				return fn;
+			}
 			return Value{std::string("undefined")};
 		}
 		// For numbers and other primitives, return "undefined" instead of null
