@@ -28,6 +28,10 @@
 #include <optional>
 #include <cstring>
 #include "AsulFormatString/AsulFormatString.h"
+// POSIX process control for `os.call`
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace {
 
@@ -4412,6 +4416,76 @@ public:
 			};
 			(*mathPkg)["abs"] = fn;
 		}
+
+		// ===== OS (os) =====
+		// 提供异步系统调用：`os.call(program, argsArray, cwd)` 返回 Promise
+		auto osPkg = ensurePackage("os");
+		auto callFn = std::make_shared<Function>(); callFn->isBuiltin = true;
+		callFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() < 1) throw std::runtime_error("os.call expects at least 1 argument (program)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("os.call: program must be a string");
+			std::string prog = std::get<std::string>(args[0]);
+			std::vector<std::string> argv;
+			if (args.size() >= 2 && !std::holds_alternative<std::monostate>(args[1])) {
+				if (auto parr = std::get_if<std::shared_ptr<Array>>(&args[1])) {
+					auto a = *parr; if (a) for (auto &v : *a) { if (!std::holds_alternative<std::string>(v)) throw std::runtime_error("os.call: args must be array of strings"); argv.push_back(std::get<std::string>(v)); }
+				} else if (std::holds_alternative<std::string>(args[1])) {
+					argv.push_back(std::get<std::string>(args[1]));
+				} else {
+					throw std::runtime_error("os.call: second argument must be array of strings or a string");
+				}
+			}
+			std::string cwd;
+			if (args.size() >= 3 && std::holds_alternative<std::string>(args[2])) cwd = std::get<std::string>(args[2]);
+			auto p = std::make_shared<PromiseState>(); p->loopPtr = this;
+			// spawn thread to run the process and settle the promise when done
+			std::thread([p, this, prog, argv, cwd]() {
+				int outpipe[2]; int errpipe[2];
+				if (pipe(outpipe) != 0 || pipe(errpipe) != 0) {
+					settlePromise(p, true, Value{ std::string("os.call: pipe failed") });
+					return;
+				}
+				pid_t pid = fork();
+				if (pid == 0) {
+					// child
+					if (!cwd.empty()) {
+						chdir(cwd.c_str());
+					}
+					dup2(outpipe[1], STDOUT_FILENO);
+					dup2(errpipe[1], STDERR_FILENO);
+					close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
+					std::vector<char*> cargv;
+					cargv.reserve(argv.size() + 2);
+					cargv.push_back(const_cast<char*>(prog.c_str()));
+					for (auto &s : argv) cargv.push_back(const_cast<char*>(s.c_str()));
+					cargv.push_back(nullptr);
+					execvp(prog.c_str(), cargv.data());
+					// if exec failed
+					_exit(127);
+				} else if (pid > 0) {
+					// parent: close write ends and read output
+					close(outpipe[1]); close(errpipe[1]);
+					std::string out; std::string err;
+					std::thread rout([&]{ char buf[4096]; ssize_t r; while((r = read(outpipe[0], buf, sizeof(buf))) > 0) out.append(buf, (size_t)r); close(outpipe[0]); });
+					std::thread rerr([&]{ char buf[4096]; ssize_t r; while((r = read(errpipe[0], buf, sizeof(buf))) > 0) err.append(buf, (size_t)r); close(errpipe[0]); });
+					int status = 0; waitpid(pid, &status, 0);
+					rout.join(); rerr.join();
+					int exitCode = (WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+					auto res = std::make_shared<Object>();
+					(*res)["exitCode"] = Value{ static_cast<double>(exitCode) };
+					(*res)["stdout"] = Value{ out };
+					(*res)["stderr"] = Value{ err };
+					settlePromise(p, false, Value{ res });
+				} else {
+					// fork failed
+					close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
+					settlePromise(p, true, Value{ std::string("os.call: fork failed") });
+				}
+			}).detach();
+			return Value{ p };
+		};
+		(*osPkg)["call"] = Value{ callFn };
+
 
 		// ---- Builtin containers and helpers ----
 		// Provide native host-backed classes: Map, Set, Deque, Stack

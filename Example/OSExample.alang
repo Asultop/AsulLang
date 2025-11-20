@@ -1,0 +1,36 @@
+// == OS Example ==
+// Demonstrates `os.call(program, argsArray, cwd)` which returns a Promise
+
+// == OS 示例 ==
+// 演示 `os.call(program, argsArray, cwd)` 的基本使用：then/await 风格，返回 Promise，resolve 为 { exitCode, stdout, stderr }
+
+import os;
+
+// 回调风格：then / catch
+let p1 = os.call("echo", ["hello from os.call "], ".");
+p1.then([](res) {
+    println("echo exit:", res.exitCode);
+    println("echo out:", res.stdout);
+}).catch([](err) {
+    println("echo failed:", err);
+});
+
+
+// await 风格：等待结果并打印
+let p2 = os.call("/bin/echo", ["async echo", "and more"], ".");
+let r = await p2;
+println("await exit:", r.exitCode);
+println("await out:", r.stdout);
+
+// 示例：列出当前目录（显示前 80 字符）
+let lsPromise = os.call("ls", ["-1"], ".");
+lsPromise.then([](res) {
+    println("ls exit:", res.exitCode);
+    println("ls stdout first 80 chars:\n", res.stdout.substring(0, 80));
+}).catch([](err) {
+    println("ls failed:", err);
+});
+await lsPromise;
+
+
+// 结束
