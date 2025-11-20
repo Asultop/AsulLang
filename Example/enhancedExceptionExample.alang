@@ -1,0 +1,36 @@
+// 增强异常信息示例
+println("=== 增强异常信息示例 ===");
+
+function inner(x) {
+    if (x < 0) {
+        throw "x 不能为负"; // string 将被包装
+    }
+    return x * 2;
+}
+
+function mid(y) {
+    return inner(y - 5);
+}
+
+function outer(z) {
+    return mid(z - 10);
+}
+
+try {
+    outer(8); // 将导致 inner(-7) 抛出
+    println("此行不会执行");
+} catch (e) {
+    println("捕获到异常对象:", e);
+    println("message:", e.message);
+    println("line:", e.line, "column:", e.column);
+    println("stack 长度:", e.stack.len());
+    println("顶层栈帧:", e.stack[0]);
+}
+
+// 抛出对象
+try {
+    throw { code: 404, msg: "未找到资源" };
+} catch (e) {
+    println("自定义对象异常 message:", e.message);
+    println("包含 stack?:", e.stack ? "yes" : "no");
+}

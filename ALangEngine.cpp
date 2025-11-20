@@ -1592,7 +1592,7 @@ private:
 struct ReturnSignal { Value value; };
 struct BreakSignal {};
 struct ContinueSignal {};
-struct ExceptionSignal { Value value; };
+struct ExceptionSignal { Value value; std::vector<std::string> stackTrace = {}; };
 
 class Interpreter {
 public:
@@ -2081,12 +2081,16 @@ public:
 			for (auto& a : call->args) args.push_back(evaluate(a));
 			if (fn->isBuiltin) {
 				try { return fn->builtin(args, fn->closure); }
+				catch (const ExceptionSignal& ex) {
+					// 已经是脚本异常，补充栈
+					ExceptionSignal enriched = ex;
+					if (enriched.stackTrace.empty()) enriched.stackTrace = callStack;
+					throw enriched;
+				}
 				catch (const std::exception& ex) {
-					std::string s = ex.what();
-					if (s.find("line ") == std::string::npos) {
-						std::ostringstream oss; oss << s << " at line " << call->line << ", column " << call->column << ", length " << call->length; throw std::runtime_error(oss.str());
-					}
-					throw;
+					// 将 native 异常转换为脚本异常对象
+					Value ev = ensureExceptionValue(Value{ std::string(ex.what()) }, call->line, call->column, call->length);
+					ExceptionSignal es; es.value = ev; es.stackTrace = callStack; throw es;
 				}
 			}
 			// 支持调用由 FunctionExpr 生成的普通函数
@@ -2140,8 +2144,18 @@ public:
 					} catch (const ReturnSignal& rs) {
 						ret = rs.value;
 					} catch (const ExceptionSignal& ex) {
-						settlePromise(p, true, ex.value);
+						Value v = ex.value;
+						// 若无栈，补充
+						if (ex.stackTrace.empty()) {
+							Value wrapped = ensureExceptionValue(v);
+							settlePromise(p, true, wrapped);
+						} else {
+							settlePromise(p, true, v);
+						}
 						return;
+					} catch (const std::exception& exNative) {
+						Value ev = ensureExceptionValue(Value{ std::string(exNative.what()) });
+						settlePromise(p, true, ev); return;
 					}
 					settlePromise(p, false, ret);
 				});
@@ -2187,6 +2201,15 @@ public:
 				try {
 					executeBlock(fn->body, local);
 				} catch (const ReturnSignal& rs) { return rs.value; }
+				catch (const ExceptionSignal& ex) {
+					ExceptionSignal enriched = ex;
+					if (enriched.stackTrace.empty()) enriched.stackTrace = callStack;
+					throw enriched;
+				}
+				catch (const std::exception& exNative) {
+					Value ev = ensureExceptionValue(Value{ std::string(exNative.what()) }, call->line, call->column, call->length);
+					ExceptionSignal es; es.value = ev; es.stackTrace = callStack; throw es;
+				}
 				return Value{std::monostate{}};
 			}
 			
@@ -2488,8 +2511,10 @@ public:
 			throw ReturnSignal{val};
 		}
 		if (auto t = std::dynamic_pointer_cast<ThrowStmt>(stmt)) {
-			Value val = t->value ? evaluate(t->value) : Value{std::monostate{}};
-			throw ExceptionSignal{ val };
+			Value raw = t->value ? evaluate(t->value) : Value{std::monostate{}};
+			Value wrapped = ensureExceptionValue(raw);
+			ExceptionSignal ex; ex.value = wrapped; ex.stackTrace = callStack; // capture current stack
+			throw ex;
 		}
 		if (auto tc = std::dynamic_pointer_cast<TryCatchStmt>(stmt)) {
 			try {
@@ -2683,6 +2708,52 @@ private:
 	std::string lastErrorFilename;
 	std::vector<std::string> importStack;
 	std::vector<std::string> callStack;
+
+	// 构建带有增强信息的异常对象：{ message, line, column, length, stack: [...], type: "Error" }
+	Value buildExceptionValue(const std::string& msg, int line = -1, int column = -1, int length = -1) {
+		// 如果已有对象则补充 stack
+		auto obj = std::make_shared<Object>();
+		(*obj)["message"] = Value{ msg };
+		if (line >= 0) (*obj)["line"] = Value{ static_cast<double>(line) };
+		if (column >= 0) (*obj)["column"] = Value{ static_cast<double>(column) };
+		if (length >= 0) (*obj)["length"] = Value{ static_cast<double>(length) };
+		(*obj)["type"] = Value{ std::string("Error") };
+		// stack 数组
+		auto arr = std::make_shared<Array>();
+		for (auto &f : callStack) arr->push_back(Value{ f });
+		(*obj)["stack"] = Value{ arr };
+		return Value{ obj };
+	}
+	// 若用户 throw 自定义值，包装为对象（string 转对象；object 未包含 stack 时补充）
+	Value ensureExceptionValue(Value v, int line = -1, int column = -1, int length = -1) {
+		// string -> { message: str, ... }
+		if (std::holds_alternative<std::string>(v)) {
+			return buildExceptionValue(std::get<std::string>(v), line, column, length);
+		}
+		// object: 若没有 stack 添加；若没有 message 生成 message = toString(value)
+		if (auto po = std::get_if<std::shared_ptr<Object>>(&v)) {
+			if (*po) {
+				bool hasStack = false; bool hasMsg = false;
+				if ((**po).find("stack") != (**po).end()) hasStack = true;
+				if ((**po).find("message") != (**po).end()) hasMsg = true;
+				if (!hasStack) {
+					auto arr = std::make_shared<Array>();
+					for (auto &f : callStack) arr->push_back(Value{ f });
+					(**po)["stack"] = Value{ arr };
+				}
+				if (!hasMsg) {
+					(**po)["message"] = Value{ std::string("Object thrown") };
+				}
+				if (line >= 0 && (**po).find("line") == (**po).end()) (**po)["line"] = Value{ static_cast<double>(line) };
+				if (column >= 0 && (**po).find("column") == (**po).end()) (**po)["column"] = Value{ static_cast<double>(column) };
+				if (length >= 0 && (**po).find("length") == (**po).end()) (**po)["length"] = Value{ static_cast<double>(length) };
+				if ((**po).find("type") == (**po).end()) (**po)["type"] = Value{ std::string("Error") };
+				return v;
+			}
+		}
+		// 其它类型 -> 包装成字符串表示
+		return buildExceptionValue(typeOf(v), line, column, length);
+	}
 
 public:
 	bool takeErrorContext(std::string& outSrc, std::string& outFile) {
