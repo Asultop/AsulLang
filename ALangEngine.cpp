@@ -38,10 +38,12 @@ enum class TokenType {
 	LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
 	Comma, Semicolon, Colon, Dot,
 	Plus, Minus, Star, Slash, Percent,
+	Ampersand, Pipe, Caret,
 	Tilde,
 	Bang, Equal, Less, Greater, Question,
 	// One, two or three char
 	BangEqual, StrictNotEqual, EqualEqual, StrictEqual, LessEqual, GreaterEqual, LeftArrow,
+	ShiftLeft, ShiftRight,
 	Arrow,
 	Ellipsis,
 	AndAnd, OrOr,
@@ -319,42 +321,20 @@ size_t startLineStart = lineStart;  // Save starting line position
 		}
 		case '<': {
 			if (match('-')) { add(TokenType::LeftArrow); }
+			else if (match('<')) { add(TokenType::ShiftLeft); }
 			else if (match('=')) { add(TokenType::LessEqual); }
 			else { add(TokenType::Less); }
 			break;
 		}
-		case '>': add(match('=') ? TokenType::GreaterEqual : TokenType::Greater); break;
-		case '&': if (match('&')) add(TokenType::AndAnd); else {
-			// 详细错误：包含字符、行列与上下文
-			size_t pos = current - 1;
-			size_t ls = lineStart;
-			size_t le = pos;
-			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
-			std::string lineStr = source.substr(ls, le - ls);
-			size_t col = (pos >= ls ? (pos - ls + 1) : 1);
-			std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
-			std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
-				<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
-			std::ostringstream oss;
-			oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
-				<< lineStr << "\n" << caret.str();
-			throw std::runtime_error(oss.str());
-		} break;
-		case '|': if (match('|')) add(TokenType::OrOr); else {
-			size_t pos = current - 1;
-			size_t ls = lineStart;
-			size_t le = pos;
-			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
-			std::string lineStr = source.substr(ls, le - ls);
-			size_t col = (pos >= ls ? (pos - ls + 1) : 1);
-			std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
-			std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
-				<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
-			std::ostringstream oss;
-			oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
-				<< lineStr << "\n" << caret.str();
-			throw std::runtime_error(oss.str());
-		} break;
+		case '>': {
+			if (match('>')) add(TokenType::ShiftRight);
+			else if (match('=')) add(TokenType::GreaterEqual);
+			else add(TokenType::Greater);
+			break;
+		}
+		case '&': if (match('&')) add(TokenType::AndAnd); else { add(TokenType::Ampersand); } break;
+		case '|': if (match('|')) add(TokenType::OrOr); else { add(TokenType::Pipe); } break;
+		case '^': add(TokenType::Caret); break;
 		case '/':
 			if (match('=')) add(TokenType::SlashEqual);
 			else add(TokenType::Slash);
@@ -1300,11 +1280,40 @@ private:
 	}
 
 	ExprPtr logicalAnd() {
-		auto expr = equality();
+		auto expr = bitwiseOr();
 		while (match({TokenType::AndAnd})) {
 			Token op = previous();
-			auto right = equality();
+			auto right = bitwiseOr();
 			expr = std::make_shared<LogicalExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	// bitwise OR level
+	ExprPtr bitwiseOr() {
+		auto expr = bitwiseXor();
+		while (match({TokenType::Pipe})) {
+			Token op = previous();
+			auto right = bitwiseXor();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+	ExprPtr bitwiseXor() {
+		auto expr = bitwiseAnd();
+		while (match({TokenType::Caret})) {
+			Token op = previous();
+			auto right = bitwiseAnd();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+	ExprPtr bitwiseAnd() {
+		auto expr = equality();
+		while (match({TokenType::Ampersand})) {
+			Token op = previous();
+			auto right = equality();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
 		}
 		return expr;
 	}
@@ -1320,8 +1329,18 @@ private:
 	}
 
 	ExprPtr comparison() {
-		auto expr = term();
+		auto expr = shift();
 		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual, TokenType::Tilde})) {
+			Token op = previous();
+			auto right = shift();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr shift() {
+		auto expr = term();
+		while (match({TokenType::ShiftLeft, TokenType::ShiftRight})) {
 			Token op = previous();
 			auto right = term();
 			expr = std::make_shared<BinaryExpr>(expr, op, right);
@@ -1356,7 +1375,7 @@ private:
 			auto operand = unary();
 			return std::make_shared<UpdateExpr>(op, operand, true, op.line, op.column, std::max(1, op.length));
 		}
-		if (match({TokenType::Bang, TokenType::Minus})) {
+		if (match({TokenType::Bang, TokenType::Minus, TokenType::Tilde})) {
 			Token op = previous();
 			auto right = unary();
 			return std::make_shared<UnaryExpr>(op, right);
@@ -1909,6 +1928,13 @@ public:
 					double rv = getNumber(r, "unary '-'");
 					return Value{-rv};
 				}
+				case TokenType::Tilde: {
+					// Bitwise NOT on 64-bit integer view
+					double rv = getNumber(r, "unary '~' ");
+					long long iv = static_cast<long long>(rv);
+					long long res = ~iv;
+					return Value{ static_cast<double>(res) };
+				}
 				default: break;
 				}
 			} catch (const std::exception& ex) {
@@ -2038,6 +2064,31 @@ public:
 				case TokenType::BangEqual: return Value{!isJSEqual(l, r)};
 				case TokenType::StrictEqual: return Value{isStrictEqual(l, r)};
 				case TokenType::StrictNotEqual: return Value{!isStrictEqual(l, r)};
+				case TokenType::Ampersand: {
+					long long lv = static_cast<long long>(getNumber(l, "& left"));
+					long long rv = static_cast<long long>(getNumber(r, "& right"));
+					return Value{ static_cast<double>(lv & rv) };
+				}
+				case TokenType::Pipe: {
+					long long lv = static_cast<long long>(getNumber(l, "| left"));
+					long long rv = static_cast<long long>(getNumber(r, "| right"));
+					return Value{ static_cast<double>(lv | rv) };
+				}
+				case TokenType::Caret: {
+					long long lv = static_cast<long long>(getNumber(l, "^ left"));
+					long long rv = static_cast<long long>(getNumber(r, "^ right"));
+					return Value{ static_cast<double>(lv ^ rv) };
+				}
+				case TokenType::ShiftLeft: {
+					long long lv = static_cast<long long>(getNumber(l, "<< left"));
+					long long rv = static_cast<long long>(getNumber(r, "<< right"));
+					return Value{ static_cast<double>(lv << rv) };
+				}
+				case TokenType::ShiftRight: {
+					long long lv = static_cast<long long>(getNumber(l, ">> left"));
+					long long rv = static_cast<long long>(getNumber(r, ">> right"));
+					return Value{ static_cast<double>(lv >> rv) };
+				}
 				case TokenType::Tilde: {
 					// Adapter/interface matching: right operand must be a ClassInfo (interface or class descriptor)
 					if (!std::holds_alternative<std::shared_ptr<ClassInfo>>(r)) {
@@ -3547,6 +3598,11 @@ public:
 					case TokenType::Star: tname = "Star"; break;
 					case TokenType::Slash: tname = "Slash"; break;
 					case TokenType::Percent: tname = "Percent"; break;
+					case TokenType::Ampersand: tname = "Ampersand"; break;
+					case TokenType::Pipe: tname = "Pipe"; break;
+					case TokenType::Caret: tname = "Caret"; break;
+					case TokenType::ShiftLeft: tname = "ShiftLeft"; break;
+					case TokenType::ShiftRight: tname = "ShiftRight"; break;
 					case TokenType::Tilde: tname = "Tilde"; break;
 					case TokenType::Bang: tname = "Bang"; break;
 					case TokenType::Equal: tname = "Equal"; break;
