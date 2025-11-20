@@ -50,7 +50,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, Static,
 	EndOfFile
 };
 
@@ -177,6 +177,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
 			{"interface", TokenType::Interface},
 			{"import", TokenType::Import}, {"from", TokenType::From},
+			{"static", TokenType::Static},
 		};
 		auto it = keywords.find(text);
 		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
@@ -572,6 +573,7 @@ struct ClassInfo {
 	std::string name;
 	std::vector<std::shared_ptr<ClassInfo>> supers; // 多继承支持，按声明顺序线性查找
 	std::unordered_map<std::string, std::shared_ptr<Function>> methods;
+	std::unordered_map<std::string, std::shared_ptr<Function>> staticMethods;
 };
 
 struct Instance {
@@ -646,7 +648,7 @@ struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPt
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)){} };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; bool isStatic{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt, bool s=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)), isStatic(s){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; };
@@ -865,6 +867,7 @@ private:
 		}
 		if (match({TokenType::LeftBrace})) {
 			while (!check(TokenType::RightBrace) && !isAtEnd()) {
+				bool isStatic = match({TokenType::Static});
 				bool isAsync = match({TokenType::Async});
 				(void)match({TokenType::Function});
 				auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
@@ -883,7 +886,7 @@ private:
 				std::optional<std::string> retType = std::nullopt;
 				if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 				auto body = statement();
-				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
+				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType, isStatic));
 			}
 			consume(TokenType::RightBrace, "Expect '}' after class body");
 			// 可选分号：class Name { ... };
@@ -2540,7 +2543,13 @@ public:
 				}
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
-				klass->methods[m->name] = fn;
+				fn->isAsync = m->isAsync;
+				
+				if (m->isStatic) {
+					klass->staticMethods[m->name] = fn;
+				} else {
+					klass->methods[m->name] = fn;
+				}
 			}
 			
 			// 验证是否实现了所有 interface 方法
@@ -2890,6 +2899,16 @@ public:
 		}
 		return nullptr;
 	}
+	static std::shared_ptr<Function> findStaticMethod(std::shared_ptr<ClassInfo> k, const std::string& name) {
+		if (!k) return nullptr;
+		auto it = k->staticMethods.find(name);
+		if (it != k->staticMethods.end()) return it->second;
+		for (auto& s : k->supers) {
+			auto f = findStaticMethod(s, name);
+			if (f) return f;
+		}
+		return nullptr;
+	}
 	Value getProperty(const Value& obj, const std::string& name) {
 		// Instance: fields then methods
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
@@ -2907,6 +2926,13 @@ public:
 					}
 				}
 				return Value{std::monostate{}};
+			}
+		}
+		// Class (static methods)
+		if (auto pcls = std::get_if<std::shared_ptr<ClassInfo>>(&obj)) {
+			if (*pcls) {
+				auto m = findStaticMethod(*pcls, name);
+				if (m) return m;
 			}
 		}
 		// Object

@@ -55,6 +55,7 @@ func_files=(
     "map_example.alang"
     "containers_example.alang"
     "STLExample.alang"
+    "staticMethodExample.alang"
 )
 
 # Counter for passed/failed tests

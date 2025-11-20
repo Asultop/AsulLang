@@ -1,0 +1,43 @@
+// Example/staticMethodExample.alang
+
+class MathUtils {
+    static function add(a, b) {
+        return a + b;
+    }
+
+    static function multiply(a, b) {
+        return a * b;
+    }
+
+    static function square(x) {
+        return MathUtils.multiply(x, x);
+    }
+}
+
+print("MathUtils.add(2, 3) = " + MathUtils.add(2, 3) + "\n");
+print("MathUtils.multiply(4, 5) = " + MathUtils.multiply(4, 5) + "\n");
+print("MathUtils.square(6) = " + MathUtils.square(6) + "\n");
+
+class AdvancedMath extends MathUtils {
+    static function power(base, exp) {
+        let res = 1;
+        let i = 0;
+        while (i < exp) {
+            res = MathUtils.multiply(res, base);
+            i = i + 1;
+        }
+        return res;
+    }
+}
+
+print("AdvancedMath.add(10, 20) (inherited) = " + AdvancedMath.add(10, 20) + "\n");
+print("AdvancedMath.power(2, 3) = " + AdvancedMath.power(2, 3) + "\n");
+
+class InstanceTest {
+    function testStaticCall() {
+        return MathUtils.add(100, 200);
+    }
+}
+
+let it = new InstanceTest();
+print("Instance calling static: " + it.testStaticCall() + "\n");
