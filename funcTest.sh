@@ -23,6 +23,7 @@ func_files=(
     "comment_examples.alang"
     "computedProps.alang"
     "defaultParamsExample.alang"
+    "doWhileExample.alang"
     "emptySemicolons.alang"
     "evalExample.alang"
     "example.alang"

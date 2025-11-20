@@ -60,7 +60,7 @@ ALang 是动态类型语言，但在内部通过 `ValueTag` 维护类型。
 - **promise**: 异步承诺 (`std::shared_ptr<PromiseState>`)。
 
 ### 2.3 类型检查 API
-- **`TYPE(x)`**: 返回变量 `x` 的类型名称字符串（如 `"string"`, `"number"`, `"array"` 等）。
+- **`typeof(x)`**: 返回变量 `x` 的类型名称字符串（如 `"string"`, `"number"`, `"array"` 等）。
 - **`len(x)`**: 获取字符串、数组或对象的长度。
 
 ---
@@ -76,7 +76,7 @@ ALang 提供了一组全局可用的内置函数：
 | `len` | `x` | 返回字符串字符数、数组元素数或对象键值对数。 |
 | `quote` | `str` | 将代码字符串解析为 Token 列表对象，包含 `apply()` 方法可重新执行。 |
 | `push` | `arr, ...values` | 向数组末尾追加元素，返回新长度。 |
-| `TYPE` | `x` | 返回值的类型名称。 |
+| `typeof` | `x` | 返回值的类型名称。 |
 | `eval` | `str` | 在子环境中执行 ALang 代码字符串，返回最后一个表达式的值。 |
 | `sleep` | `ms` | 异步休眠指定毫秒数，返回 Promise。 |
 | `keys` | `obj` | 返回对象所有键组成的数组。 |

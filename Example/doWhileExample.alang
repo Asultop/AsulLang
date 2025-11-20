@@ -1,0 +1,30 @@
+println("== Do-While Loop Example ==");
+
+let i = 0;
+do {
+    println("i = ", i);
+    i++;
+} while (i < 3);
+
+println("Loop finished. i = ", i);
+
+println("== Do-While with Break/Continue ==");
+let j = 0;
+do {
+    j++;
+    if (j == 2) {
+        println("Skipping 2");
+        continue;
+    }
+    if (j > 4) {
+        println("Breaking at ", j);
+        break;
+    }
+    println("j = ", j);
+} while (j < 10);
+
+println("== Do-While executes at least once ==");
+let k = 100;
+do {
+    println("This should print once. k = ", k);
+} while (false);

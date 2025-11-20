@@ -144,7 +144,7 @@ println("");
 println("== 异常处理：throw / try...catch ==");
 try {
     throw "错误信息: bad";
-    println("此语句不会执行");
+    println("此语句不会执行f");
 } catch (e) {
     println("捕获到异常: ${e}");
 }

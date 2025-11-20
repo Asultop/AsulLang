@@ -1,6 +1,6 @@
 let b : Int = 4;
-let c : TYPE(b.type()) = 2;
+let c : typeof(b.type()) = 2;
 println("b.type():", b.type());
 println("c.type():", c.type());
 let name = "114514";
-println("name.literalName():", name.literalName());
+println("name.literal():", name.literal());

@@ -50,7 +50,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From,
 	EndOfFile
 };
 
@@ -166,7 +166,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 		static const std::unordered_map<std::string, TokenType> keywords{
 			{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
 			{"function", TokenType::Function}, {"fn", TokenType::Function}, {"return", TokenType::Return},
-			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While},
+			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While}, {"do", TokenType::Do},
 			{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
 			{"switch", TokenType::Switch}, {"case", TokenType::Case}, {"default", TokenType::Default},
 			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
@@ -644,6 +644,7 @@ struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprP
 struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
 struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
+struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
 struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
@@ -982,7 +983,7 @@ private:
 		std::optional<std::string> type = std::nullopt;
 		ExprPtr typeExpr = nullptr;
 		if (match({TokenType::Colon})) {
-			// allow a non-assignment expression (e.g. TYPE(...)) as the type annotation
+			// allow a non-assignment expression (e.g. typeof(...)) as the type annotation
 			typeExpr = logicalOr();
 		}
 		ExprPtr init;
@@ -994,6 +995,7 @@ private:
 	StmtPtr statement() {
 		if (match({TokenType::If})) return ifStatement();
 		if (match({TokenType::While})) return whileStatement();
+		if (match({TokenType::Do})) return doWhileStatement();
 		if (match({TokenType::For})) return forStatement();
 		if (match({TokenType::ForEach})) return forEachStatement();
 		if (match({TokenType::Switch})) return switchStatement();
@@ -1130,6 +1132,16 @@ private:
 		consume(TokenType::RightParen, "Expect ')'");
 		auto body = statement();
 		return std::make_shared<WhileStmt>(cond, body);
+	}
+
+	StmtPtr doWhileStatement() {
+		auto body = statement();
+		consume(TokenType::While, "Expect 'while' after do-loop body");
+		consume(TokenType::LeftParen, "Expect '(' after 'while'");
+		auto cond = expression();
+		consume(TokenType::RightParen, "Expect ')' after condition");
+		consume(TokenType::Semicolon, "Expect ';' after do-while condition");
+		return std::make_shared<DoWhileStmt>(cond, body);
 	}
 
 	std::vector<StmtPtr> block() {
@@ -1767,7 +1779,7 @@ public:
 					};
 					return fn;
 				}
-				if (gp->name == "literalName") {
+				if (gp->name == "literal") {
 					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->closure = env;
 					std::string vname = ve->name;
 					fn->builtin = [vname](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ vname }; };
@@ -2352,6 +2364,14 @@ public:
 				catch (const ContinueSignal&) { /* continue loop */ }
 				catch (const BreakSignal&) { break; }
 			}
+			return;
+		}
+		if (auto dw = std::dynamic_pointer_cast<DoWhileStmt>(stmt)) {
+			do {
+				try { execute(dw->body); }
+				catch (const ContinueSignal&) { /* continue loop */ }
+				catch (const BreakSignal&) { break; }
+			} while (isTruthy(evaluate(dw->cond)));
 			return;
 		}
 		if (auto f = std::dynamic_pointer_cast<ForStmt>(stmt)) {
@@ -3499,11 +3519,11 @@ public:
 		};
 		globals->define("push", pushFn);
 
-		// TYPE(x): return a type-name string for x; useful in type expressions e.g. : TYPE(b.type())
+		// typeof(x): return a type-name string for x; useful in type expressions e.g. : typeof(b.type())
 		auto typeFn = std::make_shared<Function>();
 		typeFn->isBuiltin = true;
 		typeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> clos) -> Value {
-			if (args.size() != 1) throw std::runtime_error("TYPE expects 1 argument");
+			if (args.size() != 1) throw std::runtime_error("typeof expects 1 argument");
 			const Value& v = args[0];
 			if (auto ps = std::get_if<std::string>(&v)) return Value{ *ps };
 			if (auto po = std::get_if<std::shared_ptr<Object>>(&v)) {
@@ -3516,7 +3536,7 @@ public:
 			}
 			return Value{ typeOf(v) };
 		};
-		globals->define("TYPE", typeFn);
+		globals->define("typeof", typeFn);
 
 		// eval(str): evaluate ALang source in a child environment and return last-expression value or null
 		auto evalFn = std::make_shared<Function>();
