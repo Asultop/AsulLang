@@ -1,0 +1,41 @@
+// 正则表达式测试：std.regex
+
+println("=== 正则表达式测试 (std.regex) ===");
+
+// 1. test - 测试匹配
+println("\n== test 方法测试 ==");
+let re = new std.regex("hello");
+println("模式: hello");
+println("测试 'hello world': " + re.test("hello world"));
+println("测试 'hi world': " + re.test("hi world"));
+
+// 2. match - 捕获分组
+println("\n== match 方法测试 ==");
+let re2 = new std.regex("(\\d+)");
+println("模式: (\\d+)");
+let text = "abc 123 def";
+println("目标字符串: " + text);
+let m = re2.match(text);
+if (m) {
+    println("匹配结果: " + m[0]);
+    println("分组 1: " + m[1]);
+} else {
+    println("未匹配");
+}
+
+// 3. replace - 字符串替换
+println("\n== replace 方法测试 ==");
+let re3 = new std.regex("foo");
+let source = "foo bar foo";
+println("原字符串: " + source);
+println("将 'foo' 替换为 'baz': " + re3.replace(source, "baz"));
+
+// 4. 异常处理 - 无效模式
+println("\n== 异常处理测试 ==");
+try {
+    println("尝试创建无效正则: '('");
+    let reBad = new std.regex("(");
+    reBad.test("test");
+} catch (e) {
+    println("捕获到预期错误: " + e);
+}
