@@ -610,11 +610,11 @@ struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; int
 struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; int line{0}, column{1}, length{1}; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v, int l, int c0, int len): object(std::move(o)), index(std::move(i)), value(std::move(v)), line(l), column(c0), length(len){} };
 struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
 struct ObjectLiteralExpr : Expr {
-	struct Prop { bool computed; bool isSpread{false}; std::string name; ExprPtr keyExpr; ExprPtr value; };
+	struct Prop { bool computed; bool isSpread{false}; std::string name; ExprPtr keyExpr; ExprPtr value; int line{0}, column{1}, length{1}; };
 	std::vector<Prop> props;
 	explicit ObjectLiteralExpr(std::vector<Prop> p): props(std::move(p)){}
 };
-struct SpreadExpr : Expr { ExprPtr expr; explicit SpreadExpr(ExprPtr e): expr(std::move(e)){} };
+struct SpreadExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit SpreadExpr(ExprPtr e, int l=0, int c=1, int len=1): expr(std::move(e)), line(l), column(c), length(len){} };
 struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
 struct Param { 
 	std::string name; 
@@ -1529,8 +1529,9 @@ private:
 				do {
 					if (match({TokenType::Ellipsis})) {
 						// spread element
+						auto spreadTok = previous();
 						auto inner = expression();
-						elems.push_back(std::make_shared<SpreadExpr>(inner));
+						elems.push_back(std::make_shared<SpreadExpr>(inner, spreadTok.line, spreadTok.column, spreadTok.length));
 					} else {
 						elems.push_back(expression());
 					}
@@ -1546,8 +1547,10 @@ private:
 					ObjectLiteralExpr::Prop p{};
 
 					if (match({TokenType::Ellipsis})) {
+						auto spreadTok = previous();
 						p.isSpread = true;
 						p.value = expression();
+						p.line = spreadTok.line; p.column = spreadTok.column; p.length = spreadTok.length;
 					} else {
 						if (match({TokenType::Identifier})) { p.computed = false; p.name = previous().lexeme; }
 						else if (match({TokenType::String})) { p.computed = false; p.name = previous().lexeme; }
@@ -1807,7 +1810,7 @@ public:
 						if (!*a) continue;
 						for (auto &it : **a) av->push_back(it);
 					} else {
-						std::ostringstream oss; oss << "Spread element is not an array"; throw std::runtime_error(oss.str());
+						std::ostringstream oss; oss << "Spread element is not an array at line " << sp->line << ", column " << sp->column << ", length " << sp->length; throw std::runtime_error(oss.str());
 					}
 				} else {
 					av->push_back(evaluate(e));
@@ -1826,7 +1829,7 @@ public:
 							(*ov)[kv.first] = kv.second;
 						}
 					} else {
-						std::ostringstream oss; oss << "Spread value is not an object"; throw std::runtime_error(oss.str());
+						std::ostringstream oss; oss << "Spread value is not an object at line " << pr.line << ", column " << pr.column << ", length " << pr.length; throw std::runtime_error(oss.str());
 					}
 				} else {
 					std::string key;
@@ -1865,7 +1868,11 @@ public:
 				}
 			}
 			Value o = evaluate(gp->object);
-			return getProperty(o, gp->name);
+			try {
+				return getProperty(o, gp->name);
+			} catch (const std::exception& ex) {
+				std::ostringstream oss; oss << ex.what() << " at line " << gp->line << ", column " << gp->column << ", length " << gp->length; throw std::runtime_error(oss.str());
+			}
 		}
 		if (auto ix = std::dynamic_pointer_cast<IndexExpr>(expr)) {
 			Value o = evaluate(ix->object);
@@ -5011,7 +5018,13 @@ static void printErrorWithContext(const std::string& src, const std::string& msg
 		std::string codeLine = colorize("code", before, "LIGHT_GRAY")
 							 + colorize("token", mid, "RED")
 							 + colorize("code", after, "LIGHT_GRAY");
-		std::string caretStr = colorize("caret", std::string(width, '^'), "RED");
+		// Build caret: ^~~~ style
+		std::string caretStr;
+		if (width == 1) {
+			caretStr = colorize("caret", "^", "RED");
+		} else {
+			caretStr = colorize("caret", "^" + std::string(width - 1, '~'), "RED");
+		}
 		// line prefix (colored): optional filename + "line N: "
 		std::string filePrefix;
 		if (!filename.empty()) {
