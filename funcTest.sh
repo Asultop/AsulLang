@@ -74,6 +74,8 @@ func_files=(
     "stackExample.alang"
     "priorityQueueExample.alang"
     "binarySearchExample.alang"
+    "string_methods_extended.alang"
+    "encoding_test.alang"
 )
 
 # Counter for passed/failed tests

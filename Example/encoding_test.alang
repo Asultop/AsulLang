@@ -1,0 +1,15 @@
+import std.encoding;
+
+let s = "Hello World";
+let b64 = std.encoding.base64.encode(s);
+println("Base64 encode: " + b64);
+println("Base64 decode: " + std.encoding.base64.decode(b64));
+
+let hex = std.encoding.hex.encode(s);
+println("Hex encode: " + hex);
+println("Hex decode: " + std.encoding.hex.decode(hex));
+
+let url = "Hello World!";
+let encodedUrl = std.encoding.url.encode(url);
+println("URL encode: " + encodedUrl);
+println("URL decode: " + std.encoding.url.decode(encodedUrl));

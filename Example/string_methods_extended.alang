@@ -1,0 +1,19 @@
+// Test extended string methods
+import std.string;
+let s = "  Hello World  ";
+println("Original: '" + s + "'");
+println("trimLeft: '" + s.trimLeft() + "'");
+println("trimRight: '" + s.trimRight() + "'");
+
+let s2 = "Hello World Hello";
+println("lastIndexOf 'Hello': " + s2.lastIndexOf("Hello"));
+println("lastIndexOf 'Hello' before 10: " + s2.lastIndexOf("Hello", 10));
+
+let s3 = "0123456789";
+println("slice(2, 5): " + s3.slice(2, 5));
+println("slice(-3): " + s3.slice(-3));
+println("slice(2, -2): " + s3.slice(2, -2));
+
+let s4 = "5";
+println("padStart(3, '0'): " + s4.padStart(3, "0"));
+println("padEnd(3, '0'): " + s4.padEnd(3, "0"));

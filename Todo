@@ -1,13 +1,13 @@
 # ALang 标准库 - 缺失功能与待办事项
 
 ## 1. 字符串处理 (std.string)
-- [ ] **大小写转换**: `toUpperCase()`, `toLowerCase()`
-- [ ] **去除空白**: `trim()`, `trimLeft()`, `trimRight()`
-- [ ] **分割/合并**: `split(delimiter)`, `join(separator)` (目前 Array 有 `join`，但缺失 `split`)
-- [ ] **搜索**: `indexOf(substr)`, `lastIndexOf(substr)`, `startsWith(prefix)`, `endsWith(suffix)`, `includes(substr)`
-- [ ] **子串**: `substring(start, end)`, `slice(start, end)`
-- [ ] **填充**: `padStart(len, char)`, `padEnd(len, char)`
-- [ ] **编码**: `std.encoding.base64`, `std.encoding.hex`, `std.encoding.url`
+- [x] **大小写转换**: `toUpperCase()`, `toLowerCase()`
+- [x] **去除空白**: `trim()`, `trimLeft()`, `trimRight()`
+- [x] **分割/合并**: `split(delimiter)`, `join(separator)` (目前 Array 有 `join`，但缺失 `split`)
+- [x] **搜索**: `indexOf(substr)`, `lastIndexOf(substr)`, `startsWith(prefix)`, `endsWith(suffix)`, `includes(substr)`
+- [x] **子串**: `substring(start, end)`, `slice(start, end)`
+- [x] **填充**: `padStart(len, char)`, `padEnd(len, char)`
+- [x] **编码**: `std.encoding.base64`, `std.encoding.hex`, `std.encoding.url`
 
 ## 2. 集合与算法 (std.collections)
 - [ ] **排序**: 数组的 `sort(comparator)` (目前有基础排序，需要稳定排序/自定义比较器)

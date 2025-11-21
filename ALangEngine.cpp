@@ -3518,6 +3518,22 @@ public:
 					return Value{ s.substr(start, end - start) };
 				}; return fn;
 			}
+			if (name == "trimLeft") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+					size_t start = 0;
+					while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) start++;
+					return Value{ s.substr(start) };
+				}; return fn;
+			}
+			if (name == "trimRight") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+					size_t end = s.size();
+					while (end > 0 && std::isspace(static_cast<unsigned char>(s[end-1]))) end--;
+					return Value{ s.substr(0, end) };
+				}; return fn;
+			}
 			if (name == "toLowerCase") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { std::string out=s; for (auto &c: out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return Value{out}; }; return fn; }
 			if (name == "toUpperCase") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { std::string out=s; for (auto &c: out) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return Value{out}; }; return fn; }
 			if (name == "startsWith") { auto s=*ps; auto fn=std::make_shared<Function>(); fn->isBuiltin=true; fn->builtin=[s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("startsWith expects 1 string arg"); std::string pre=std::get<std::string>(args[0]); return Value{ s.rfind(pre,0)==0 }; }; return fn; }
@@ -3581,6 +3597,69 @@ public:
 					return Value{ out };
 				};
 				return fn;
+			}
+			if (name == "lastIndexOf") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("lastIndexOf expects search string");
+					std::string search = std::get<std::string>(args[0]);
+					size_t pos = std::string::npos;
+					if (args.size() >= 2) {
+						double d = getNumber(args[1], "lastIndexOf position");
+						if (d >= 0) pos = static_cast<size_t>(d);
+					}
+					auto found = s.rfind(search, pos);
+					if (found == std::string::npos) return Value{ -1.0 };
+					return Value{ static_cast<double>(found) };
+				}; return fn;
+			}
+			if (name == "slice") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					double start = 0, end = static_cast<double>(s.size());
+					if (args.size() >= 1) start = getNumber(args[0], "slice start");
+					if (args.size() >= 2) end = getNumber(args[1], "slice end");
+					if (start < 0) start += s.size();
+					if (end < 0) end += s.size();
+					if (start < 0) start = 0;
+					if (end < 0) end = 0;
+					size_t si = static_cast<size_t>(start);
+					size_t ei = static_cast<size_t>(end);
+					if (si > s.size()) si = s.size();
+					if (ei > s.size()) ei = s.size();
+					if (ei < si) return Value{ std::string("") };
+					return Value{ s.substr(si, ei - si) };
+				}; return fn;
+			}
+			if (name == "padStart") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 1) throw std::runtime_error("padStart expects target length");
+					size_t targetLen = static_cast<size_t>(std::max(0.0, getNumber(args[0], "padStart length")));
+					if (s.size() >= targetLen) return Value{s};
+					std::string pad = " ";
+					if (args.size() >= 2) pad = toString(args[1]);
+					if (pad.empty()) return Value{s};
+					std::string out;
+					size_t padLen = targetLen - s.size();
+					while (out.size() < padLen) out += pad;
+					out = out.substr(0, padLen);
+					return Value{ out + s };
+				}; return fn;
+			}
+			if (name == "padEnd") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() < 1) throw std::runtime_error("padEnd expects target length");
+					size_t targetLen = static_cast<size_t>(std::max(0.0, getNumber(args[0], "padEnd length")));
+					if (s.size() >= targetLen) return Value{s};
+					std::string pad = " ";
+					if (args.size() >= 2) pad = toString(args[1]);
+					if (pad.empty()) return Value{s};
+					std::string out = s;
+					while (out.size() < targetLen) out += pad;
+					return Value{ out.substr(0, targetLen) };
+				}; return fn;
 			}
 			return Value{std::string("undefined")};
 		}
@@ -3760,6 +3839,134 @@ public:
 		// Register std.io.fileSystem as a package so it can be imported directly
 		// It will also be available as std.io.fileSystem due to ensurePackage logic
 		auto fsPkg = ensurePackage("std.io.fileSystem");
+
+		// Encoding Package (std.encoding)
+		auto encPkg = ensurePackage("std.encoding");
+		
+		// Base64
+		auto base64Obj = std::make_shared<Object>();
+		(*encPkg)["base64"] = Value{base64Obj};
+		
+		// base64.encode(str)
+		auto b64enc = std::make_shared<Function>(); b64enc->isBuiltin = true;
+		b64enc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("base64.encode expects string");
+			std::string in = toString(args[0]);
+			static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+			std::string out;
+			int val = 0, valb = -6;
+			for (unsigned char c : in) {
+				val = (val << 8) + c;
+				valb += 8;
+				while (valb >= 0) {
+					out.push_back(chars[(val >> valb) & 0x3F]);
+					valb -= 6;
+				}
+			}
+			if (valb > -6) out.push_back(chars[((val << 8) >> (valb + 8)) & 0x3F]);
+			while (out.size() % 4) out.push_back('=');
+			return Value{out};
+		};
+		(*base64Obj)["encode"] = Value{b64enc};
+
+		// base64.decode(str)
+		auto b64dec = std::make_shared<Function>(); b64dec->isBuiltin = true;
+		b64dec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("base64.decode expects string");
+			std::string in = toString(args[0]);
+			static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+			std::vector<int> T(256, -1);
+			for (int i=0; i<64; i++) T[chars[i]] = i;
+			
+			std::string out;
+			int val = 0, valb = -8;
+			for (unsigned char c : in) {
+				if (T[c] == -1) break;
+				val = (val << 6) + T[c];
+				valb += 6;
+				if (valb >= 0) {
+					out.push_back(char((val >> valb) & 0xFF));
+					valb -= 8;
+				}
+			}
+			return Value{out};
+		};
+		(*base64Obj)["decode"] = Value{b64dec};
+
+		// Hex
+		auto hexObj = std::make_shared<Object>();
+		(*encPkg)["hex"] = Value{hexObj};
+		
+		// hex.encode(str)
+		auto hexenc = std::make_shared<Function>(); hexenc->isBuiltin = true;
+		hexenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("hex.encode expects string");
+			std::string in = toString(args[0]);
+			std::ostringstream oss;
+			for (unsigned char c : in) oss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+			return Value{oss.str()};
+		};
+		(*hexObj)["encode"] = Value{hexenc};
+		
+		// hex.decode(str)
+		auto hexdec = std::make_shared<Function>(); hexdec->isBuiltin = true;
+		hexdec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("hex.decode expects string");
+			std::string in = toString(args[0]);
+			if (in.size() % 2 != 0) throw std::runtime_error("Invalid hex string length");
+			std::string out;
+			for (size_t i=0; i<in.size(); i+=2) {
+				std::string byteStr = in.substr(i, 2);
+				char c = (char)strtol(byteStr.c_str(), nullptr, 16);
+				out.push_back(c);
+			}
+			return Value{out};
+		};
+		(*hexObj)["decode"] = Value{hexdec};
+
+		// URL
+		auto urlObj = std::make_shared<Object>();
+		(*encPkg)["url"] = Value{urlObj};
+		
+		// url.encode(str)
+		auto urlenc = std::make_shared<Function>(); urlenc->isBuiltin = true;
+		urlenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("url.encode expects string");
+			std::string in = toString(args[0]);
+			std::ostringstream oss;
+			for (unsigned char c : in) {
+				if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') oss << c;
+				else oss << '%' << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+			}
+			return Value{oss.str()};
+		};
+		(*urlObj)["encode"] = Value{urlenc};
+		
+		// url.decode(str)
+		auto urldec = std::make_shared<Function>(); urldec->isBuiltin = true;
+		urldec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("url.decode expects string");
+			std::string in = toString(args[0]);
+			std::string out;
+			for (size_t i=0; i<in.size(); ++i) {
+				if (in[i] == '%') {
+					if (i + 2 < in.size()) {
+						std::string hex = in.substr(i+1, 2);
+						char c = (char)strtol(hex.c_str(), nullptr, 16);
+						out.push_back(c);
+						i += 2;
+					} else {
+						out.push_back('%');
+					}
+				} else if (in[i] == '+') {
+					out.push_back(' ');
+				} else {
+					out.push_back(in[i]);
+				}
+			}
+			return Value{out};
+		};
+		(*urlObj)["decode"] = Value{urldec};
 
 		// Network Package (std.network)
 		registerLazyPackage("std.network", [](std::shared_ptr<Object> netPkg) {
