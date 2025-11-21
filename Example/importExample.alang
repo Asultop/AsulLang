@@ -47,4 +47,5 @@ try {
 } catch (e) {
     println("PASS: helper class is hidden");
 }
-import "Module/math_utils.alang".hiddenNotExported;
+from "Module/math_utils.alang" import hiddenNotExported;
+println("hiddenNotExported(): " + hiddenNotExported());

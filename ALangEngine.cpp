@@ -777,7 +777,38 @@ private:
 	StmtPtr importDeclaration(bool isFrom) {
 		auto imp = std::make_shared<ImportStmt>();
 		if (isFrom) {
+			// Support both: from Package import name | from "file" import name
+			if (match({TokenType::String})) {
+				// from "file" import symbol | from "file" import (a b ...)
+				Token t = previous();
+				auto filePath = t.lexeme;
+				consume(TokenType::Import, "Expect 'import' after file path");
+				if (match({TokenType::LeftParen})) {
+					while (!check(TokenType::RightParen) && !isAtEnd()) {
+						auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+						ImportStmt::Entry e; e.isFile = true; e.filePath = filePath; e.symbol = nameTok.lexeme; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+						if (match({TokenType::As})) {
+							e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+						}
+						imp->entries.push_back(e);
+						(void)match({TokenType::Comma});
+					}
+					consume(TokenType::RightParen, "Expect ')' after import list");
+					consume(TokenType::Semicolon, "Expect ';' after import statement");
+					return imp;
+				} else {
+					auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.isFile = true; e.filePath = filePath; e.symbol = nameTok.lexeme; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
+					consume(TokenType::Semicolon, "Expect ';' after import statement");
+					return imp;
+				}
+			}
 			// from Package import name | from Package import (name1 name2 ...)
+			// fallthrough to existing package handling
 			auto pkgParts = parseQualifiedIdentifiers("Expect package name after 'from'");
 			auto pkg = joinIdentifiers(pkgParts, 0, pkgParts.size());
 			consume(TokenType::Import, "Expect 'import' after package name");
@@ -2498,7 +2529,17 @@ public:
 				if (ent.isFile) {
 					try {
 						auto modObj = importFilePath(ent.filePath);
-						if (ent.alias.has_value()) {
+						// If a specific symbol was requested (from "file" import name), bind that symbol
+						if (!ent.symbol.empty()) {
+							auto fit = modObj->find(ent.symbol);
+							if (fit == modObj->end()) {
+								std::ostringstream oss; oss << "Module '" << ent.filePath << "' has no symbol '" << ent.symbol << "'";
+								oss << " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
+								throw std::runtime_error(oss.str());
+							}
+							std::string varName = ent.alias.has_value() ? ent.alias.value() : ent.symbol;
+							env->define(varName, fit->second);
+						} else if (ent.alias.has_value()) {
 							// import "file" as alias
 							env->define(ent.alias.value(), Value{modObj});
 						} else {
