@@ -1,0 +1,43 @@
+import std.io;
+import std.time;
+
+var println = std.io.println;
+
+println("=== 时区支持测试 ===");
+
+// 1. Test Date.format with timezone
+var now = std.time.now();
+println("当前时间 (UTC): " + now.format("%Y-%m-%d %H:%M:%S"));
+
+var nyTime = now.format("%Y-%m-%d %H:%M:%S", "America/New_York");
+println("纽约时间: " + nyTime);
+
+var tokyoTime = now.format("%Y-%m-%d %H:%M:%S", "Asia/Tokyo");
+println("东京时间: " + tokyoTime);
+
+// 2. Test std.time.parse with timezone
+var dateStr = "2023-12-25 10:00:00";
+var fmt = "%Y-%m-%d %H:%M:%S";
+
+// Parse as UTC (default)
+var utcDate = std.time.parse(dateStr, fmt);
+println("解析 '" + dateStr + "' (UTC): " + utcDate.toISO());
+
+// Parse as New York time
+var nyDate = std.time.parse(dateStr, fmt, "America/New_York");
+println("解析 '" + dateStr + "' (纽约): " + nyDate.toISO());
+
+// Verify difference (NY is UTC-5 in winter)
+// 10:00 NY is 15:00 UTC. 10:00 UTC is 10:00 UTC.
+// So nyDate (15:00 UTC) should be greater than utcDate (10:00 UTC) by 5 hours.
+var diff = nyDate - utcDate;
+println("差异 (纽约 - UTC): " + diff.milliseconds + " ms");
+
+// 5 hours = 5 * 60 * 60 * 1000 = 18000000 ms
+if (diff.milliseconds == 18000000) {
+    println("时区解析验证: 成功");
+} else {
+    println("时区解析验证: 失败 (预期 18000000, 实际 " + diff.milliseconds + ")");
+}
+
+println("=== 测试完成 ===");

@@ -19,7 +19,7 @@
 ## 3. 日期与时间 (std.time)
 - [x] **格式化**: `strftime` 风格格式化 (例如 `format("YYYY-MM-DD")`)
 - [x] **解析**: `parse(dateString, formatString)`
-- [ ] **时区**: 存在基础 UTC/Local 支持，但可能缺失完整的 TZDB 支持
+- [x] **时区**: 存在基础 UTC/Local 支持，但可能缺失完整的 TZDB 支持
 - [x] **时间段**: 用于时间运算的 `Duration` 类 (例如 `date + duration`)
 - [x] **高精度计时器**: 用于基准测试的 `performance.now()`
 

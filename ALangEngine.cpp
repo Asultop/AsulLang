@@ -39,6 +39,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+// Global mutex for timezone operations (setenv/tzset are not thread-safe)
+std::mutex tzMutex;
+
 namespace {
 
 // ----------- Lexer -----------
@@ -4700,20 +4703,42 @@ public:
 			dateClass->methods["getMillisecond"] = makeFieldGetter("millisecond");
 			dateClass->methods["getEpochMillis"] = makeFieldGetter("epochMillis");
 
-			// format(fmt)
+			// format(fmt, [timezone])
 			auto formatFn = std::make_shared<Function>(); formatFn->isBuiltin = true;
 			formatFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("Date.format expects 1 argument (format string)");
+				if (args.size() < 1 || args.size() > 2) throw std::runtime_error("Date.format expects 1 or 2 arguments (format string, [timezone])");
 				std::string fmt = toString(args[0]);
+				std::string tzName;
+				if (args.size() == 2) tzName = toString(args[1]);
+
 				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 				double ms = getNumber(inst->fields["epochMillis"], "epochMillis");
 				time_t tt = (time_t)(ms / 1000.0);
 				std::tm tmVal{};
+
+				if (tzName.empty() || tzName == "UTC" || tzName == "Z") {
+					// Default to UTC if no timezone specified or explicitly UTC
 #ifdef _WIN32
-				gmtime_s(&tmVal, &tt);
+					gmtime_s(&tmVal, &tt);
 #else
-				gmtime_r(&tt, &tmVal);
+					gmtime_r(&tt, &tmVal);
 #endif
+				} else {
+					// Use timezone
+					std::lock_guard<std::mutex> lock(tzMutex);
+					char* oldTz = getenv("TZ");
+					std::string oldTzStr = oldTz ? oldTz : "";
+					
+					setenv("TZ", tzName.c_str(), 1);
+					tzset();
+					
+					localtime_r(&tt, &tmVal);
+					
+					if (oldTz) setenv("TZ", oldTzStr.c_str(), 1);
+					else unsetenv("TZ");
+					tzset();
+				}
+
 				char buf[128];
 				std::strftime(buf, sizeof(buf), fmt.c_str(), &tmVal);
 				return Value{ std::string(buf) };
@@ -4852,12 +4877,14 @@ public:
 			return Value{ inst };
 		}; (*timePkg)["dateFromEpoch"] = Value{ dateFromEpochFn };
 
-		// parse(dateStr, fmt)
+		// parse(dateStr, fmt, [timezone])
 		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true;
 		parseFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (args.size() != 2) throw std::runtime_error("parse expects 2 arguments (dateString, formatString)");
+			if (args.size() < 2 || args.size() > 3) throw std::runtime_error("parse expects 2 or 3 arguments (dateString, formatString, [timezone])");
 			std::string dateStr = toString(args[0]);
 			std::string fmt = toString(args[1]);
+			std::string tzName;
+			if (args.size() == 3) tzName = toString(args[2]);
 			
 			std::tm tmVal{};
 			tmVal.tm_isdst = -1;
@@ -4865,11 +4892,30 @@ public:
 			char* res = strptime(dateStr.c_str(), fmt.c_str(), &tmVal);
 			if (res == nullptr) throw std::runtime_error("Date parse failed");
 			
-			// Use timegm to interpret as UTC (GNU extension, usually available on Linux)
-			time_t tt = timegm(&tmVal);
-			if (tt == -1) throw std::runtime_error("Date parse failed (timegm)");
+			double ms = 0;
 			
-			double ms = (double)tt * 1000.0;
+			if (tzName.empty() || tzName == "UTC" || tzName == "Z") {
+				// Use timegm to interpret as UTC (GNU extension, usually available on Linux)
+				time_t tt = timegm(&tmVal);
+				if (tt == -1) throw std::runtime_error("Date parse failed (timegm)");
+				ms = (double)tt * 1000.0;
+			} else {
+				std::lock_guard<std::mutex> lock(tzMutex);
+				char* oldTz = getenv("TZ");
+				std::string oldTzStr = oldTz ? oldTz : "";
+				
+				setenv("TZ", tzName.c_str(), 1);
+				tzset();
+				
+				time_t tt = mktime(&tmVal); // mktime interprets tm as local time in current TZ
+				
+				if (oldTz) setenv("TZ", oldTzStr.c_str(), 1);
+				else unsetenv("TZ");
+				tzset();
+				
+				if (tt == -1) throw std::runtime_error("Date parse failed (mktime)");
+				ms = (double)tt * 1000.0;
+			}
 			
 			auto timePkgLocal = ensurePackage("std.time");
 			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
