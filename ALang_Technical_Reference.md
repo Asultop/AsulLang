@@ -423,27 +423,67 @@ println(arr.join("-"));                             // "5-4-3-2-1"
 
 ## 5. 模块系统 (Module System)
 
-ALang 支持多种导入语法来组织代码。
+ALang 提供了灵活的模块化机制，支持包（Package）和文件模块（File Module）。
 
-### 导入语法
+### 5.1 导出 (Export)
+在模块文件中，可以通过以下方式导出成员供外部使用：
+
+1. **显式导出 (`export`)**:
+   使用 `export` 关键字修饰声明。
+   ```alang
+   export var Version = "1.0";
+   export function add(a, b) { return a + b; }
+   export class User { ... }
+   ```
+
+2. **隐式导出 (Implicit Export)**:
+   首字母大写的变量、函数或类会自动导出，无需 `export` 关键字。
+   ```alang
+   var PI = 3.14;       // 导出 (大写开头)
+   function Log() { ... } // 导出 (大写开头)
+   class Config { ... }   // 导出 (大写开头)
+   ```
+
+3. **私有成员**:
+   未标记 `export` 且首字母小写的成员仅在模块内部可见。
+   ```alang
+   var internal = "secret"; // 私有
+   function helper() { ... } // 私有
+   ```
+
+### 5.2 导入 (Import)
+
+#### 文件导入
+1. **导入并合并**:
+   将目标模块导出的所有符号直接合并到当前作用域。
+   ```alang
+   import "path/to/module.alang";
+   println(Version); // 直接访问
+   ```
+
+2. **导入为别名 (Namespace Import)**:
+   将目标模块导出的符号封装到一个对象中。
+   ```alang
+   import "path/to/module.alang" as mod;
+   println(mod.Version); // 通过别名访问
+   ```
+
+#### 包导入
 1. **从包导入指定成员**:
    ```alang
-   from Package import name;
-   from Package import (name1, name2);
+   from std.math import abs;
+   from std.math import (pi, sin);
    ```
+
 2. **导入包成员 (Dot 语法)**:
    ```alang
-   import Package.member;
-   import Package.(member1, member2);
+   import std.math.pi;
+   import std.math.(abs, max);
    ```
+
 3. **导入整个包**:
    ```alang
-   import Package.*;
-   ```
-4. **文件导入**:
-   ```alang
-   import "path/to/file.alang";
-   import ("file1.alang", "file2.alang");
+   import std.math.*;
    ```
 
 ---

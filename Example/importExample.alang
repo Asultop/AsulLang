@@ -1,20 +1,49 @@
-// == 导入系统示例 ==
+// == Import System Example ==
+// Demonstrates importing from standard packages and local files.
 
-// 1) 导入语法：import 包名.(成员1, 成员2, ...)
-import std.math.(pi, abs);
-println("pi:", pi, ", abs(-3):", abs(-3));
-
-// 2) 导入语法：import (包名.成员1, 包名.成员2, ...)
-import (
-    std.math.pi,
-    std.math.abs
-);
-println("再次输出 pi:", pi, ", abs(2):", abs(2));
-
-// 3) 导入语法：from 包名 import 单个成员 | (成员1, 成员2)
-from std.math import abs;
-println("abs(5):", abs(5));
-
-// 4) 导入语法：import 包名.*（通配符导入，导入包内所有成员）
+// 1. Standard Package Import
 import std.math.*;
-println("通配符导入 -> pi:", pi, ", abs(-7):", abs(-7));
+println("Math.pi: " + pi);
+println("Math.abs(-5): " + abs(-5));
+
+// 2. File Import with Alias
+// We import the local module 'math_utils.alang' as 'utils'
+// Note: The path is relative to the entry script or configured import base
+import "Module/math_utils.alang" as utils;
+
+println("--- File Import (with alias) ---");
+println("Version: " + utils.Version);
+println("PI_APPROX: " + utils.PI_APPROX); // Implicitly exported
+println("Add(10, 20): " + utils.add(10, 20));
+println("Multiply(3, 4): " + utils.Multiply(3, 4)); // Implicitly exported
+
+let calc = new utils.Calculator();
+println("Calculator: " + calc.calc(5));
+
+let solver = new utils.Solver();
+println("Solver: " + solver.solve());
+
+// 3. File Import (Merge symbols)
+// This brings exported symbols directly into current scope
+import "Module/math_utils.alang";
+
+println("--- File Import (merge) ---");
+println("Direct access to Version: " + Version);
+println("Direct access to Multiply: " + Multiply(5, 5));
+
+// 4. Visibility Check
+println("--- Visibility Check ---");
+// internalSecret is not exported (lowercase, no export keyword)
+if (utils.internalSecret == null) {
+    println("PASS: internalSecret is hidden");
+} else {
+    println("FAIL: internalSecret is visible!");
+}
+
+// helper class is not exported
+try {
+    let h = new utils.helper();
+    println("FAIL: helper class should be hidden");
+} catch (e) {
+    println("PASS: helper class is hidden");
+}

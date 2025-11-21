@@ -59,7 +59,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, As, Static,
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, As, Export, Static,
 	EndOfFile
 };
 
@@ -185,7 +185,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 			{"go", TokenType::Go},
 			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
 			{"interface", TokenType::Interface},
-			{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As},
+			{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
 			{"static", TokenType::Static},
 		};
 		auto it = keywords.find(text);
@@ -519,6 +519,8 @@ struct Environment : std::enable_shared_from_this<Environment> {
 	std::unordered_map<std::string, Value> values;
 	// declared types for variables (optional): maps variable name -> declared type name
 	std::unordered_map<std::string, std::string> declaredTypes;
+	// Explicitly exported symbols in this environment (for module scopes)
+	std::unordered_set<std::string> explicitExports;
 
 	explicit Environment(std::shared_ptr<Environment> p = nullptr) : parent(std::move(p)) {}
 
@@ -634,16 +636,16 @@ struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; explicit F
 
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
-struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)){} };
+struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; bool isExported{false}; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i, bool exported=false): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)), isExported(exported){} };
 struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
 struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; bool isStatic{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt, bool s=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)), isStatic(s){} };
-struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)), isStatic(s), isExported(exported){} };
+struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
-struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; };
+struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; bool isExported{false}; };
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
@@ -751,14 +753,19 @@ private:
 	}
 
 	StmtPtr declaration() {
-		if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true); }
-		if (match({TokenType::Function})) return functionDecl(false);
-		if (match({TokenType::Class})) return classDeclaration();
-		if (match({TokenType::Extends})) return extendsDeclaration();
-		if (match({TokenType::Interface})) return interfaceDeclaration();
+		bool isExported = false;
+		if (match({TokenType::Export})) {
+			isExported = true;
+		}
+		if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true, isExported); }
+		if (match({TokenType::Function})) return functionDecl(false, isExported);
+		if (match({TokenType::Class})) return classDeclaration(isExported);
+		if (match({TokenType::Extends})) return extendsDeclaration(); // extends cannot be exported
+		if (match({TokenType::Interface})) return interfaceDeclaration(isExported);
 		if (match({TokenType::Import})) return importDeclaration(false);
 		if (match({TokenType::From})) return importDeclaration(true);
-		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration();
+		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration(isExported);
+		if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
 		return statement();
 	}
 
@@ -817,10 +824,14 @@ private:
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
-		// Support: import "file";  OR keep existing package import forms
+		// Support: import "file" [as alias];  OR keep existing package import forms
 		if (match({TokenType::String})) {
 			Token t = previous();
-			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
+			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
@@ -876,10 +887,10 @@ private:
 			return imp;
 		}
 	}
-	StmtPtr interfaceDeclaration() {
+	StmtPtr interfaceDeclaration(bool isExported = false) {
 		// 语法：interface Name ; | interface Name { function sig(...); ... }
 		auto nameTok = consume(TokenType::Identifier, "Expect interface name");
-		auto st = std::make_shared<InterfaceStmt>(); st->name = nameTok.lexeme;
+		auto st = std::make_shared<InterfaceStmt>(); st->name = nameTok.lexeme; st->isExported = isExported;
 		if (match({TokenType::Semicolon})) return st;
 		consume(TokenType::LeftBrace, "Expect '{' before interface body");
 		while (!check(TokenType::RightBrace) && !isAtEnd()) {
@@ -913,10 +924,11 @@ private:
 		return st;
 	}
 
-	StmtPtr classDeclaration() {
+	StmtPtr classDeclaration(bool isExported = false) {
 		auto nameTok = consume(TokenType::Identifier, "Expect class name");
 		auto cls = std::make_shared<ClassStmt>();
 		cls->name = nameTok.lexeme;
+		cls->isExported = isExported;
 		// 支持三种：class Name ; | class Name <- Supers | class Name [<- Supers] { ... }
 		if (match({TokenType::Semicolon})) return cls; // 空类声明
 		if (match({TokenType::LeftArrow}) || match({TokenType::Extends})) {
@@ -991,7 +1003,7 @@ private:
 		return ext;
 	}
 
-	StmtPtr functionDecl(bool isAsync) {
+	StmtPtr functionDecl(bool isAsync, bool isExported = false) {
 		auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
 		std::vector<Param> params;
@@ -1041,10 +1053,10 @@ private:
 		std::optional<std::string> retType = std::nullopt;
 		if (match({TokenType::Colon, TokenType::Arrow})) retType = consume(TokenType::Identifier, "Expect return type name after ':' or '->'").lexeme;
 		auto body = statement();
-		return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType);
+		return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType, false, isExported);
 	}
 
-	StmtPtr varDeclaration() {
+	StmtPtr varDeclaration(bool isExported = false) {
 		auto name = consume(TokenType::Identifier, "Expect variable name").lexeme;
 		std::optional<std::string> type = std::nullopt;
 		ExprPtr typeExpr = nullptr;
@@ -1055,7 +1067,7 @@ private:
 		ExprPtr init;
 		if (match({TokenType::Equal})) init = expression();
 		consume(TokenType::Semicolon, "Expect ';' after variable declaration");
-		return std::make_shared<VarDecl>(name, type, typeExpr, init);
+		return std::make_shared<VarDecl>(name, type, typeExpr, init, isExported);
 	}
 
 	StmtPtr statement() {
@@ -1703,6 +1715,8 @@ public:
 	Interpreter() { globals = std::make_shared<Environment>(); env = globals; installBuiltins(); }
 
 	void registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value);
+	std::shared_ptr<Object> ensurePackage(const std::string& name);
+	void importPackageSymbols(const std::string& name);
 
 	void setImportBaseDir(const std::string& base) {
 		try { importBaseDir = std::filesystem::path(base); }
@@ -1733,8 +1747,8 @@ public:
 		}
 	}
 
-	// Import external file: resolve path, read, parse and execute in isolated env, then merge symbols
-	void importFilePath(const std::string& rawPath) {
+	// Import external file: resolve path, read, parse and execute in isolated env, then return module object
+	std::shared_ptr<Object> importFilePath(const std::string& rawPath) {
 		// capture context for error pretty-printing + import chain
 		std::string ctxCode; std::string ctxFile;
 		try {
@@ -1765,7 +1779,7 @@ public:
 			}
 			std::string key = finalPath.string();
 			ctxFile = key;
-			if (importedFiles.find(key) != importedFiles.end()) return; // already imported
+			if (importedModules.find(key) != importedModules.end()) return importedModules[key];
 
 			// Read file content
 			std::ifstream in(key, std::ios::in | std::ios::binary);
@@ -1789,14 +1803,22 @@ public:
 			// Run
 			executeBlock(stmts, fileEnv);
 
-			// Merge symbols into current env (similar to wildcard import)
+			// Create module object with exported symbols
+			auto modObj = std::make_shared<Object>();
+			// Rule: Import only if (Explicitly Exported) OR (Starts with Uppercase)
 			for (const auto& kv : fileEnv->values) {
-				// Bring into the current environment
-				env->define(kv.first, kv.second);
+				const std::string& name = kv.first;
+				bool isExplicit = fileEnv->explicitExports.find(name) != fileEnv->explicitExports.end();
+				bool isImplicit = !name.empty() && std::isupper(static_cast<unsigned char>(name[0]));
+				
+				if (isExplicit || isImplicit) {
+					(*modObj)[name] = kv.second;
+				}
 			}
 
-			// Mark imported
-			importedFiles.insert(key);
+			// Cache and return
+			importedModules[key] = modObj;
+			return modObj;
 		} catch (const ExceptionSignal& ex) {
 			// Record error source for upper-level pretty printing
 			lastErrorSource = ctxCode; lastErrorFilename = ctxFile;
@@ -2469,7 +2491,18 @@ public:
 		if (auto imp = std::dynamic_pointer_cast<ImportStmt>(stmt)) {
 			for (auto& ent : imp->entries) {
 				if (ent.isFile) {
-					try { importFilePath(ent.filePath); }
+					try {
+						auto modObj = importFilePath(ent.filePath);
+						if (ent.alias.has_value()) {
+							// import "file" as alias
+							env->define(ent.alias.value(), Value{modObj});
+						} else {
+							// import "file" (merge symbols)
+							for (auto& kv : *modObj) {
+								env->define(kv.first, kv.second);
+							}
+						}
+					}
 					catch (const std::exception& ex) {
 						std::ostringstream oss; oss << ex.what();
 						// 附加 import 语句位置
@@ -2543,6 +2576,7 @@ public:
 				} catch(...) { /* ignore and leave declaredName nullopt */ }
 			}
 			if (declaredName) env->defineWithType(v->name, init, declaredName); else env->define(v->name, init);
+			if (v->isExported) env->explicitExports.insert(v->name);
 			return;
 		}
 		if (auto b = std::dynamic_pointer_cast<BlockStmt>(stmt)) { executeBlock(b->statements, std::make_shared<Environment>(env)); return; }
@@ -2688,6 +2722,16 @@ public:
 				} else {
 					executeBlock(std::vector<StmtPtr>{ tc->catchBlock }, local);
 				}
+			} catch (const std::exception& ex) {
+				// Catch C++ runtime errors and expose them as ALang exceptions
+				auto local = std::make_shared<Environment>(env);
+				Value errVal = buildExceptionValue(ex.what());
+				local->define(tc->catchName, errVal);
+				if (auto block = std::dynamic_pointer_cast<BlockStmt>(tc->catchBlock)) {
+					executeBlock(block->statements, local);
+				} else {
+					executeBlock(std::vector<StmtPtr>{ tc->catchBlock }, local);
+				}
 			}
 			return;
 		}
@@ -2712,6 +2756,7 @@ public:
 			fn->closure = env;
 			fn->isAsync = f->isAsync;
 			env->define(f->name, fn);
+			if (f->isExported) env->explicitExports.insert(f->name);
 			return;
 		}
 		if (auto c = std::dynamic_pointer_cast<ClassStmt>(stmt)) {
@@ -2772,7 +2817,8 @@ public:
 				}
 			}
 			
-			env->define(c->name, klass);
+			env->define(c->name, Value{klass});
+			if (c->isExported) env->explicitExports.insert(c->name);
 			return;
 		}
 		if (auto ext = std::dynamic_pointer_cast<ExtendStmt>(stmt)) {
@@ -2805,6 +2851,7 @@ public:
 				}
 			}
 			env->define(itf->name, klass);
+			if (itf->isExported) env->explicitExports.insert(itf->name);
 			return;
 		}
 		if (auto go = std::dynamic_pointer_cast<GoStmt>(stmt)) {
@@ -2862,10 +2909,8 @@ private:
 	std::queue<std::function<void()>> taskQueue;
 	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
 	std::shared_ptr<Object> stdRoot;
-	std::unordered_set<std::string> importedFiles;
+	std::unordered_map<std::string, std::shared_ptr<Object>> importedModules;
 	std::filesystem::path importBaseDir;
-	std::shared_ptr<Object> ensurePackage(const std::string& name);
-	void importPackageSymbols(const std::string& name);
 	// Error context for pretty printing from imported files
 	std::string lastErrorSource;
 	std::string lastErrorFilename;
@@ -3627,6 +3672,8 @@ public:
 	void installBuiltins() {
 		stdRoot = std::make_shared<Object>();
 		globals->define("std", Value{stdRoot});
+		// Define 'undefined' as a global variable equivalent to null (monostate)
+		globals->define("undefined", Value{std::monostate{}});
 		packages["std"] = stdRoot;
 
 		auto ioPkg = ensurePackage("std.io");
@@ -3918,6 +3965,10 @@ public:
 			}; dirClass->methods["walk"] = walkM;
 			(*fsPkg)["Dir"] = Value{dirClass};
 		}
+
+		// Alias File and Dir to std.io for convenience
+		(*ioPkg)["File"] = (*fsPkg)["File"];
+		(*ioPkg)["Dir"] = (*fsPkg)["Dir"];
 
 		// FileStream class (lightweight streaming wrapper)
 		{

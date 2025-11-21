@@ -53,6 +53,8 @@ int main(int argc, char* argv[]) {
 		try {
 			std::filesystem::path inPath(argv[1]);
 			std::filesystem::path base = inPath.has_parent_path() ? inPath.parent_path() : std::filesystem::current_path();
+			// Make base absolute before changing CWD or setting importBaseDir
+			base = std::filesystem::absolute(base);
 			engine.setImportBaseDir(base.string());
 			std::filesystem::current_path(base);
 		} catch (...) { /* ignore base dir errors */ }

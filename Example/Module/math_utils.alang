@@ -1,0 +1,42 @@
+// Example/Module/math_utils.alang
+// This module demonstrates the export system.
+
+// Explicit export
+export var Version = "1.0.0";
+
+// Implicit export (starts with Uppercase)
+var PI_APPROX = 3.14; 
+// Note: Variables starting with Uppercase are implicitly exported!
+
+// Private variable (starts with lowercase, no export)
+var internalSecret = "hidden";
+
+// Explicit export function
+export function add(a, b) {
+    return a + b;
+}
+
+// Implicit export function (Uppercase)
+function Multiply(a, b) {
+    return a * b;
+}
+
+// Private function
+function subtract(a, b) {
+    return a - b;
+}
+
+// Explicit export class
+export class Calculator {
+    function calc(x) { return x * 2; }
+}
+
+// Implicit export class
+class Solver {
+    function solve() { return "solved"; }
+}
+
+// Private class
+class helper {
+    function help() { return "helping"; }
+}

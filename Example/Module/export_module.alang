@@ -1,0 +1,27 @@
+// Example/Module/export_module.alang
+// Test module for verifying export visibility rules.
+
+// 1. Variables
+export var ExplicitVar = "explicit";        // Explicitly exported
+var hiddenVar = "hidden";                   // Private (lowercase, no export)
+var ImplicitVar = "implicit";               // Implicitly exported (Uppercase start)
+
+// 2. Functions
+export function explicitFunc() { return "explicitFunc"; }
+
+function hiddenFunc() { return "hiddenFunc"; }
+
+function ImplicitFunc() { return "ImplicitFunc"; }
+
+// 3. Classes
+export class ExplicitClass {
+    function getName() { return "ExplicitClass"; }
+}
+
+class hiddenClass {
+    function getName() { return "hiddenClass"; }
+}
+
+class ImplicitClass {
+    function getName() { return "ImplicitClass"; }
+}

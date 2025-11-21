@@ -28,6 +28,7 @@ func_files=(
     "array_methods_test.alang"
     "evalExample.alang"
     "example.alang"
+    "export_test.alang"
     "fileImportExample.alang"
     "foreachExample.alang"
     "foreachAdvanced.alang"

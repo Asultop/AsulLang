@@ -1,0 +1,19 @@
+// Example/ErrorExample/import_private_symbol.alang
+// This example demonstrates that private symbols cannot be accessed.
+
+import "../Module/math_utils.alang" as utils;
+
+println("Trying to access private variable 'internalSecret'...");
+
+// 'internalSecret' is not exported, so it should be undefined (null) or throw error depending on access
+// In ALang, accessing undefined property on module object returns null/undefined usually, 
+// but let's see if we can force an error or just show it's missing.
+
+if (utils.internalSecret != null) {
+    throw "Error: internalSecret should be hidden!";
+}
+
+println("Trying to call private function 'subtract'...");
+
+// This should throw a runtime error because utils.subtract is null/undefined
+utils.subtract(10, 5);

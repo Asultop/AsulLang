@@ -1,0 +1,53 @@
+// == Export/Import Visibility Test ==
+// Tests the 'export' keyword and implicit uppercase export rules.
+
+import "Module/export_module.alang" as mod;
+
+println("== Variable Visibility Checks ==");
+
+print("Checking ExplicitVar... ");
+if (mod.ExplicitVar == "explicit") println("PASS"); else println("FAIL: " + mod.ExplicitVar);
+
+print("Checking ImplicitVar... ");
+if (mod.ImplicitVar == "implicit") println("PASS"); else println("FAIL: " + mod.ImplicitVar);
+
+print("Checking hiddenVar... ");
+if (mod.hiddenVar == null) {
+    println("PASS: hiddenVar is hidden (null)");
+} else {
+    println("FAIL: hiddenVar is visible: " + mod.hiddenVar);
+}
+
+println("\n== Function Visibility Checks ==");
+
+print("Checking explicitFunc... ");
+if (mod.explicitFunc() == "explicitFunc") println("PASS"); else println("FAIL");
+
+print("Checking ImplicitFunc... ");
+if (mod.ImplicitFunc() == "ImplicitFunc") println("PASS"); else println("FAIL");
+
+print("Checking hiddenFunc... ");
+try {
+    mod.hiddenFunc();
+    println("FAIL: hiddenFunc should not be visible");
+} catch (e) {
+    println("PASS: hiddenFunc is hidden");
+}
+
+println("\n== Class Visibility Checks ==");
+
+print("Checking ExplicitClass... ");
+let c1 = new mod.ExplicitClass();
+if (c1.getName() == "ExplicitClass") println("PASS"); else println("FAIL");
+
+print("Checking ImplicitClass... ");
+let c2 = new mod.ImplicitClass();
+if (c2.getName() == "ImplicitClass") println("PASS"); else println("FAIL");
+
+print("Checking hiddenClass... ");
+try {
+    let c3 = new mod.hiddenClass();
+    println("FAIL: hiddenClass should not be visible");
+} catch (e) {
+    println("PASS: hiddenClass is hidden");
+}
