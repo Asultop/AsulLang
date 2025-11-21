@@ -27,6 +27,7 @@
 #include <fstream>
 #include <optional>
 #include <cstring>
+#include <random>
 #include "AsulFormatString/AsulFormatString.h"
 // POSIX process control for `os.call`
 #include <sys/types.h>
@@ -3331,6 +3332,22 @@ public:
 		// String synthetic methods
 		if (auto ps = std::get_if<std::string>(&obj)) {
 			if (name == "len") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ static_cast<double>(s.size()) }; }; return fn; }
+			// Added extended string methods
+			if (name == "trim") {
+				auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+					size_t start = 0, end = s.size();
+					while (start < end && std::isspace(static_cast<unsigned char>(s[start]))) start++;
+					while (end > start && std::isspace(static_cast<unsigned char>(s[end-1]))) end--;
+					return Value{ s.substr(start, end - start) };
+				}; return fn;
+			}
+			if (name == "toLowerCase") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { std::string out=s; for (auto &c: out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return Value{out}; }; return fn; }
+			if (name == "toUpperCase") { auto s = *ps; auto fn = std::make_shared<Function>(); fn->isBuiltin = true; fn->builtin = [s](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { std::string out=s; for (auto &c: out) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return Value{out}; }; return fn; }
+			if (name == "startsWith") { auto s=*ps; auto fn=std::make_shared<Function>(); fn->isBuiltin=true; fn->builtin=[s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("startsWith expects 1 string arg"); std::string pre=std::get<std::string>(args[0]); return Value{ s.rfind(pre,0)==0 }; }; return fn; }
+			if (name == "endsWith") { auto s=*ps; auto fn=std::make_shared<Function>(); fn->isBuiltin=true; fn->builtin=[s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("endsWith expects 1 string arg"); std::string suf=std::get<std::string>(args[0]); if (suf.size()>s.size()) return Value{false}; return Value{ std::equal(suf.rbegin(), suf.rend(), s.rbegin()) }; }; return fn; }
+			if (name == "includes") { auto s=*ps; auto fn=std::make_shared<Function>(); fn->isBuiltin=true; fn->builtin=[s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("includes expects 1 string arg"); std::string sub=std::get<std::string>(args[0]); return Value{ s.find(sub)!=std::string::npos }; }; return fn; }
+			if (name == "indexOf") { auto s=*ps; auto fn=std::make_shared<Function>(); fn->isBuiltin=true; fn->builtin=[s](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (args.size()<1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("indexOf expects search string and optional start index"); std::string search=std::get<std::string>(args[0]); size_t start=0; if (args.size()>=2) start = static_cast<size_t>(std::max(0, static_cast<int>(getNumber(args[1], "indexOf start")))); auto pos = s.find(search, start); if (pos==std::string::npos) return Value{ -1.0 }; return Value{ static_cast<double>(pos) }; }; return fn; }
 			if (name == "split") {
 				auto s = *ps;
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
@@ -4415,6 +4432,77 @@ public:
 				return Value{ x < 0 ? -x : x };
 			};
 			(*mathPkg)["abs"] = fn;
+		}
+		// === Added extended math functions ===
+		{
+			auto unary = [](auto op, const char* name){
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [op,name](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.size() != 1) throw std::runtime_error(std::string(name) + " expects 1 number argument");
+					double x = getNumber(args[0], name);
+					return Value{ op(x) };
+				};
+				return fn;
+			};
+			(*mathPkg)["sin"] = unary(static_cast<double(*)(double)>(std::sin), "sin");
+			(*mathPkg)["cos"] = unary(static_cast<double(*)(double)>(std::cos), "cos");
+			(*mathPkg)["tan"] = unary(static_cast<double(*)(double)>(std::tan), "tan");
+			(*mathPkg)["sqrt"] = unary(static_cast<double(*)(double)>(std::sqrt), "sqrt");
+			(*mathPkg)["exp"] = unary(static_cast<double(*)(double)>(std::exp), "exp");
+			(*mathPkg)["log"] = unary(static_cast<double(*)(double)>(std::log), "log");
+			// pow(a,b)
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.size() != 2) throw std::runtime_error("pow expects 2 number arguments");
+					double a = getNumber(args[0], "pow base");
+					double b = getNumber(args[1], "pow exp");
+					return Value{ std::pow(a,b) };
+				};
+				(*mathPkg)["pow"] = fn;
+			}
+			// ceil / floor / round
+			(*mathPkg)["ceil"] = unary(static_cast<double(*)(double)>(std::ceil), "ceil");
+			(*mathPkg)["floor"] = unary(static_cast<double(*)(double)>(std::floor), "floor");
+			(*mathPkg)["round"] = unary(static_cast<double(*)(double)>(std::round), "round");
+			// min/max support variable number of args
+			{
+				auto mkVar = [](bool isMin){
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+					fn->builtin = [isMin](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+						if (args.empty()) throw std::runtime_error(std::string(isMin?"min":"max") + " expects at least 1 argument");
+						double best = getNumber(args[0], isMin?"min arg":"max arg");
+						for (size_t i=1;i<args.size();++i){ double v = getNumber(args[i], isMin?"min arg":"max arg"); best = isMin? (v < best ? v : best) : (v > best ? v : best); }
+						return Value{ best };
+					};
+					return fn;
+				};
+				(*mathPkg)["min"] = mkVar(true);
+				(*mathPkg)["max"] = mkVar(false);
+			}
+			// random(): 0<=x<1 ; random(max): [0,max); random(min,max): [min,max)
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					static thread_local std::mt19937 rng{ std::random_device{}() };
+					if (args.empty()) {
+						std::uniform_real_distribution<double> dist(0.0,1.0);
+						return Value{ dist(rng) };
+					} else if (args.size()==1) {
+						double max = getNumber(args[0], "random max");
+						std::uniform_real_distribution<double> dist(0.0,max);
+						return Value{ dist(rng) };
+					} else if (args.size()==2) {
+						double min = getNumber(args[0], "random min");
+						double max = getNumber(args[1], "random max");
+						if (max < min) std::swap(max,min);
+						std::uniform_real_distribution<double> dist(min,max);
+						return Value{ dist(rng) };
+					}
+					throw std::runtime_error("random expects 0,1 or 2 numeric arguments");
+				};
+				(*mathPkg)["random"] = fn;
+			}
 		}
 
 		// ===== OS (os) =====

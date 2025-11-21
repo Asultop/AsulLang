@@ -32,6 +32,7 @@ func_files=(
     "foreachAdvanced.alang"
     "goExample.alang"
     "importExample.alang"
+    "mathExample.alang"
     "incrementExample.alang"
     "interfaceExample.alang"
     "interfaceValidationTest.alang"
