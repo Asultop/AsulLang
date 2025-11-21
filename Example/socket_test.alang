@@ -1,0 +1,23 @@
+import std.os;
+
+import std.os;
+
+// Assuming running from Example/ directory (CWD is set to script dir by engine)
+let alangPath = "../alang";
+
+println("Starting server...");
+let server = std.os.popen(alangPath + " socket_server.alang", "r");
+
+await sleep(1000);
+
+println("Starting client...");
+let client = std.os.popen(alangPath + " socket_client.alang", "r");
+
+// Read client output
+let clientOut = client.read(4096);
+println("Client Output:\n" + clientOut);
+
+// Read server output
+let serverOut = server.read(4096);
+println("Server Output:\n" + serverOut);
+

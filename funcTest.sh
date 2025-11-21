@@ -69,6 +69,7 @@ func_files=(
     "jsonExample.alang"
     "OSExample.alang"
     "io_os_test.alang"
+    "signal_test.alang"
     "stringExample.alang"
     "test_lazy.alang"
     "test_wildcard.alang"
@@ -78,6 +79,7 @@ func_files=(
     "binarySearchExample.alang"
     "string_methods_extended.alang"
     "encoding_test.alang"
+    "socket_test.alang"
 )
 
 # Counter for passed/failed tests

@@ -1,0 +1,28 @@
+import std.os;
+
+println("Setting up signal handler...");
+let handled = false;
+
+std.os.signal("SIGINT", [](sig) {
+    println("Received SIGINT: " + sig);
+    handled = true;
+});
+
+println("Sending SIGINT to self...");
+let pid = std.os.getpid();
+println("PID: " + pid);
+// Use popen to avoid system() blocking signals
+std.os.popen("kill -2 " + pid, "r");
+
+// Busy wait a bit for signal to be processed
+let i = 0;
+while (i < 10000000) {
+    if (handled) break;
+    i = i + 1;
+}
+
+if (handled) {
+    println("Signal handled successfully!");
+} else {
+    throw "Signal NOT handled";
+}

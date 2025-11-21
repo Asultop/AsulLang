@@ -28,6 +28,12 @@
 #include <optional>
 #include <cstring>
 #include <random>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
 #include "AsulFormatString/AsulFormatString.h"
 // POSIX process control for `os.call`
 #include <sys/types.h>
@@ -38,13 +44,20 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <csignal>
+#include <atomic>
 
 // Global mutex for timezone operations (setenv/tzset are not thread-safe)
 std::mutex tzMutex;
 
 namespace {
 
-// ----------- Lexer -----------
+// Signal handling globals
+std::atomic<int> g_pendingSignals[32];
+void globalSignalHandler(int sig) {
+    // const char* msg = "Signal received\n"; write(1, msg, 16);
+    if (sig > 0 && sig < 32) g_pendingSignals[sig] = 1;
+}// ----------- Lexer -----------
 
 enum class TokenType {
 	// Single-char
@@ -544,6 +557,7 @@ struct ClassInfo {
 	std::vector<std::shared_ptr<ClassInfo>> supers; // 多继承支持，按声明顺序线性查找
 	std::unordered_map<std::string, std::shared_ptr<Function>> methods;
 	std::unordered_map<std::string, std::shared_ptr<Function>> staticMethods;
+	bool isNative{false}; // If true, new creates InstanceExt
 };
 
 struct Instance {
@@ -2614,7 +2628,12 @@ public:
 				std::ostringstream oss; oss << "new: target is not a class at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
 			}
 			auto klass = std::get<std::shared_ptr<ClassInfo>>(cal);
-			auto inst = std::make_shared<Instance>();
+			std::shared_ptr<Instance> inst;
+			if (klass->isNative) {
+				inst = std::make_shared<InstanceExt>();
+			} else {
+				inst = std::make_shared<Instance>();
+			}
 			inst->klass = klass;
 			// constructor (lookup super chain)
 			auto ctor = findMethod(klass, "constructor");
@@ -2649,7 +2668,37 @@ public:
 		throw std::runtime_error("Unknown expression type");
 	}
 
+	Value callValue(const Value& cal, const std::vector<Value>& args) {
+		if (!std::holds_alternative<std::shared_ptr<Function>>(cal)) return Value{std::monostate{}};
+		auto fn = std::get<std::shared_ptr<Function>>(cal);
+		if (fn->isBuiltin) {
+			return fn->builtin(args, fn->closure);
+		}
+		auto local = std::make_shared<Environment>(fn->closure);
+		for (size_t i=0; i<args.size() && i<fn->params.size(); ++i) local->define(fn->params[i], args[i]);
+		try {
+			executeBlock(fn->body, local);
+		} catch (const ReturnSignal& rs) {
+			return rs.value;
+		}
+		return Value{std::monostate{}};
+	}
+
+	void checkSignals() {
+		for (int i = 1; i < 32; ++i) {
+			if (g_pendingSignals[i].exchange(0)) {
+				auto it = signalHandlers.find(i);
+				if (it != signalHandlers.end()) {
+					try {
+						callValue(it->second, { Value{static_cast<double>(i)} });
+					} catch (...) { }
+				}
+			}
+		}
+	}
+
 	void execute(const StmtPtr& stmt) {
+		checkSignals();
 		if (auto e = std::dynamic_pointer_cast<ExprStmt>(stmt)) { (void)evaluate(e->expr); return; }
 		if (std::dynamic_pointer_cast<EmptyStmt>(stmt)) { return; }
 		if (auto imp = std::dynamic_pointer_cast<ImportStmt>(stmt)) {
@@ -3099,8 +3148,12 @@ private:
 	std::queue<std::function<void()>> taskQueue;
 	std::unordered_map<std::string, std::shared_ptr<Object>> packages;
 	std::shared_ptr<Object> stdRoot;
-	std::unordered_map<std::string, std::shared_ptr<Object>> importedModules;
+	std::unordered_map<std::string, std::shared_ptr<Object>> importedModules; // cache for file imports
 	std::filesystem::path importBaseDir;
+
+	// Signal handlers map: signal number -> callback function
+	std::unordered_map<int, Value> signalHandlers;
+
 	// Error context for pretty printing from imported files
 	std::string lastErrorSource;
 	std::string lastErrorFilename;
@@ -4068,6 +4121,32 @@ public:
 			};
 			(*osPkg)["setenv"] = Value{setenvFn};
 
+			// signal(signame, callback)
+			auto signalFn = std::make_shared<Function>(); signalFn->isBuiltin = true;
+			signalFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.size() != 2) throw std::runtime_error("os.signal expects signame and callback");
+				std::string signame = toString(args[0]);
+				Value callback = args[1];
+				if (!std::holds_alternative<std::shared_ptr<Function>>(callback)) throw std::runtime_error("os.signal callback must be a function");
+				
+				int sig = 0;
+				if (signame == "SIGINT") sig = SIGINT;
+				else if (signame == "SIGTERM") sig = SIGTERM;
+				else throw std::runtime_error("os.signal unsupported signal: " + signame);
+				
+				this->signalHandlers[sig] = callback;
+				std::signal(sig, globalSignalHandler);
+				return Value{true};
+			};
+			(*osPkg)["signal"] = Value{signalFn};
+
+			// getpid()
+			auto getpidFn = std::make_shared<Function>(); getpidFn->isBuiltin = true;
+			getpidFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				return Value{static_cast<double>(getpid())};
+			};
+			(*osPkg)["getpid"] = Value{getpidFn};
+
 			// popen(command, mode)
 			auto popenFn = std::make_shared<Function>(); popenFn->isBuiltin = true;
 			popenFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
@@ -4245,8 +4324,249 @@ public:
 		(*urlObj)["decode"] = Value{urldec};
 
 		// Network Package (std.network)
-		registerLazyPackage("std.network", [](std::shared_ptr<Object> netPkg) {
-		
+		registerLazyPackage("std.network", [this](std::shared_ptr<Object> netPkg) {
+			
+			// Socket Class
+			auto socketClass = std::make_shared<ClassInfo>();
+			socketClass->name = "Socket";
+			socketClass->isNative = true;
+			(*netPkg)["Socket"] = Value{socketClass};
+
+			// constructor(domain, type)
+			auto ctor = std::make_shared<Function>();
+			ctor->isBuiltin = true;
+			ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				int domain = AF_INET;
+				int type = SOCK_STREAM;
+				if (args.size() >= 1) {
+					std::string d = toString(args[0]);
+					if (d == "inet6") domain = AF_INET6;
+				}
+				if (args.size() >= 2) {
+					std::string t = toString(args[1]);
+					if (t == "udp") type = SOCK_DGRAM;
+				}
+				
+				int fd = socket(domain, type, 0);
+				if (fd < 0) throw std::runtime_error("socket creation failed");
+				
+				int opt = 1;
+				setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				if (ext) {
+					ext->nativeHandle = new int(fd);
+					ext->nativeDestructor = [](void* p) {
+						int* fdp = static_cast<int*>(p);
+						close(*fdp);
+						delete fdp;
+					};
+				}
+				return Value{std::monostate{}};
+			};
+			socketClass->methods["constructor"] = ctor;
+
+			// bind(host, port)
+			auto bindFn = std::make_shared<Function>();
+			bindFn->isBuiltin = true;
+			bindFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 2) throw std::runtime_error("bind expects host and port");
+				std::string host = toString(args[0]);
+				int port = static_cast<int>(getNumber(args[1], "port"));
+				
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				if (!ext || !ext->nativeHandle) throw std::runtime_error("Socket not initialized");
+				int fd = *static_cast<int*>(ext->nativeHandle);
+
+				struct sockaddr_in addr;
+				std::memset(&addr, 0, sizeof(addr));
+				addr.sin_family = AF_INET;
+				addr.sin_port = htons(port);
+				if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
+					throw std::runtime_error("Invalid address");
+				}
+				
+				if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+					throw std::runtime_error("bind failed");
+				}
+				return Value{true};
+			};
+			socketClass->methods["bind"] = bindFn;
+
+			// listen(backlog)
+			auto listenFn = std::make_shared<Function>();
+			listenFn->isBuiltin = true;
+			listenFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				int backlog = 5;
+				if (!args.empty()) backlog = static_cast<int>(getNumber(args[0], "backlog"));
+				
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				int fd = *static_cast<int*>(ext->nativeHandle);
+				
+				if (listen(fd, backlog) < 0) throw std::runtime_error("listen failed");
+				return Value{true};
+			};
+			socketClass->methods["listen"] = listenFn;
+
+			// connect(host, port) -> Promise
+			auto connectFn = std::make_shared<Function>();
+			connectFn->isBuiltin = true;
+			connectFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() != 2) throw std::runtime_error("connect expects host and port");
+				std::string host = toString(args[0]);
+				int port = static_cast<int>(getNumber(args[1], "port"));
+				
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				int fd = *static_cast<int*>(ext->nativeHandle);
+
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+				
+				std::thread([p, this, fd, host, port]{
+					struct sockaddr_in addr;
+					std::memset(&addr, 0, sizeof(addr));
+					addr.sin_family = AF_INET;
+					addr.sin_port = htons(port);
+					
+					struct hostent* server = gethostbyname(host.c_str());
+					if (server == NULL) {
+						settlePromise(p, true, Value{std::string("Host resolution failed")});
+						return;
+					}
+					std::memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+
+					if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+						settlePromise(p, true, Value{std::string("Connection failed")});
+					} else {
+						settlePromise(p, false, Value{true});
+					}
+				}).detach();
+				
+				return Value{p};
+			};
+			socketClass->methods["connect"] = connectFn;
+
+			// accept() -> Promise<Socket>
+			auto acceptFn = std::make_shared<Function>();
+			acceptFn->isBuiltin = true;
+			acceptFn->builtin = [this, socketClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				int fd = *static_cast<int*>(ext->nativeHandle);
+
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+
+				std::thread([p, this, fd, socketClass]{
+					struct sockaddr_in cli_addr;
+					socklen_t clilen = sizeof(cli_addr);
+					int newsockfd = accept(fd, (struct sockaddr*)&cli_addr, &clilen);
+					if (newsockfd < 0) {
+						settlePromise(p, true, Value{std::string("accept failed")});
+						return;
+					}
+					
+					auto newInst = std::make_shared<InstanceExt>();
+					newInst->klass = socketClass;
+					newInst->nativeHandle = new int(newsockfd);
+					newInst->nativeDestructor = [](void* p) {
+						int* fdp = static_cast<int*>(p);
+						close(*fdp);
+						delete fdp;
+					};
+					
+					settlePromise(p, false, Value{std::shared_ptr<Instance>(newInst)});
+				}).detach();
+
+				return Value{p};
+			};
+			socketClass->methods["accept"] = acceptFn;
+
+			// write(data) -> Promise
+			auto writeFn = std::make_shared<Function>();
+			writeFn->isBuiltin = true;
+			writeFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.empty()) throw std::runtime_error("write expects data");
+				std::string data = toString(args[0]);
+				
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				int fd = *static_cast<int*>(ext->nativeHandle);
+
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+
+				std::thread([p, this, fd, data]{
+					ssize_t n = write(fd, data.c_str(), data.length());
+					if (n < 0) {
+						settlePromise(p, true, Value{std::string("write failed")});
+					} else {
+						settlePromise(p, false, Value{static_cast<double>(n)});
+					}
+				}).detach();
+
+				return Value{p};
+			};
+			socketClass->methods["write"] = writeFn;
+
+			// read(size) -> Promise<string>
+			auto readFn = std::make_shared<Function>();
+			readFn->isBuiltin = true;
+			readFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				int size = 1024;
+				if (!args.empty()) size = static_cast<int>(getNumber(args[0], "size"));
+				
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				int fd = *static_cast<int*>(ext->nativeHandle);
+
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = this;
+
+				std::thread([p, this, fd, size]{
+					std::vector<char> buf(size);
+					ssize_t n = read(fd, buf.data(), size);
+					if (n < 0) {
+						settlePromise(p, true, Value{std::string("read failed")});
+					} else if (n == 0) {
+						settlePromise(p, false, Value{std::string("")});
+					} else {
+						settlePromise(p, false, Value{std::string(buf.data(), n)});
+					}
+				}).detach();
+
+				return Value{p};
+			};
+			socketClass->methods["read"] = readFn;
+
+			// close()
+			auto closeFn = std::make_shared<Function>();
+			closeFn->isBuiltin = true;
+			closeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				if (ext && ext->nativeHandle) {
+					int* fdp = static_cast<int*>(ext->nativeHandle);
+					close(*fdp);
+					delete fdp;
+					ext->nativeHandle = nullptr;
+				}
+				return Value{true};
+			};
+			socketClass->methods["close"] = closeFn;
+
 		// Helper for HTTP requests (Simple blocking implementation)
 		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {
 			// 1. Parse URL

@@ -1,0 +1,14 @@
+import std.network;
+try {
+    let client = new std.network.Socket("inet", "tcp");
+    await client.connect("127.0.0.1", 9091);
+    println("Connected");
+    
+    await client.write("Hello");
+    let res = await client.read(1024);
+    println("Response: " + res);
+    
+    client.close();
+} catch(e) {
+    println("Client Error: " + e.message);
+}

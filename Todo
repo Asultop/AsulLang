@@ -28,10 +28,10 @@
 - [x] **文件流**: 缓冲读写 (行, 块) - `FileStream` 已重写为有状态缓冲流
 - [x] **标准流**: 作为流对象访问 `stdin`, `stdout`, `stderr`
 - [x] **进程控制**: `os.system`, `os.popen` (支持读取输出), `os.getenv`, `os.setenv`
-- [ ] **信号**: 处理 `SIGINT`, `SIGTERM`
+- [x] **信号**: 处理 `SIGINT`, `SIGTERM`
 
 ## 5. 网络 (std.network)
-- [ ] **Socket API**: 用于原始连接的 `std.net.Socket` (TCP/UDP)
+- [x] **Socket API**: 用于原始连接的 `std.net.Socket` (TCP/UDP)
 - [ ] **HTTP 服务器**: 用于构建 Web 后端的 `std.http.Server`
 - [ ] **URL 解析**: `std.url.URL` 类 (`protocol`, `host`, `path`, `query`)
 - [ ] **Fetch API**: 更健壮的 `fetch`，支持 headers, methods, body types (目前仅有基础的 `get`/`post`)
