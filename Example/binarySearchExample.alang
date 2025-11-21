@@ -1,0 +1,16 @@
+// binarySearch 二分查找示例 (std.collections)
+import std.collections.binarySearch;
+
+println("== 数字数组二分查找 ==");
+var nums = [1,2,3,4,5,6,7,8,9];
+println("查找 4 ->", binarySearch(nums, 4));
+println("查找 9 ->", binarySearch(nums, 9));
+println("查找 10 ->", binarySearch(nums, 10));
+
+println("== 字符串数组二分查找 ==");
+var words = ["apple","banana","carrot","date","egg"];
+println("查找 carrot ->", binarySearch(words, "carrot"));
+println("查找 apple ->", binarySearch(words, "apple"));
+println("查找 fig ->", binarySearch(words, "fig"));
+
+println("binarySearch 示例结束\n");

@@ -1,0 +1,30 @@
+// Set 集合操作示例 (std.collections)
+import std.collections.set; // 引入构造函数
+import std.collections.Set; // 可选：类原型
+
+println("== Set 基本操作 ==");
+var a = set();
+a.add(1); a.add(2); a.add(3);
+println("A values:", a.values());
+
+var b = set();
+b.add(3); b.add(4); b.add(5);
+println("B values:", b.values());
+
+println("== union ==");
+var u = a.union(b);
+println("Union:", u.values());
+
+println("== intersection ==");
+var i = a.intersection(b);
+println("Intersection:", i.values());
+
+println("== difference (A - B) ==");
+var d = a.difference(b);
+println("Difference:", d.values());
+
+println("== 原集合不变 ==");
+println("A:", a.values());
+println("B:", b.values());
+
+println("Set 示例结束\n");

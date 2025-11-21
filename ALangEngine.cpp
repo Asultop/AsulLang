@@ -5248,9 +5248,59 @@ public:
 			setClass->methods["size"] = setSize;
 			auto setValues = std::make_shared<Function>(); setValues->isBuiltin = true; setValues->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeSet*>(ie->nativeHandle); auto out = std::make_shared<Array>(); for (auto &v : ns->order) out->push_back(v); return Value{out}; };
 			setClass->methods["values"] = setValues;
+			// Set union(other): returns new Set containing all unique elements
+			auto setUnion = std::make_shared<Function>(); setUnion->isBuiltin = true; setUnion->builtin = [getThisInstanceExt,setClass](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+				if (args.size()!=1) throw std::runtime_error("set.union expects 1 Set argument");
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto ns = static_cast<NativeSet*>(ie->nativeHandle);
+				if (!std::holds_alternative<std::shared_ptr<Instance>>(args[0])) throw std::runtime_error("set.union expects Set instance");
+				auto inst2 = std::get<std::shared_ptr<Instance>>(args[0]);
+				if (inst2->klass != setClass) throw std::runtime_error("set.union expects Set instance");
+				auto ie2 = static_cast<InstanceExt*>(inst2.get());
+				auto ns2 = static_cast<NativeSet*>(ie2->nativeHandle);
+				// create new Set instance
+				auto newInst = std::make_shared<InstanceExt>(); newInst->klass = setClass; auto newNative = new NativeSet(); newInst->nativeHandle = newNative; newInst->nativeDestructor = [](void* p){ delete static_cast<NativeSet*>(p); };
+				for (auto &v : ns->order) { if (newNative->s.insert(v).second) { newNative->order.push_back(v); newNative->index[v] = newNative->order.size()-1; } }
+				for (auto &v : ns2->order) { if (newNative->s.insert(v).second) { newNative->order.push_back(v); newNative->index[v] = newNative->order.size()-1; } }
+				return Value{newInst};
+			};
+			setClass->methods["union"] = setUnion;
+			// Set intersection(other): returns new Set containing elements in both sets
+			auto setIntersection = std::make_shared<Function>(); setIntersection->isBuiltin = true; setIntersection->builtin = [getThisInstanceExt,setClass](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+				if (args.size()!=1) throw std::runtime_error("set.intersection expects 1 Set argument");
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto ns = static_cast<NativeSet*>(ie->nativeHandle);
+				if (!std::holds_alternative<std::shared_ptr<Instance>>(args[0])) throw std::runtime_error("set.intersection expects Set instance");
+				auto inst2 = std::get<std::shared_ptr<Instance>>(args[0]);
+				if (inst2->klass != setClass) throw std::runtime_error("set.intersection expects Set instance");
+				auto ie2 = static_cast<InstanceExt*>(inst2.get());
+				auto ns2 = static_cast<NativeSet*>(ie2->nativeHandle);
+				auto newInst = std::make_shared<InstanceExt>(); newInst->klass = setClass; auto newNative = new NativeSet(); newInst->nativeHandle = newNative; newInst->nativeDestructor = [](void* p){ delete static_cast<NativeSet*>(p); };
+				for (auto &v : ns->order) { if (ns2->s.find(v)!=ns2->s.end()) { newNative->s.insert(v); newNative->order.push_back(v); newNative->index[v] = newNative->order.size()-1; } }
+				return Value{newInst};
+			};
+			setClass->methods["intersection"] = setIntersection;
+			// Set difference(other): returns elements in this set not in other
+			auto setDifference = std::make_shared<Function>(); setDifference->isBuiltin = true; setDifference->builtin = [getThisInstanceExt,setClass](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+				if (args.size()!=1) throw std::runtime_error("set.difference expects 1 Set argument");
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto ns = static_cast<NativeSet*>(ie->nativeHandle);
+				if (!std::holds_alternative<std::shared_ptr<Instance>>(args[0])) throw std::runtime_error("set.difference expects Set instance");
+				auto inst2 = std::get<std::shared_ptr<Instance>>(args[0]);
+				if (inst2->klass != setClass) throw std::runtime_error("set.difference expects Set instance");
+				auto ie2 = static_cast<InstanceExt*>(inst2.get());
+				auto ns2 = static_cast<NativeSet*>(ie2->nativeHandle);
+				auto newInst = std::make_shared<InstanceExt>(); newInst->klass = setClass; auto newNative = new NativeSet(); newInst->nativeHandle = newNative; newInst->nativeDestructor = [](void* p){ delete static_cast<NativeSet*>(p); };
+				for (auto &v : ns->order) { if (ns2->s.find(v)==ns2->s.end()) { newNative->s.insert(v); newNative->order.push_back(v); newNative->index[v] = newNative->order.size()-1; } }
+				return Value{newInst};
+			};
+			setClass->methods["difference"] = setDifference;
 			globals->define("Set", setClass);
 			auto setCtor = std::make_shared<Function>(); setCtor->isBuiltin = true; setCtor->builtin = [setClass](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { auto inst = std::make_shared<InstanceExt>(); inst->klass = setClass; auto ns = new NativeSet(); inst->nativeHandle = ns; inst->nativeDestructor = [](void* p){ delete static_cast<NativeSet*>(p); }; return Value{inst}; };
 			globals->define("set", setCtor);
+			// Package namespace bindings for std.collections
+			registerPackageSymbol("std.collections", "Set", Value{setClass});
+			registerPackageSymbol("std.collections", "set", Value{setCtor});
 
 			// ---- Deque (native) ----
 			struct NativeDeque { std::deque<Value> d; };
@@ -5287,6 +5337,73 @@ public:
 			globals->define("Stack", stackClass);
 			auto stackCtor = std::make_shared<Function>(); stackCtor->isBuiltin = true; stackCtor->builtin = [stackClass](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { auto inst = std::make_shared<InstanceExt>(); inst->klass = stackClass; auto ns = new NativeStack(); inst->nativeHandle = ns; inst->nativeDestructor = [](void* p){ delete static_cast<NativeStack*>(p); }; return Value{inst}; };
 			globals->define("stack", stackCtor);
+			registerPackageSymbol("std.collections", "Stack", Value{stackClass});
+			registerPackageSymbol("std.collections", "stack", Value{stackCtor});
+
+			// ---- PriorityQueue (native) ----
+			struct NativePriorityQueue { struct Node { double priority; Value value; }; std::vector<Node> heap; };
+			auto pqClass = std::make_shared<ClassInfo>(); pqClass->name = "PriorityQueue";
+			auto pqPush = std::make_shared<Function>(); pqPush->isBuiltin = true; pqPush->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+				if (args.size()!=2) throw std::runtime_error("priorityQueue.push expects value, priority");
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto npq = static_cast<NativePriorityQueue*>(ie->nativeHandle);
+				double pr = 0.0; if (std::holds_alternative<double>(args[1])) pr = std::get<double>(args[1]); else throw std::runtime_error("priority must be number");
+				npq->heap.push_back(NativePriorityQueue::Node{pr, args[0]});
+				std::push_heap(npq->heap.begin(), npq->heap.end(), [](const NativePriorityQueue::Node& a, const NativePriorityQueue::Node& b){ return a.priority < b.priority; });
+				return Value{ static_cast<double>(npq->heap.size()) };
+			};
+			pqClass->methods["push"] = pqPush;
+			auto pqPop = std::make_shared<Function>(); pqPop->isBuiltin = true; pqPop->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto npq = static_cast<NativePriorityQueue*>(ie->nativeHandle);
+				if (npq->heap.empty()) return Value{std::monostate{}};
+				std::pop_heap(npq->heap.begin(), npq->heap.end(), [](const NativePriorityQueue::Node& a, const NativePriorityQueue::Node& b){ return a.priority < b.priority; });
+				auto node = npq->heap.back(); npq->heap.pop_back(); return node.value;
+			};
+			pqClass->methods["pop"] = pqPop;
+			auto pqPeek = std::make_shared<Function>(); pqPeek->isBuiltin = true; pqPeek->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+				InstanceExt* ie = getThisInstanceExt(clos);
+				auto npq = static_cast<NativePriorityQueue*>(ie->nativeHandle);
+				if (npq->heap.empty()) return Value{std::monostate{}}; return npq->heap.front().value;
+			};
+			pqClass->methods["peek"] = pqPeek;
+			auto pqSize = std::make_shared<Function>(); pqSize->isBuiltin = true; pqSize->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto npq = static_cast<NativePriorityQueue*>(ie->nativeHandle); return Value{ static_cast<double>(npq->heap.size()) }; };
+			pqClass->methods["size"] = pqSize;
+			globals->define("PriorityQueue", pqClass);
+			auto pqCtor = std::make_shared<Function>(); pqCtor->isBuiltin = true; pqCtor->builtin = [pqClass](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { auto inst = std::make_shared<InstanceExt>(); inst->klass = pqClass; auto npq = new NativePriorityQueue(); inst->nativeHandle = npq; inst->nativeDestructor = [](void* p){ delete static_cast<NativePriorityQueue*>(p); }; return Value{inst}; };
+			globals->define("priorityQueue", pqCtor);
+			registerPackageSymbol("std.collections", "PriorityQueue", Value{pqClass});
+			registerPackageSymbol("std.collections", "priorityQueue", Value{pqCtor});
+
+			// ---- binarySearch (function) ----
+			auto binarySearchFn = std::make_shared<Function>(); binarySearchFn->isBuiltin = true; binarySearchFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.size()!=2) throw std::runtime_error("binarySearch expects (array, target)");
+				if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("binarySearch first arg must be array");
+				auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+				Value target = args[1];
+				// Support number or string search only
+				bool targetIsNumber = std::holds_alternative<double>(target);
+				bool targetIsString = std::holds_alternative<std::string>(target);
+				if (!targetIsNumber && !targetIsString) throw std::runtime_error("binarySearch target must be number or string");
+				int left = 0; int right = static_cast<int>(arr->size()) - 1;
+				while (left <= right) {
+					int mid = left + (right - left)/2;
+					Value v = (*arr)[mid];
+					if (targetIsNumber) {
+						if (!std::holds_alternative<double>(v)) throw std::runtime_error("binarySearch array must be homogeneous numbers");
+						double tv = std::get<double>(target); double mv = std::get<double>(v);
+						if (mv == tv) return Value{ static_cast<double>(mid) };
+						if (mv < tv) left = mid + 1; else right = mid - 1;
+					} else {
+						if (!std::holds_alternative<std::string>(v)) throw std::runtime_error("binarySearch array must be homogeneous strings");
+						const std::string& tv = std::get<std::string>(target); const std::string& mv = std::get<std::string>(v);
+						if (mv == tv) return Value{ static_cast<double>(mid) };
+						if (mv < tv) left = mid + 1; else right = mid - 1;
+					}
+				}
+				return Value{ -1.0 };
+			};
+			registerPackageSymbol("std.collections", "binarySearch", Value{binarySearchFn});
 		}
 
 		// ---- Utility helper functions ----

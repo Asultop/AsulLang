@@ -1,0 +1,20 @@
+// Stack 栈结构示例 (std.collections)
+import std.collections.stack;
+import std.collections.Stack;
+
+println("== Stack 基本操作 ==");
+var st = stack();
+st.push(10);
+st.push(20);
+st.push(30);
+println("size:", st.size());
+println("peek:", st.peek());
+println("pop:", st.pop());
+println("peek after pop:", st.peek());
+println("size after pop:", st.size());
+
+println("== 连续 pop ==");
+println(st.pop());
+println(st.pop());
+println("pop 空栈 -> null:", st.pop());
+println("Stack 示例结束\n");

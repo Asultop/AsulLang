@@ -1,0 +1,17 @@
+// PriorityQueue 优先队列示例 (std.collections)
+import std.collections.priorityQueue;
+import std.collections.PriorityQueue;
+
+println("== PriorityQueue 基本操作 ==");
+var pq = priorityQueue();
+// push(value, priority)
+pq.push("low", 1);
+pq.push("medium", 50);
+pq.push("high", 100);
+println("size:", pq.size());
+println("peek:", pq.peek());
+println("pop (应为 high):", pq.pop());
+println("pop (应为 medium):", pq.pop());
+println("pop (应为 low):", pq.pop());
+println("pop 空 -> null:", pq.pop());
+println("PriorityQueue 示例结束\n");

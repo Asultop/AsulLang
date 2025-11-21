@@ -70,6 +70,10 @@ func_files=(
     "stringExample.alang"
     "test_lazy.alang"
     "test_wildcard.alang"
+    "setExample.alang"
+    "stackExample.alang"
+    "priorityQueueExample.alang"
+    "binarySearchExample.alang"
 )
 
 # Counter for passed/failed tests
