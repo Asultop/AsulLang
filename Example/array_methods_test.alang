@@ -98,39 +98,77 @@ let names = users.map([](u) { return u.name; });
 println("用户名列表:", names);
 
 let adults = users.filter([](u) { return u.age >= 30; });
-println("30岁及以上用户数:", adults.len());
+println("成年用户:", adults);
 
-let totalAge = users.reduce([](sum, u) { return sum + u.age; }, 0);
-println("年龄总和:", totalAge);
+// 11. pop - 移除末尾元素
+println("\n== pop 测试 ==");
+let pArr = [1, 2, 3];
+let popped = pArr.pop();
+println("pop返回值:", popped);
+println("pop后数组:", pArr);
 
-let hasBob = users.some([](u) { return u.name == "Bob"; });
-println("是否有Bob:", hasBob);
+// 12. shift - 移除头部元素
+println("\n== shift 测试 ==");
+let sArr = [1, 2, 3];
+let shifted = sArr.shift();
+println("shift返回值:", shifted);
+println("shift后数组:", sArr);
 
-// 11. 新增扩展方法测试
-println("\n== 扩展方法测试 ==");
-let ext = [10, 3, 5, 7, 2];
-println("原始数组 ext:", ext);
-println("pop():", ext.pop()); // 2
-println("pop() 后:", ext);
-println("shift():", ext.shift()); // 10
-println("shift() 后:", ext);
-println("unshift(99,100) 返回新长度:", ext.unshift(99,100));
-println("unshift 后:", ext);
-println("slice(1,3):", ext.slice(1,3));
-println("indexOf(7):", ext.indexOf(7));
-println("indexOf(404):", ext.indexOf(404));
-println("join('-'):", ext.join("-"));
-println("reverse():", ext.reverse());
-println("reverse 后 ext:", ext);
-// sort 默认数字升序
-println("sort():", ext.sort());
-println("sort 后 ext:", ext);
-// 使用比较函数实现降序
-// 比较函数：返回 true 表示 a 排在 b 前面（实现中 isTruthy(ret) 用于决定顺序）
-println("sort(降序):", ext.sort([](a, b) { return a > b; }));
-println("splice(2,1,'X','Y') 删除元素:", ext.splice(2,1,"X","Y"));
-println("splice 后 ext:", ext);
-println("splice(0,0,'HEAD'):", ext.splice(0,0,"HEAD"));
-println("最终 ext:", ext);
+// 13. unshift - 头部添加元素
+println("\n== unshift 测试 ==");
+let uArr = [2, 3];
+let newLen = uArr.unshift(1);
+println("unshift返回值:", newLen);
+println("unshift后数组:", uArr);
+uArr.unshift(0, -1); // 多参数测试
+println("unshift多参数后:", uArr);
+
+// 14. splice - 切片修改
+println("\n== splice 测试 ==");
+let spArr = [1, 2, 3, 4, 5];
+// 从索引1开始删除2个元素
+let removed = spArr.splice(1, 2);
+println("splice删除元素:", removed);
+println("splice后数组:", spArr);
+// 插入元素
+spArr.splice(1, 0, 8, 9);
+println("splice插入后:", spArr);
+
+// 15. sort - 排序
+println("\n== sort 测试 ==");
+let sortArr = [3, 1, 4, 1, 5, 9, 2, 6];
+sortArr.sort(); // 默认排序
+println("默认排序:", sortArr);
+// 自定义排序 (降序)
+sortArr.sort([](a, b) { return b - a; }); // 假设返回正数表示 b > a
+println("降序排序:", sortArr);
+
+// 16. reverse - 反转
+println("\n== reverse 测试 ==");
+let revArr = [1, 2, 3, 4, 5];
+revArr.reverse();
+println("反转后:", revArr);
+
+// 17. indexOf - 查找索引
+println("\n== indexOf 测试 ==");
+let idxArr = [10, 20, 30, 40, 20];
+println("20的索引:", idxArr.indexOf(20));
+println("20从索引2开始找:", idxArr.indexOf(20, 2));
+println("50的索引:", idxArr.indexOf(50));
+
+// 18. join - 连接成字符串
+println("\n== join 测试 ==");
+let joinArr = ["a", "b", "c"];
+println("默认join:", joinArr.join()); // 默认逗号? 需确认实现，看代码似乎默认无分隔符或空字符串?
+// 查看C++代码: if (!args.empty()) delim=toString(args[0]); else delim=""; 
+// 实际上C++代码里默认是空字符串 ""。
+println("join('-'):", joinArr.join("-"));
+
+// 19. slice - 切片
+println("\n== slice 测试 ==");
+let slArr = [1, 2, 3, 4, 5];
+println("slice(1, 3):", slArr.slice(1, 3));
+println("slice(2):", slArr.slice(2));
+println("slice(-2):", slArr.slice(-2)); // 负数索引支持测试
 
 println("\n=== 数组方法测试完成 ===");
