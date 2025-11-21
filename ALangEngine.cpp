@@ -427,39 +427,7 @@ inline bool isTruthy(const Value& v) {
 	return true;
 }
 
-inline std::string toString(const Value& v) {
-	if (std::holds_alternative<std::monostate>(v)) return "null";
-	if (auto n = std::get_if<double>(&v)) {
-		std::ostringstream oss; oss << *n; return oss.str();
-	}
-	if (auto s = std::get_if<std::string>(&v)) return *s;
-	if (auto b = std::get_if<bool>(&v)) return *b ? "true" : "false";
-	if (std::holds_alternative<std::shared_ptr<Function>>(v)) return "[Function]";
-	if (auto arr = std::get_if<std::shared_ptr<Array>>(&v)) {
-		std::ostringstream oss; oss << "[";
-		if (*arr) {
-			for (size_t i=0;i<(*arr)->size();++i) {
-				if (i) oss << ", ";
-				oss << toString((**arr)[i]);
-			}
-		}
-		oss << "]"; return oss.str();
-	}
-	if (auto obj = std::get_if<std::shared_ptr<Object>>(&v)) {
-		std::ostringstream oss; oss << "{"; bool first=true;
-		if (*obj) {
-			for (auto& kv : **obj) {
-				if (!first) oss << ", "; first=false;
-				oss << kv.first << ": " << toString(kv.second);
-			}
-		}
-		oss << "}"; return oss.str();
-	}
-	if (std::holds_alternative<std::shared_ptr<ClassInfo>>(v)) return "[Class]";
-	if (std::holds_alternative<std::shared_ptr<Instance>>(v)) return "[Object]";
-	if (std::holds_alternative<std::shared_ptr<PromiseState>>(v)) return "[Promise]";
-	return "unknown";
-}
+inline std::string toString(const Value& v);
 
 // Compare two Value keys for use in Map/Set: numbers/strings/bools/null compare by value,
 // arrays/objects/functions/etc compare by pointer identity (shared_ptr address).
@@ -588,6 +556,57 @@ struct InstanceExt : Instance {
 		if (nativeDestructor && nativeHandle) nativeDestructor(nativeHandle);
 	}
 };
+
+inline std::string toString(const Value& v) {
+	if (std::holds_alternative<std::monostate>(v)) return "null";
+	if (auto n = std::get_if<double>(&v)) {
+		std::ostringstream oss; oss << *n; return oss.str();
+	}
+	if (auto s = std::get_if<std::string>(&v)) return *s;
+	if (auto b = std::get_if<bool>(&v)) return *b ? "true" : "false";
+	if (std::holds_alternative<std::shared_ptr<Function>>(v)) return "[Function]";
+	if (auto arr = std::get_if<std::shared_ptr<Array>>(&v)) {
+		std::ostringstream oss; oss << "[";
+		if (*arr) {
+			for (size_t i=0;i<(*arr)->size();++i) {
+				if (i) oss << ", ";
+				oss << toString((**arr)[i]);
+			}
+		}
+		oss << "]"; return oss.str();
+	}
+	if (auto obj = std::get_if<std::shared_ptr<Object>>(&v)) {
+		std::ostringstream oss; oss << "{"; bool first=true;
+		if (*obj) {
+			for (auto& kv : **obj) {
+				if (!first) oss << ", "; first=false;
+				oss << kv.first << ": " << toString(kv.second);
+			}
+		}
+		oss << "}"; return oss.str();
+	}
+	if (std::holds_alternative<std::shared_ptr<ClassInfo>>(v)) return "[Class]";
+	if (auto inst = std::get_if<std::shared_ptr<Instance>>(&v)) {
+		if (*inst && (*inst)->klass) {
+			if ((*inst)->klass->name == "Date") {
+				auto it = (*inst)->fields.find("iso");
+				if (it != (*inst)->fields.end() && std::holds_alternative<std::string>(it->second)) {
+					return std::get<std::string>(it->second);
+				}
+			}
+			if ((*inst)->klass->name == "Duration") {
+				auto it = (*inst)->fields.find("milliseconds");
+				if (it != (*inst)->fields.end() && std::holds_alternative<double>(it->second)) {
+					std::ostringstream oss; oss << "Duration(" << std::get<double>(it->second) << "ms)";
+					return oss.str();
+				}
+			}
+		}
+		return "[Object]";
+	}
+	if (std::holds_alternative<std::shared_ptr<PromiseState>>(v)) return "[Promise]";
+	return "unknown";
+}
 
 // Promise 状态：用于 await 等待
 struct PromiseState {
@@ -2148,8 +2167,44 @@ public:
 						if (auto rs = std::get_if<std::string>(&r)) return Value{toString(l) + *rs};
 					}
 					if (auto ls = std::get_if<std::string>(&l)) return Value{*ls + toString(r)};
+					// Operator overloading: __add__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__add__");
+							if (m) {
+								std::vector<Value> args{r};
+								// For builtin methods of instances, 'this' is usually bound when method is retrieved via getProperty.
+								// But here we retrieved it from class. We need to bind 'this'.
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								// User defined
+								if (args.size() != m->params.size()) { /* handle mismatch? */ }
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
 					throw std::runtime_error("'+' requires numbers or strings");
 				case TokenType::Minus:
+					// Operator overloading: __sub__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__sub__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
 					return Value{getNumber(l, "left of '-' ") - getNumber(r, "right of '-' ")};
 				case TokenType::Star:
 					return Value{getNumber(l, "left of '*' ") * getNumber(r, "right of '*' ")};
@@ -4644,6 +4699,96 @@ public:
 			dateClass->methods["getSecond"] = makeFieldGetter("second");
 			dateClass->methods["getMillisecond"] = makeFieldGetter("millisecond");
 			dateClass->methods["getEpochMillis"] = makeFieldGetter("epochMillis");
+
+			// format(fmt)
+			auto formatFn = std::make_shared<Function>(); formatFn->isBuiltin = true;
+			formatFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Date.format expects 1 argument (format string)");
+				std::string fmt = toString(args[0]);
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				double ms = getNumber(inst->fields["epochMillis"], "epochMillis");
+				time_t tt = (time_t)(ms / 1000.0);
+				std::tm tmVal{};
+#ifdef _WIN32
+				gmtime_s(&tmVal, &tt);
+#else
+				gmtime_r(&tt, &tmVal);
+#endif
+				char buf[128];
+				std::strftime(buf, sizeof(buf), fmt.c_str(), &tmVal);
+				return Value{ std::string(buf) };
+			};
+			dateClass->methods["format"] = formatFn;
+
+			// Duration Class
+			auto durationClass = std::make_shared<ClassInfo>();
+			durationClass->name = "Duration";
+			auto durCtor = std::make_shared<Function>(); durCtor->isBuiltin = true;
+			durCtor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Duration constructor expects 1 argument (milliseconds)");
+				double ms = getNumber(args[0], "Duration milliseconds");
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				inst->fields["milliseconds"] = Value{ms};
+				return Value{std::monostate{}};
+			};
+			durationClass->methods["constructor"] = durCtor;
+			(*timePkg)["Duration"] = Value{durationClass};
+
+			// __add__(other)
+			auto addFn = std::make_shared<Function>(); addFn->isBuiltin = true;
+			addFn->builtin = [dateClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Date + expects 1 argument");
+				Value other = args[0];
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				double ms = getNumber(inst->fields["epochMillis"], "epochMillis");
+				
+				if (auto otherInst = std::get_if<std::shared_ptr<Instance>>(&other)) {
+					if ((*otherInst)->klass->name == "Duration") {
+						double durMs = getNumber((*otherInst)->fields["milliseconds"], "Duration milliseconds");
+						double newMs = ms + durMs;
+						auto newInst = std::make_shared<Instance>(); newInst->klass = dateClass;
+						auto ctor = dateClass->methods["constructor"];
+						auto newEnv = std::make_shared<Environment>(); newEnv->define("this", Value{newInst});
+						ctor->builtin({Value{newMs}}, newEnv);
+						return Value{newInst};
+					}
+				}
+				throw std::runtime_error("Date + supports Duration");
+			};
+			dateClass->methods["__add__"] = addFn;
+
+			// __sub__(other)
+			auto subFn = std::make_shared<Function>(); subFn->isBuiltin = true;
+			subFn->builtin = [dateClass, durationClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() != 1) throw std::runtime_error("Date - expects 1 argument");
+				Value other = args[0];
+				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				double ms = getNumber(inst->fields["epochMillis"], "epochMillis");
+				
+				if (auto otherInst = std::get_if<std::shared_ptr<Instance>>(&other)) {
+					if ((*otherInst)->klass->name == "Duration") {
+						double durMs = getNumber((*otherInst)->fields["milliseconds"], "Duration milliseconds");
+						double newMs = ms - durMs;
+						auto newInst = std::make_shared<Instance>(); newInst->klass = dateClass;
+						auto ctor = dateClass->methods["constructor"];
+						auto newEnv = std::make_shared<Environment>(); newEnv->define("this", Value{newInst});
+						ctor->builtin({Value{newMs}}, newEnv);
+						return Value{newInst};
+					}
+					if ((*otherInst)->klass->name == "Date") {
+						double otherMs = getNumber((*otherInst)->fields["epochMillis"], "Date epochMillis");
+						double diff = ms - otherMs;
+						auto newInst = std::make_shared<Instance>(); newInst->klass = durationClass;
+						auto ctor = durationClass->methods["constructor"];
+						auto newEnv = std::make_shared<Environment>(); newEnv->define("this", Value{newInst});
+						ctor->builtin({Value{diff}}, newEnv);
+						return Value{newInst};
+					}
+				}
+				throw std::runtime_error("Date - supports Duration or Date");
+			};
+			dateClass->methods["__sub__"] = subFn;
+
 			(*timePkg)["Date"] = Value{ dateClass };
 		}
 
@@ -4676,6 +4821,21 @@ public:
 			return Value{ std::string(buf) };
 		}; (*timePkg)["nowISO"] = Value{ nowIsoFn };
 
+		// now() -> Date instance
+		auto nowFn = std::make_shared<Function>(); nowFn->isBuiltin = true; nowFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (!args.empty()) throw std::runtime_error("now expects 0 arguments");
+			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+			
+			auto timePkgLocal = ensurePackage("std.time");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
+			auto inst = std::make_shared<Instance>(); inst->klass = dateClass;
+			auto ctor = dateClass->methods["constructor"];
+			auto newEnv = std::make_shared<Environment>(); newEnv->define("this", Value{inst});
+			ctor->builtin({Value{static_cast<double>(ms)}}, newEnv);
+			return Value{inst};
+		}; (*timePkg)["now"] = Value{nowFn};
+
 		// dateFromEpoch(ms) -> Date instance
 		auto dateFromEpochFn = std::make_shared<Function>(); dateFromEpochFn->isBuiltin = true; dateFromEpochFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 			if (args.size() != 1) throw std::runtime_error("dateFromEpoch expects 1 argument (epochMillis)");
@@ -4691,6 +4851,37 @@ public:
 			ctorIt->second->builtin({ Value{ ms } }, closureEnv);
 			return Value{ inst };
 		}; (*timePkg)["dateFromEpoch"] = Value{ dateFromEpochFn };
+
+		// parse(dateStr, fmt)
+		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true;
+		parseFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() != 2) throw std::runtime_error("parse expects 2 arguments (dateString, formatString)");
+			std::string dateStr = toString(args[0]);
+			std::string fmt = toString(args[1]);
+			
+			std::tm tmVal{};
+			tmVal.tm_isdst = -1;
+			
+			char* res = strptime(dateStr.c_str(), fmt.c_str(), &tmVal);
+			if (res == nullptr) throw std::runtime_error("Date parse failed");
+			
+			// Use timegm to interpret as UTC (GNU extension, usually available on Linux)
+			time_t tt = timegm(&tmVal);
+			if (tt == -1) throw std::runtime_error("Date parse failed (timegm)");
+			
+			double ms = (double)tt * 1000.0;
+			
+			auto timePkgLocal = ensurePackage("std.time");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
+
+			auto newInst = std::make_shared<Instance>(); newInst->klass = dateClass;
+			auto ctor = dateClass->methods["constructor"];
+			auto newEnv = std::make_shared<Environment>(); newEnv->define("this", Value{newInst});
+			ctor->builtin({Value{ms}}, newEnv);
+			return Value{newInst};
+		};
+		(*timePkg)["parse"] = Value{parseFn};
 
 		// 注意: 不将 std.time 自动导入到全局，使用方可通过 `import std.time.*;` 或 `std.time.<name>` 访问
 		});
@@ -4796,6 +4987,19 @@ public:
 			throw std::runtime_error("len: unsupported type: " + typeOf(v));
 		};
 		globals->define("len", lenFn);
+
+		// performance.now()
+		auto perfObj = std::make_shared<Object>();
+		auto nowFn = std::make_shared<Function>(); nowFn->isBuiltin = true;
+		nowFn->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+			using namespace std::chrono;
+			static auto start = high_resolution_clock::now();
+			auto now = high_resolution_clock::now();
+			duration<double, std::milli> ms = now - start;
+			return Value{ ms.count() };
+		};
+		(*perfObj)["now"] = Value{nowFn};
+		globals->define("performance", Value{perfObj});
 
 		// quote(str): 返回一个对象 { tokens: [...], source: string, apply: function() }
 		auto quoteFn = std::make_shared<Function>();
@@ -5212,7 +5416,8 @@ public:
 				if (pid == 0) {
 					// child
 					if (!cwd.empty()) {
-						chdir(cwd.c_str());
+						auto ret = chdir(cwd.c_str());
+						ret = ret; // suppress unused warning
 					}
 					dup2(outpipe[1], STDOUT_FILENO);
 					dup2(errpipe[1], STDERR_FILENO);

@@ -1,0 +1,62 @@
+import std.io;
+import std.time;
+
+var println = std.io.println;
+
+println("=== Date and Time Extended Features Test ===");
+
+// 1. Test Date.format
+var now = std.time.now();
+println("Current time: " + now);
+var fmt = "%Y-%m-%d %H:%M:%S";
+var formatted = now.format(fmt);
+println("Formatted (" + fmt + "): " + formatted);
+
+// 2. Test std.time.parse
+var dateStr = "2023-12-25 10:30:00";
+var parsedDate = std.time.parse(dateStr, fmt);
+println("Parsed '" + dateStr + "': " + parsedDate);
+if (parsedDate.format(fmt) == dateStr) {
+    println("Parse verification: SUCCESS");
+} else {
+    println("Parse verification: FAILED");
+}
+
+// 3. Test Duration class
+var d1 = new std.time.Duration(1000); // 1000 ms = 1 second
+println("Duration d1: " + d1 + " (" + d1.milliseconds + " ms)");
+
+var d2 = new std.time.Duration(60000); // 1 minute
+println("Duration d2: " + d2 + " (" + d2.milliseconds + " ms)");
+
+// 4. Test Date + Duration
+var future = now + d2;
+println("Now + 1 minute: " + future);
+
+// 5. Test Date - Duration
+var past = now - d2;
+println("Now - 1 minute: " + past);
+
+// 6. Test Date - Date -> Duration
+var diff = future - now;
+println("Difference (future - now): " + diff + " ms");
+
+if (diff.milliseconds == 60000) {
+    println("Date difference verification: SUCCESS");
+} else {
+    println("Date difference verification: FAILED (expected 60000, got " + diff.milliseconds + ")");
+}
+
+// 7. Test performance.now()
+println("Testing performance.now()...");
+var start = performance.now();
+// Busy wait for a bit
+var sum = 0;
+for (var i = 0; i < 100000; i = i + 1) {
+    sum = sum + i;
+}
+var end = performance.now();
+var elapsed = end - start;
+println("Elapsed time: " + elapsed + " ms");
+
+println("=== Test Complete ===");

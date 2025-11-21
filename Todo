@@ -10,18 +10,18 @@
 - [x] **编码**: `std.encoding.base64`, `std.encoding.hex`, `std.encoding.url`
 
 ## 2. 集合与算法 (std.collections)
-- [ ] **排序**: 数组的 `sort(comparator)` (目前有基础排序，需要稳定排序/自定义比较器)
-- [ ] **过滤/映射**: `filter`, `map`, `reduce` (作为全局/数组方法已存在，需验证完整性)
+- [x] **排序**: 数组的 `sort(comparator)` (目前有基础排序，需要稳定排序/自定义比较器)
+- [x] **过滤/映射**: `filter`, `map`, `reduce` (作为全局/数组方法已存在，需验证完整性)
 - [x] **集合操作**: `Set` 类的 `union` (并集), `intersection` (交集), `difference` (差集)
 - [x] **优先队列**: `std.collections.PriorityQueue` (堆)
 - [x] **二分查找**: `std.collections.binarySearch`
 
 ## 3. 日期与时间 (std.time)
-- [ ] **格式化**: `strftime` 风格格式化 (例如 `format("YYYY-MM-DD")`)
-- [ ] **解析**: `parse(dateString, formatString)`
+- [x] **格式化**: `strftime` 风格格式化 (例如 `format("YYYY-MM-DD")`)
+- [x] **解析**: `parse(dateString, formatString)`
 - [ ] **时区**: 存在基础 UTC/Local 支持，但可能缺失完整的 TZDB 支持
-- [ ] **时间段**: 用于时间运算的 `Duration` 类 (例如 `date + duration`)
-- [ ] **高精度计时器**: 用于基准测试的 `performance.now()`
+- [x] **时间段**: 用于时间运算的 `Duration` 类 (例如 `date + duration`)
+- [x] **高精度计时器**: 用于基准测试的 `performance.now()`
 
 ## 4. 输入/输出与操作系统 (std.io / std.os)
 - [ ] **路径操作**: `std.path` 模块 (`join`, `resolve`, `dirname`, `basename`, `extname`, `isAbsolute`)
