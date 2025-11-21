@@ -549,6 +549,7 @@ struct ClassInfo {
 struct Instance {
 	std::shared_ptr<ClassInfo> klass;
 	std::unordered_map<std::string, Value> fields;
+	virtual ~Instance() = default;
 };
 
 // Allow Instance to own a native handle for host-wrapped classes
@@ -558,6 +559,75 @@ struct InstanceExt : Instance {
 	~InstanceExt() {
 		if (nativeDestructor && nativeHandle) nativeDestructor(nativeHandle);
 	}
+};
+
+struct StreamWrapper {
+	virtual size_t read(char* buf, size_t n) = 0;
+	virtual void write(const char* buf, size_t n) = 0;
+	virtual void close() = 0;
+	virtual bool eof() { return false; }
+	virtual ~StreamWrapper() = default;
+};
+
+struct FStreamWrapper : StreamWrapper {
+	std::fstream fs;
+	FStreamWrapper(const std::string& path, std::ios_base::openmode mode) : fs(path, mode) {}
+	size_t read(char* buf, size_t n) override {
+		fs.read(buf, n);
+		return static_cast<size_t>(fs.gcount());
+	}
+	void write(const char* buf, size_t n) override {
+		fs.write(buf, n);
+	}
+	void close() override { fs.close(); }
+	bool eof() override { return fs.eof(); }
+};
+
+struct StdinWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override {
+		std::cin.read(buf, n);
+		return static_cast<size_t>(std::cin.gcount());
+	}
+	void write(const char* buf, size_t n) override { }
+	void close() override { }
+	bool eof() override { return std::cin.eof(); }
+};
+
+struct StdoutWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override { return 0; }
+	void write(const char* buf, size_t n) override {
+		std::cout.write(buf, n);
+		std::cout.flush();
+	}
+	void close() override { }
+};
+
+struct StderrWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override { return 0; }
+	void write(const char* buf, size_t n) override {
+		std::cerr.write(buf, n);
+		std::cerr.flush();
+	}
+	void close() override { }
+};
+
+struct FilePtrWrapper : StreamWrapper {
+	FILE* fp;
+	std::function<void(FILE*)> closer;
+	FilePtrWrapper(FILE* f, std::function<void(FILE*)> c) : fp(f), closer(c) {}
+	size_t read(char* buf, size_t n) override {
+		return fread(buf, 1, n, fp);
+	}
+	void write(const char* buf, size_t n) override {
+		fwrite(buf, 1, n, fp);
+	}
+	void close() override {
+		if (fp && closer) {
+			closer(fp);
+			fp = nullptr;
+		}
+	}
+	bool eof() override { return feof(fp); }
 };
 
 inline std::string toString(const Value& v) {
@@ -3893,6 +3963,154 @@ public:
 		globals->define("undefined", Value{std::monostate{}});
 		packages["std"] = stdRoot;
 
+		// ===== Path Manipulation (std.path) =====
+		registerLazyPackage("std.path", [](std::shared_ptr<Object> pathPkg) {
+			namespace fs = std::filesystem;
+			// join(...paths)
+			auto joinFn = std::make_shared<Function>(); joinFn->isBuiltin = true;
+			joinFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				fs::path p;
+				for (const auto& arg : args) {
+					p /= toString(arg);
+				}
+				return Value{ p.string() };
+			};
+			(*pathPkg)["join"] = Value{ joinFn };
+
+			// resolve(...paths)
+			auto resolveFn = std::make_shared<Function>(); resolveFn->isBuiltin = true;
+			resolveFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				fs::path p = fs::current_path();
+				for (const auto& arg : args) {
+					p /= toString(arg);
+				}
+				return Value{ fs::weakly_canonical(p).string() };
+			};
+			(*pathPkg)["resolve"] = Value{ resolveFn };
+
+			// dirname(path)
+			auto dirnameFn = std::make_shared<Function>(); dirnameFn->isBuiltin = true;
+			dirnameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) return Value{ std::string(".") };
+				fs::path p(toString(args[0]));
+				return Value{ p.parent_path().string() };
+			};
+			(*pathPkg)["dirname"] = Value{ dirnameFn };
+
+			// basename(path, [ext])
+			auto basenameFn = std::make_shared<Function>(); basenameFn->isBuiltin = true;
+			basenameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) return Value{ std::string("") };
+				fs::path p(toString(args[0]));
+				std::string name = p.filename().string();
+				if (args.size() > 1) {
+					std::string ext = toString(args[1]);
+					if (name.size() >= ext.size() && name.compare(name.size() - ext.size(), ext.size(), ext) == 0) {
+						return Value{ name.substr(0, name.size() - ext.size()) };
+					}
+				}
+				return Value{ name };
+			};
+			(*pathPkg)["basename"] = Value{ basenameFn };
+
+			// extname(path)
+			auto extnameFn = std::make_shared<Function>(); extnameFn->isBuiltin = true;
+			extnameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) return Value{ std::string("") };
+				fs::path p(toString(args[0]));
+				return Value{ p.extension().string() };
+			};
+			(*pathPkg)["extname"] = Value{ extnameFn };
+
+			// isAbsolute(path)
+			auto isAbsFn = std::make_shared<Function>(); isAbsFn->isBuiltin = true;
+			isAbsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) return Value{ false };
+				fs::path p(toString(args[0]));
+				return Value{ p.is_absolute() };
+			};
+			(*pathPkg)["isAbsolute"] = Value{ isAbsFn };
+
+			(*pathPkg)["sep"] = Value{ std::string(1, fs::path::preferred_separator) };
+		});
+
+		// ===== OS Interaction (std.os) =====
+		registerLazyPackage("std.os", [this](std::shared_ptr<Object> osPkg) {
+			// system(command)
+			auto systemFn = std::make_shared<Function>(); systemFn->isBuiltin = true;
+			systemFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) throw std::runtime_error("os.system expects command");
+				std::string cmd = toString(args[0]);
+				int ret = std::system(cmd.c_str());
+				return Value{static_cast<double>(ret)};
+			};
+			(*osPkg)["system"] = Value{systemFn};
+
+			// getenv(name)
+			auto getenvFn = std::make_shared<Function>(); getenvFn->isBuiltin = true;
+			getenvFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) throw std::runtime_error("os.getenv expects name");
+				std::string name = toString(args[0]);
+				const char* val = std::getenv(name.c_str());
+				if (val) return Value{std::string(val)};
+				return Value{std::monostate{}};
+			};
+			(*osPkg)["getenv"] = Value{getenvFn};
+
+			// setenv(name, value)
+			auto setenvFn = std::make_shared<Function>(); setenvFn->isBuiltin = true;
+			setenvFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.size() < 2) throw std::runtime_error("os.setenv expects name and value");
+				std::string name = toString(args[0]);
+				std::string val = toString(args[1]);
+				setenv(name.c_str(), val.c_str(), 1);
+				return Value{true};
+			};
+			(*osPkg)["setenv"] = Value{setenvFn};
+
+			// popen(command, mode)
+			auto popenFn = std::make_shared<Function>(); popenFn->isBuiltin = true;
+			popenFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				if (args.size() < 1) throw std::runtime_error("os.popen expects command");
+				std::string cmd = toString(args[0]);
+				std::string mode = "r";
+				if (args.size() > 1) mode = toString(args[1]);
+				
+				FILE* fp = popen(cmd.c_str(), mode.c_str());
+				if (!fp) throw std::runtime_error("os.popen failed");
+				
+				auto ioPkgLocal = ensurePackage("std.io");
+				auto itFS = ioPkgLocal->find("FileStream");
+				if (itFS == ioPkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(itFS->second)) {
+					pclose(fp);
+					throw std::runtime_error("FileStream class not found");
+				}
+				auto streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
+
+				auto fsInst = std::make_shared<InstanceExt>(); 
+				fsInst->klass = streamClass; 
+				fsInst->fields["path"] = Value{cmd}; 
+				fsInst->fields["mode"] = Value{mode}; 
+				fsInst->fields["closed"] = Value{false}; 
+				
+				fsInst->nativeHandle = new FilePtrWrapper(fp, [](FILE* f) { pclose(f); });
+				fsInst->nativeDestructor = [](void* ptr) { delete static_cast<StreamWrapper*>(ptr); };
+				
+				return Value{std::shared_ptr<Instance>(fsInst)};
+			};
+			(*osPkg)["popen"] = Value{popenFn};
+
+			#ifdef _WIN32
+			(*osPkg)["platform"] = Value{std::string("windows")};
+			#elif __linux__
+			(*osPkg)["platform"] = Value{std::string("linux")};
+			#elif __APPLE__
+			(*osPkg)["platform"] = Value{std::string("darwin")};
+			#else
+			(*osPkg)["platform"] = Value{std::string("unknown")};
+			#endif
+		});
+
 		auto ioPkg = ensurePackage("std.io");
 		// Register std.io.fileSystem as a package so it can be imported directly
 		// It will also be available as std.io.fileSystem due to ensurePackage logic
@@ -4366,19 +4584,37 @@ public:
 				std::string mode = std::get<std::string>(args[0]);
 				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 				std::string path = std::get<std::string>(inst->fields["path"]);
-				auto streamClassIt = stdRoot->find("io.FileStream");
-				std::shared_ptr<ClassInfo> streamClass;
-				if (streamClassIt != stdRoot->end()) {
-					if (std::holds_alternative<std::shared_ptr<Object>>(streamClassIt->second)) {
-						// nested object structure: std.io.FileStream stored in std.io package
-					}
-				}
-				// find in std.io package
+				
 				auto ioPkgLocal = ensurePackage("std.io");
 				auto itFS = ioPkgLocal->find("FileStream");
 				if (itFS == ioPkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(itFS->second)) throw std::runtime_error("FileStream class not found");
-				streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
-				auto fsInst = std::make_shared<Instance>(); fsInst->klass = streamClass; fsInst->fields["path"] = Value{path}; fsInst->fields["mode"] = Value{mode}; fsInst->fields["pos"] = Value{0.0}; fsInst->fields["closed"] = Value{false}; return Value{fsInst};
+				auto streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
+				
+				std::ios_base::openmode modeFlags = std::ios::binary;
+				if (mode == "r") modeFlags |= std::ios::in;
+				else if (mode == "w") modeFlags |= std::ios::out | std::ios::trunc;
+				else if (mode == "a") modeFlags |= std::ios::out | std::ios::app;
+				else if (mode == "rw") modeFlags |= std::ios::in | std::ios::out;
+				else throw std::runtime_error("File.open invalid mode: " + mode);
+
+				auto fsInst = std::make_shared<InstanceExt>(); 
+				fsInst->klass = streamClass; 
+				fsInst->fields["path"] = Value{path}; 
+				fsInst->fields["mode"] = Value{mode}; 
+				fsInst->fields["closed"] = Value{false}; 
+				
+				auto* wrapper = new FStreamWrapper(path, modeFlags);
+				if (!wrapper->fs) {
+					delete wrapper;
+					throw std::runtime_error("File.open failed: " + path);
+				}
+				
+				fsInst->nativeHandle = wrapper;
+				fsInst->nativeDestructor = [](void* ptr) { 
+					delete static_cast<StreamWrapper*>(ptr); 
+				};
+				
+				return Value{std::shared_ptr<Instance>(fsInst)};
 			}; fileClass->methods["open"] = openM;
 			(*fsPkg)["File"] = Value{fileClass};
 		}
@@ -4448,49 +4684,132 @@ public:
 		(*ioPkg)["File"] = (*fsPkg)["File"];
 		(*ioPkg)["Dir"] = (*fsPkg)["Dir"];
 
-		// FileStream class (lightweight streaming wrapper)
+		// FileStream class (buffered, stateful)
 		{
 			auto fsClass = std::make_shared<ClassInfo>(); fsClass->name = "FileStream";
+			
 			// read(n)
 			auto fsRead = std::make_shared<Function>(); fsRead->isBuiltin = true; fsRead->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("FileStream.read expects 1 argument (n bytes)");
-				double dn = getNumber(args[0], "FileStream.read n"); if (dn < 0) throw std::runtime_error("FileStream.read n must be >=0"); size_t n = static_cast<size_t>(dn);
-				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
-				bool closed = std::get<bool>(inst->fields["closed"]); if (closed) throw std::runtime_error("FileStream.read on closed stream");
-				std::string mode = std::get<std::string>(inst->fields["mode"]); if (mode != "r") throw std::runtime_error("FileStream.read only valid in 'r' mode");
-				std::string path = std::get<std::string>(inst->fields["path"]); double posd = std::get<double>(inst->fields["pos"]); size_t pos = static_cast<size_t>(posd);
-				std::ifstream in(path, std::ios::binary); if (!in) throw std::runtime_error("FileStream.read cannot open: " + path);
-				in.seekg(static_cast<std::streamoff>(pos)); std::vector<unsigned char> buf; buf.resize(n);
-				in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(n)); size_t got = static_cast<size_t>(in.gcount()); buf.resize(got); inst->fields["pos"] = Value{ static_cast<double>(pos + got) };
-				auto arr = std::make_shared<Array>(); arr->reserve(buf.size()); for (auto c : buf) arr->push_back(Value{ static_cast<double>(c) }); return Value{arr};
-			}; fsClass->methods["read"] = fsRead;
-			// write(array or string)
+				Value thisVal = closure->get("this"); 
+				auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
+				if (!inst || !inst->nativeHandle) throw std::runtime_error("FileStream: invalid handle");
+				
+				StreamWrapper* stream = static_cast<StreamWrapper*>(inst->nativeHandle);
+				
+				size_t n = 0;
+				if (!args.empty()) {
+					double dn = getNumber(args[0], "FileStream.read n");
+					if (dn < 0) throw std::runtime_error("FileStream.read n must be >=0");
+					n = static_cast<size_t>(dn);
+				} else {
+					throw std::runtime_error("FileStream.read expects 1 argument (n bytes)");
+				}
+
+				std::vector<char> buf(n);
+				size_t got = stream->read(buf.data(), n);
+				buf.resize(got);
+				
+				auto arr = std::make_shared<Array>();
+				arr->reserve(got);
+				for (char c : buf) arr->push_back(Value{ static_cast<double>(static_cast<unsigned char>(c)) });
+				return Value{arr};
+			}; 
+			fsClass->methods["read"] = fsRead;
+
+			// write(data)
 			auto fsWrite = std::make_shared<Function>(); fsWrite->isBuiltin = true; fsWrite->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("FileStream.write expects 1 argument (string or byte array)");
-				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
-				bool closed = std::get<bool>(inst->fields["closed"]); if (closed) throw std::runtime_error("FileStream.write on closed stream");
-				std::string mode = std::get<std::string>(inst->fields["mode"]); if (mode != "a" && mode != "w") throw std::runtime_error("FileStream.write only valid in 'a' or 'w' mode");
-				std::string path = std::get<std::string>(inst->fields["path"]); std::ofstream out(path, std::ios::binary | (mode == "a" ? std::ios::app : std::ios::trunc)); if (!out) throw std::runtime_error("FileStream.write cannot open: " + path);
+				if (args.size() != 1) throw std::runtime_error("FileStream.write expects 1 argument");
+				Value thisVal = closure->get("this"); 
+				auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
+				if (!inst || !inst->nativeHandle) throw std::runtime_error("FileStream: invalid handle");
+				
+				StreamWrapper* stream = static_cast<StreamWrapper*>(inst->nativeHandle);
+				
 				if (std::holds_alternative<std::string>(args[0])) {
-					out << std::get<std::string>(args[0]); inst->fields["pos"] = Value{ static_cast<double>(std::filesystem::file_size(path)) }; return Value{true};
+					std::string s = std::get<std::string>(args[0]);
+					stream->write(s.data(), s.size());
+				} else if (std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
+					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+					std::vector<char> buf;
+					buf.reserve(arr->size());
+					for (auto &v : *arr) {
+						double d = getNumber(v, "FileStream.write element");
+						buf.push_back(static_cast<char>(static_cast<unsigned char>(d)));
+					}
+					stream->write(buf.data(), buf.size());
+				} else {
+					throw std::runtime_error("FileStream.write expects string or byte array");
 				}
-				if (std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-					auto arr = std::get<std::shared_ptr<Array>>(args[0]); for (auto &v : *arr){ double d = getNumber(v, "FileStream.write element"); unsigned char c = static_cast<unsigned char>(static_cast<int>(d) & 0xFF); out.put(static_cast<char>(c)); }
-					inst->fields["pos"] = Value{ static_cast<double>(std::filesystem::file_size(path)) }; return Value{true};
-				}
-				throw std::runtime_error("FileStream.write unsupported argument type");
-			}; fsClass->methods["write"] = fsWrite;
+				return Value{true};
+			};
+			fsClass->methods["write"] = fsWrite;
+
 			// eof()
 			auto fsEof = std::make_shared<Function>(); fsEof->isBuiltin = true; fsEof->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (!args.empty()) throw std::runtime_error("FileStream.eof expects 0 arguments"); Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
-				std::string path = std::get<std::string>(inst->fields["path"]); bool closed = std::get<bool>(inst->fields["closed"]); if (closed) return Value{true};
-				std::error_code ec; auto sz = std::filesystem::file_size(path, ec); if (ec) return Value{true}; double posd = std::get<double>(inst->fields["pos"]); return Value{ posd >= static_cast<double>(sz) };
-			}; fsClass->methods["eof"] = fsEof;
+				Value thisVal = closure->get("this"); 
+				auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
+				if (!inst || !inst->nativeHandle) return Value{true};
+				StreamWrapper* stream = static_cast<StreamWrapper*>(inst->nativeHandle);
+				return Value{stream->eof()};
+			};
+			fsClass->methods["eof"] = fsEof;
+
 			// close()
 			auto fsClose = std::make_shared<Function>(); fsClose->isBuiltin = true; fsClose->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (!args.empty()) throw std::runtime_error("FileStream.close expects 0 arguments"); Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal); inst->fields["closed"] = Value{true}; return Value{true};
-			}; fsClass->methods["close"] = fsClose;
+				Value thisVal = closure->get("this"); 
+				auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
+				if (inst && inst->nativeHandle) {
+					StreamWrapper* stream = static_cast<StreamWrapper*>(inst->nativeHandle);
+					stream->close();
+					if (inst->nativeDestructor) inst->nativeDestructor(inst->nativeHandle);
+					inst->nativeHandle = nullptr;
+					inst->nativeDestructor = nullptr;
+				}
+				inst->fields["closed"] = Value{true};
+				return Value{true};
+			};
+			fsClass->methods["close"] = fsClose;
+
 			(*ioPkg)["FileStream"] = Value{fsClass};
+		}
+
+		// Standard Streams
+		{
+			auto ioPkg = ensurePackage("std.io");
+			auto itFS = ioPkg->find("FileStream");
+			if (itFS != ioPkg->end() && std::holds_alternative<std::shared_ptr<ClassInfo>>(itFS->second)) {
+				auto streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
+
+				// stdin
+				auto stdinInst = std::make_shared<InstanceExt>();
+				stdinInst->klass = streamClass;
+				stdinInst->fields["path"] = Value{std::string("stdin")};
+				stdinInst->fields["mode"] = Value{std::string("r")};
+				stdinInst->fields["closed"] = Value{false};
+				stdinInst->nativeHandle = new StdinWrapper();
+				stdinInst->nativeDestructor = [](void* ptr) { delete static_cast<StreamWrapper*>(ptr); };
+				(*ioPkg)["stdin"] = Value{std::shared_ptr<Instance>(stdinInst)};
+
+				// stdout
+				auto stdoutInst = std::make_shared<InstanceExt>();
+				stdoutInst->klass = streamClass;
+				stdoutInst->fields["path"] = Value{std::string("stdout")};
+				stdoutInst->fields["mode"] = Value{std::string("w")};
+				stdoutInst->fields["closed"] = Value{false};
+				stdoutInst->nativeHandle = new StdoutWrapper();
+				stdoutInst->nativeDestructor = [](void* ptr) { delete static_cast<StreamWrapper*>(ptr); };
+				(*ioPkg)["stdout"] = Value{std::shared_ptr<Instance>(stdoutInst)};
+
+				// stderr
+				auto stderrInst = std::make_shared<InstanceExt>();
+				stderrInst->klass = streamClass;
+				stderrInst->fields["path"] = Value{std::string("stderr")};
+				stderrInst->fields["mode"] = Value{std::string("w")};
+				stderrInst->fields["closed"] = Value{false};
+				stderrInst->nativeHandle = new StderrWrapper();
+				stderrInst->nativeDestructor = [](void* ptr) { delete static_cast<StreamWrapper*>(ptr); };
+				(*ioPkg)["stderr"] = Value{std::shared_ptr<Instance>(stderrInst)};
+			}
 		}
 
 		// Extended File System Operations (std.io.fileSystem)

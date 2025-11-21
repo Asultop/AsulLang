@@ -24,10 +24,10 @@
 - [x] **高精度计时器**: 用于基准测试的 `performance.now()`
 
 ## 4. 输入/输出与操作系统 (std.io / std.os)
-- [ ] **路径操作**: `std.path` 模块 (`join`, `resolve`, `dirname`, `basename`, `extname`, `isAbsolute`)
-- [ ] **文件流**: 缓冲读写 (行, 块) - `FileStream` 已存在但需验证缓冲机制
-- [ ] **标准流**: 作为流对象访问 `stdin`, `stdout`, `stderr`
-- [ ] **进程控制**: `exec` (作为 `os.call` 存在)，但需要 `spawn` 以与长运行进程交互 (stdin/stdout 管道)
+- [x] **路径操作**: `std.path` 模块 (`join`, `resolve`, `dirname`, `basename`, `extname`, `isAbsolute`)
+- [x] **文件流**: 缓冲读写 (行, 块) - `FileStream` 已重写为有状态缓冲流
+- [x] **标准流**: 作为流对象访问 `stdin`, `stdout`, `stderr`
+- [x] **进程控制**: `os.system`, `os.popen` (支持读取输出), `os.getenv`, `os.setenv`
 - [ ] **信号**: 处理 `SIGINT`, `SIGTERM`
 
 ## 5. 网络 (std.network)

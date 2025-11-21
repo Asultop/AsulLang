@@ -1,0 +1,68 @@
+import std.io;
+import std.os;
+import std.path;
+
+println("Testing std.path...");
+let p = std.path.join("a", "b", "c");
+println("join: " + p);
+if (p != "a/b/c") throw "join failed";
+
+let abs = std.path.resolve("test");
+println("resolve: " + abs);
+
+let dir = std.path.dirname("/a/b/c.txt");
+println("dirname: " + dir);
+if (dir != "/a/b") throw "dirname failed";
+
+let base = std.path.basename("/a/b/c.txt");
+println("basename: " + base);
+if (base != "c.txt") throw "basename failed";
+
+let ext = std.path.extname("/a/b/c.txt");
+println("extname: " + ext);
+if (ext != ".txt") throw "extname failed";
+
+println("Testing std.io streams...");
+
+// Create output directory
+let outDir = "IOTest";
+let d = new Dir(outDir);
+if (!d.exists()) {
+    d.create();
+}
+
+let testFile = std.path.join(outDir, "test_io.txt");
+
+let fObj = new File(testFile);
+let f = fObj.open("w");
+f.write("Hello World");
+f.close();
+
+let fObj2 = new File(testFile);
+let f2 = fObj2.open("r");
+let bytes = f2.read(100); 
+println("Read bytes: " + bytes);
+f2.close();
+
+let fObj3 = new File(testFile);
+let f3 = fObj3.open("r");
+let bytes2 = f3.read(5); 
+println("Read bytes: " + bytes2);
+f3.close();
+
+println("Testing std.os...");
+std.os.setenv("TEST_VAR", "123");
+let val = std.os.getenv("TEST_VAR");
+println("Env var: " + val);
+if (val != "123") throw "getenv failed";
+
+println("Testing popen...");
+let pstream = std.os.popen("echo Hello Popen", "r");
+let outBytes = pstream.read(100);
+println("Popen output bytes: " + outBytes);
+pstream.close();
+
+println("Testing stdin/stdout...");
+std.io.stdout.write("Writing to stdout via stream\n");
+
+println("All tests passed!");
