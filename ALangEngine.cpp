@@ -2559,6 +2559,11 @@ public:
 				}
 				auto it = packages.find(ent.packageName);
 				if (it == packages.end()) {
+					if (loadLazyPackage(ent.packageName)) {
+						it = packages.find(ent.packageName);
+					}
+				}
+				if (it == packages.end()) {
 					std::ostringstream oss; oss << "Unknown package: " << ent.packageName
 						<< " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
 					throw std::runtime_error(oss.str());
@@ -2573,12 +2578,23 @@ public:
 					if (ent.alias.has_value()) varName = ent.alias.value();
 					env->define(varName, Value{pobj});
 				} else if (ent.symbol == "*") {
+					// Load all lazy sub-packages
+					std::string prefix = ent.packageName + ".";
+					std::vector<std::string> toLoad;
+					for (auto& lp : lazyPackages) {
+						if (lp.first.rfind(prefix, 0) == 0) {
+							toLoad.push_back(lp.first);
+						}
+					}
+					for (const auto& name : toLoad) loadLazyPackage(name);
+
 					for (auto& kv : *pobj) env->define(kv.first, kv.second);
 				} else {
 					auto fit = pobj->find(ent.symbol);
 					if (fit == pobj->end()) {
 						// Check if it is a sub-package import
 						std::string subPkgName = ent.packageName + "." + ent.symbol;
+						loadLazyPackage(subPkgName);
 						auto subIt = packages.find(subPkgName);
 						if (subIt != packages.end()) {
 							std::string varName = ent.symbol;
@@ -2962,6 +2978,24 @@ private:
 	std::string lastErrorFilename;
 	std::vector<std::string> importStack;
 	std::vector<std::string> callStack;
+
+	// Lazy loading support
+	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
+
+	void registerLazyPackage(const std::string& name, std::function<void(std::shared_ptr<Object>)> init) {
+		lazyPackages[name] = init;
+	}
+
+	bool loadLazyPackage(const std::string& name) {
+		auto it = lazyPackages.find(name);
+		if (it != lazyPackages.end()) {
+			auto pkg = ensurePackage(name);
+			it->second(pkg);
+			lazyPackages.erase(it);
+			return true;
+		}
+		return false;
+	}
 
 	// 构建带有增强信息的异常对象：{ message, line, column, length, stack: [...], type: "Error" }
 	Value buildExceptionValue(const std::string& msg, int line = -1, int column = -1, int length = -1) {
@@ -3728,7 +3762,7 @@ public:
 		auto fsPkg = ensurePackage("std.io.fileSystem");
 
 		// Network Package (std.network)
-		auto netPkg = ensurePackage("std.network");
+		registerLazyPackage("std.network", [](std::shared_ptr<Object> netPkg) {
 		
 		// Helper for HTTP requests (Simple blocking implementation)
 		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {
@@ -3858,6 +3892,7 @@ public:
 			return httpRequest("POST", std::get<std::string>(args[0]), toString(args[1]));
 		};
 		(*netPkg)["post"] = Value{postFn};
+		});
 
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
@@ -4289,8 +4324,58 @@ public:
 		}
 		importPackageSymbols("std.io");
 
+		// ===== String Manipulation (std.string) =====
+		registerLazyPackage("std.string", [](std::shared_ptr<Object> stringPkg) {
+
+		// toUpperCase(str)
+		auto toUpperCaseFn = std::make_shared<Function>();
+		toUpperCaseFn->isBuiltin = true;
+		toUpperCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
+				throw std::runtime_error("toUpperCase expects 1 string argument");
+			}
+			std::string input = std::get<std::string>(args[0]);
+			std::transform(input.begin(), input.end(), input.begin(), ::toupper);
+			return Value{input};
+		};
+		(*stringPkg)["toUpperCase"] = Value{toUpperCaseFn};
+
+		// toLowerCase(str)
+		auto toLowerCaseFn = std::make_shared<Function>();
+		toLowerCaseFn->isBuiltin = true;
+		toLowerCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
+				throw std::runtime_error("toLowerCase expects 1 string argument");
+			}
+			std::string input = std::get<std::string>(args[0]);
+			std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+			return Value{input};
+		};
+		(*stringPkg)["toLowerCase"] = Value{toLowerCaseFn};
+
+		// trim(str)
+		auto trimFn = std::make_shared<Function>();
+		trimFn->isBuiltin = true;
+		trimFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
+				throw std::runtime_error("trim expects 1 string argument");
+			}
+			std::string input = std::get<std::string>(args[0]);
+			auto start = input.find_first_not_of(" \t\n\r");
+			auto end = input.find_last_not_of(" \t\n\r");
+			if (start == std::string::npos || end == std::string::npos) {
+				return Value{std::string("")};
+			}
+			return Value{input.substr(start, end - start + 1)};
+		};
+		(*stringPkg)["trim"] = Value{trimFn};
+
+		// Register std.string package
+		// globals->define("std.string", Value{stringPkg});
+		});
+
 		// ===== Date & Time (std.time) =====
-		auto timePkg = ensurePackage("std.time");
+		registerLazyPackage("std.time", [this](std::shared_ptr<Object> timePkg) {
 
 		// Date class: constructor(epochMillis)
 		{
@@ -4401,9 +4486,10 @@ public:
 		}; (*timePkg)["dateFromEpoch"] = Value{ dateFromEpochFn };
 
 		// 注意: 不将 std.time 自动导入到全局，使用方可通过 `import std.time.*;` 或 `std.time.<name>` 访问
+		});
 
 		// ===== JSON (json) =====
-		auto jsonPkg = ensurePackage("json");
+		registerLazyPackage("json", [](std::shared_ptr<Object> jsonPkg) {
 
 		// parse(jsonString) -> ALang Value (simple JSON parser)
 		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true; parseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
@@ -4483,6 +4569,7 @@ public:
 			};
 			return Value{ emit(args[0]) };
 		}; (*jsonPkg)["stringify"] = Value{ stringifyFn };
+		});
 
 		// 注意: 不将 json 自动导入到全局，使用方可通过 `import json.*;` 或 `json.<name>` 访问
 
@@ -4802,7 +4889,7 @@ public:
 
 		// --- Packages ---
 		// Math: pi, abs
-		auto mathPkg = ensurePackage("std.math");
+		registerLazyPackage("std.math", [](std::shared_ptr<Object> mathPkg) {
 		(*mathPkg)["pi"] = Value{ 3.14159265358979323846 };
 		{
 			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
@@ -4884,10 +4971,11 @@ public:
 				(*mathPkg)["random"] = fn;
 			}
 		}
+		});
 
 		// ===== OS (os) =====
 		// 提供异步系统调用：`os.call(program, argsArray, cwd)` 返回 Promise
-		auto osPkg = ensurePackage("os");
+		registerLazyPackage("os", [this](std::shared_ptr<Object> osPkg) {
 		auto callFn = std::make_shared<Function>(); callFn->isBuiltin = true;
 		callFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 			if (args.size() < 1) throw std::runtime_error("os.call expects at least 1 argument (program)");
@@ -5002,6 +5090,7 @@ public:
 			return Value{std::string("x86")};
 		};
 		(*osPkg)["arch"] = Value{archFn};
+		});
 
 
 		// ---- Builtin containers and helpers ----
@@ -5378,6 +5467,7 @@ public:
 
 
 		// Regex class
+		registerLazyPackage("std.regex", [this](std::shared_ptr<Object> regexPkg) {
 		auto regexClass = std::make_shared<ClassInfo>();
 		regexClass->name = "Regex";
 		
@@ -5512,10 +5602,9 @@ public:
 		};
 		regexClass->methods["replace"] = replaceFn;
 
-		auto regexPkg = std::make_shared<Object>();
 		(*regexPkg)["Regex"] = Value{regexClass};
-		packages["std.regex"] = regexPkg;
 		(*stdRoot)["regex"] = Value{regexClass};
+		});
 	}
 };
 
@@ -5889,7 +5978,7 @@ void ALangEngine::registerClass(
 
 		// 注入全局
 		impl->interpreter.globalsEnv()->define(className, klass);
-		impl->interpreter.registerPackageSymbol("std.math", className, klass);
+		// impl->interpreter.registerPackageSymbol("std.math", className, klass);
 }
 
 void ALangEngine::registerClassValue(

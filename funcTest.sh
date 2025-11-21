@@ -67,6 +67,9 @@ func_files=(
     "dateTimeExample.alang"
     "jsonExample.alang"
     "OSExample.alang"
+    "stringExample.alang"
+    "test_lazy.alang"
+    "test_wildcard.alang"
 )
 
 # Counter for passed/failed tests

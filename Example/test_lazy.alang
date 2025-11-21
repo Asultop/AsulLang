@@ -1,0 +1,103 @@
+// test_lazy.alang
+
+println("Testing std.io (default import)...");
+// println is available, so std.io is working.
+
+println("Checking std.string before import...");
+// We expect std.string to be undefined or missing.
+// Accessing missing property on object usually returns undefined in ALang (based on previous observations)
+// or throws error. Let's try to access it safely if possible.
+// But std is global.
+// Let's try to print it.
+
+try {
+    if (std.string == undefined) {
+        println("PASS: std.string is undefined.");
+    } else {
+        println("FAIL: std.string is defined: " + std.string);
+    }
+} catch (e) {
+    println("PASS: Accessing std.string threw error (maybe missing property): " + e);
+}
+
+println("Importing std.string...");
+import std.string;
+
+println("Checking std.string after import...");
+try {
+    if (std.string != undefined) {
+        println("PASS: std.string is defined.");
+        let s = std.string.toUpperCase("hello");
+        println("Result: " + s);
+        if (s == "HELLO") {
+            println("PASS: toUpperCase worked.");
+        } else {
+            println("FAIL: toUpperCase returned wrong result.");
+        }
+    } else {
+        println("FAIL: std.string is still undefined.");
+    }
+} catch (e) {
+    println("FAIL: Accessing std.string threw error: " + e);
+}
+
+// Test std.math
+println("Checking std.math before import...");
+try {
+    if (std.math == undefined) {
+        println("PASS: std.math is undefined.");
+    } else {
+        println("FAIL: std.math is defined.");
+    }
+} catch (e) {
+    println("PASS: Accessing std.math threw error: " + e);
+}
+
+println("Importing std.math...");
+import std.math;
+try {
+    if (std.math != undefined) {
+        println("PASS: std.math is defined.");
+        println("PI: " + std.math.pi);
+    } else {
+        println("FAIL: std.math is still undefined.");
+    }
+} catch (e) {
+    println("FAIL: Accessing std.math threw error: " + e);
+}
+
+// Test json
+println("Checking json before import...");
+try {
+    let x = json;
+    println("FAIL: json is defined: " + x);
+} catch (e) {
+    println("PASS: json is undefined (threw error).");
+}
+
+println("Importing json...");
+import json;
+try {
+    let s = json.stringify({a:1});
+    println("PASS: json.stringify worked: " + s);
+} catch (e) {
+    println("FAIL: json usage failed: " + e);
+}
+
+// Test os
+println("Checking os before import...");
+try {
+    let x = os;
+    println("FAIL: os is defined.");
+} catch (e) {
+    println("PASS: os is undefined.");
+}
+
+println("Importing os...");
+import os;
+try {
+    let p = os.platform();
+    println("PASS: os.platform: " + p);
+} catch (e) {
+    println("FAIL: os usage failed: " + e);
+}

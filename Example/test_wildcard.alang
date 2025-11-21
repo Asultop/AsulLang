@@ -1,0 +1,26 @@
+// test_wildcard.alang
+println("Testing wildcard import with lazy loading...");
+
+// Ensure std.string is not yet loaded/imported
+try {
+    // toUpperCase is a method in std.string
+    let s = toUpperCase("test"); 
+    println("FAIL: toUpperCase should not be visible yet.");
+} catch (e) {
+    println("PASS: toUpperCase is not visible yet.");
+}
+
+println("Importing std.string.* ...");
+import std.string.*;
+
+try {
+    let s = toUpperCase("hello");
+    println("Result: " + s);
+    if (s == "HELLO") {
+        println("PASS: Wildcard import worked, toUpperCase is visible.");
+    } else {
+        println("FAIL: toUpperCase returned wrong result.");
+    }
+} catch (e) {
+    println("FAIL: Wildcard import failed: " + e);
+}

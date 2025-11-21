@@ -1,0 +1,70 @@
+// test_wildcard_std.alang
+println("Testing import std.* with lazy loading...");
+
+// Ensure std.string and std.math are not yet loaded
+try {
+    let s = toUpperCase("test"); 
+    println("FAIL: toUpperCase should not be visible yet.");
+} catch (e) {
+    println("PASS: toUpperCase is not visible yet.");
+}
+
+try {
+    let x = abs(-5);
+    println("FAIL: abs should not be visible yet.");
+} catch (e) {
+    println("PASS: abs is not visible yet.");
+}
+
+println("Importing std.* ...");
+import std.*;
+
+// Verify std.string methods
+try {
+    let s = toUpperCase("hello");
+    println("Result toUpperCase: " + s);
+    if (s == "HELLO") {
+        println("PASS: std.string.toUpperCase is visible.");
+    } else {
+        println("FAIL: toUpperCase returned wrong result.");
+    }
+} catch (e) {
+    println("FAIL: std.string import failed: " + e);
+}
+
+// Verify std.math methods (abs is in std.math)
+// Wait, std.math has 'abs'.
+// import std.* imports symbols from 'std'.
+// 'std' has 'string' (package) and 'math' (package).
+// It does NOT import 'toUpperCase' directly into global scope unless 'toUpperCase' is a member of 'std'.
+// 'toUpperCase' is in 'std.string'.
+// So 'import std.*' should make 'string' and 'math' available as variables.
+// It should NOT make 'toUpperCase' available directly.
+
+// Let's correct the expectation.
+// 'import std.string.*' makes 'toUpperCase' available.
+// 'import std.*' makes 'string' available (as std.string package object).
+
+println("Checking 'string' variable...");
+try {
+    let s = string.toUpperCase("hello");
+    println("PASS: 'string' package is available.");
+} catch (e) {
+    println("FAIL: 'string' package is NOT available: " + e);
+}
+
+println("Checking 'math' variable...");
+try {
+    let p = math.pi;
+    println("PASS: 'math' package is available. PI=" + p);
+} catch (e) {
+    println("FAIL: 'math' package is NOT available: " + e);
+}
+
+// Verify that we didn't pollute global scope with internals of subpackages
+try {
+    let s = toUpperCase("test");
+    println("FAIL: toUpperCase should NOT be visible (it is inside string package).");
+} catch (e) {
+    println("PASS: toUpperCase is correctly hidden.");
+}

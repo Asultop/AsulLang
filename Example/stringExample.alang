@@ -1,0 +1,22 @@
+// 示例：字符串处理方法
+// 展示如何使用 std.string 包中的 toUpperCase, toLowerCase 和 trim 方法
+// import std.string;
+import std.string;
+println("== 字符串处理方法示例 ==");
+
+// 1) toUpperCase 示例
+let upper = std.string.toUpperCase("hello world");
+println("toUpperCase: ${upper}"); // 输出: HELLO WORLD
+
+// 2) toLowerCase 示例
+let lower = std.string.toLowerCase("HELLO WORLD");
+println("toLowerCase: ${lower}"); // 输出: hello world
+
+// 3) trim 示例
+let trimmed = std.string.trim("   hello world   ");
+println("trim: '${trimmed}'"); // 输出: 'hello world'
+
+// 4) 综合示例
+let mixed = "   HeLLo WoRLd   ";
+let result = std.string.toLowerCase(std.string.trim(mixed));
+println("综合处理: ${result}"); // 输出: hello world
