@@ -127,4 +127,169 @@ let cleaned = messy; // 注意: replace 只替换第一个匹配，需要循环�
 println("原始(带空格): '", messy, "'");
 println("处理后: '", cleaned, "'");
 
+// ===== 新增字符串方法 =====
+
+// 4. trim - 移除前后空格
+println("\n== trim 测试 ==");
+
+let withSpaces = "  Hello World  ";
+let trimmed = withSpaces.trim();
+println("原字符串: '", withSpaces, "'");
+println("trim后: '", trimmed, "'");
+
+let leadingSpace = "   Start";
+let trimmed2 = leadingSpace.trim();
+println("前导空格: '", leadingSpace, "'");
+println("trim后: '", trimmed2, "'");
+
+let trailingSpace = "End   ";
+let trimmed3 = trailingSpace.trim();
+println("尾部空格: '", trailingSpace, "'");
+println("trim后: '", trimmed3, "'");
+
+let noSpace = "NoSpace";
+let trimmed4 = noSpace.trim();
+println("无空格: '", noSpace, "'");
+println("trim后: '", trimmed4, "'");
+
+let onlySpaces = "     ";
+let trimmed5 = onlySpaces.trim();
+println("仅空格: '", onlySpaces, "'");
+println("trim后: '", trimmed5, "'");
+
+// 5. toLowerCase 和 toUpperCase - 大小写转换
+println("\n== toLowerCase 和 toUpperCase 测试 ==");
+
+let mixed = "Hello World";
+println("原字符串:", mixed);
+println("toLowerCase:", mixed.toLowerCase());
+println("toUpperCase:", mixed.toUpperCase());
+
+let upperStr = "JAVASCRIPT";
+println("原字符串:", upperStr);
+println("toLowerCase:", upperStr.toLowerCase());
+
+let lowerStr = "python";
+println("原字符串:", lowerStr);
+println("toUpperCase:", lowerStr.toUpperCase());
+
+let numbers = "Test123";
+println("原字符串:", numbers);
+println("toLowerCase:", numbers.toLowerCase());
+println("toUpperCase:", numbers.toUpperCase());
+
+// 6. startsWith 和 endsWith - 前缀和后缀检查
+println("\n== startsWith 和 endsWith 测试 ==");
+
+let url = "https://example.com";
+println("URL:", url);
+println("startsWith('https'):", url.startsWith("https"));
+println("startsWith('http'):", url.startsWith("http"));
+println("endsWith('.com'):", url.endsWith(".com"));
+println("endsWith('.org'):", url.endsWith(".org"));
+
+let filename2 = "document.txt";
+println("\n文件名:", filename2);
+println("startsWith('doc'):", filename2.startsWith("doc"));
+println("endsWith('.txt'):", filename2.endsWith(".txt"));
+println("endsWith('.pdf'):", filename2.endsWith(".pdf"));
+
+let email2 = "user@example.com";
+println("\n邮箱:", email2);
+println("startsWith('user'):", email2.startsWith("user"));
+println("endsWith('.com'):", email2.endsWith(".com"));
+println("endsWith('@'):", email2.endsWith("@"));
+
+let empty = "";
+println("\n空字符串测试:");
+println("startsWith('a'):", empty.startsWith("a"));
+println("endsWith('b'):", empty.endsWith("b"));
+
+// 7. includes - 包含检查
+println("\n== includes 测试 ==");
+
+let sentence2 = "The quick brown fox jumps over the lazy dog";
+println("句子:", sentence2);
+println("includes('quick'):", sentence2.includes("quick"));
+println("includes('cat'):", sentence2.includes("cat"));
+println("includes('fox'):", sentence2.includes("fox"));
+
+let code2 = "let x = 10; let y = 20;";
+println("\n代码:", code2);
+println("includes('let'):", code2.includes("let"));
+println("includes('function'):", code2.includes("function"));
+
+let text2 = "hello";
+println("\n字符串:", text2);
+println("includes('h'):", text2.includes("h"));
+println("includes('he'):", text2.includes("he"));
+println("includes('lo'):", text2.includes("lo"));
+println("includes('xyz'):", text2.includes("xyz"));
+
+// 8. indexOf - 查找子串位置
+println("\n== indexOf 测试 ==");
+
+let text3 = "hello world hello";
+println("字符串:", text3);
+println("indexOf('world'):", text3.indexOf("world"));
+println("indexOf('hello'):", text3.indexOf("hello"));
+println("indexOf('xyz'):", text3.indexOf("xyz"));
+
+let alphabet = "abcdefghijklmnop";
+println("\n字母表:", alphabet);
+println("indexOf('a'):", alphabet.indexOf("a"));
+println("indexOf('e'):", alphabet.indexOf("e"));
+println("indexOf('p'):", alphabet.indexOf("p"));
+println("indexOf('z'):", alphabet.indexOf("z"));
+
+let data = "apple,banana,apple,cherry";
+println("\n数据:", data);
+println("indexOf('apple'):", data.indexOf("apple"));
+println("indexOf('banana'):", data.indexOf("banana"));
+println("indexOf('date'):", data.indexOf("date"));
+
+let single = "a";
+println("\n单个字符:", single);
+println("indexOf('a'):", single.indexOf("a"));
+println("indexOf('b'):", single.indexOf("b"));
+
+// 9. 组合使用新增方法
+println("\n== 组合使用新增方法 ==");
+
+let userInput = "  USER_NAME@EXAMPLE.COM  ";
+println("原始输入: '", userInput, "'");
+
+// 清理输入
+let cleaned2 = userInput.trim();
+println("trim后: '", cleaned2, "'");
+
+// 转换为小写
+let lowerInput = cleaned2.toLowerCase();
+println("转小写: '", lowerInput, "'");
+
+// 验证邮箱格式
+let isEmail = lowerInput.includes("@") && lowerInput.endsWith(".com");
+println("是否是邮箱?: ", isEmail);
+
+// 提取用户名部分
+let atIndex = lowerInput.indexOf("@");
+if (atIndex != -1) {
+    let username = lowerInput.substring(0, atIndex);
+    let domain = lowerInput.substring(atIndex + 1);
+    println("用户名:", username);
+    println("域名:", domain);
+}
+
+// 文件验证示例
+println("\n== 文件名验证 ==");
+let files = ["document.txt", "image.png", "DATA.PDF", "  script.js  "];
+
+for (let i = 0; i < files.len(); i = i + 1) {
+    let file = files[i].trim().toLowerCase();
+    println("\n原文件名:", files[i]);
+    println("处理后:", file);
+    println("是否为txt:", file.endsWith(".txt"));
+    println("是否为图片:", file.includes(".png") || file.includes(".jpg") || file.includes(".gif"));
+}
+
 println("\n=== 字符串方法测试完成 ===");
