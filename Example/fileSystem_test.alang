@@ -1,0 +1,64 @@
+import std.io.fileSystem as fs;
+
+println("=== File System Test ===");
+
+let testDir = "test_fs_dir";
+let testFile = "test_fs_dir/test.txt";
+let copyFile = "test_fs_dir/copy.txt";
+
+// 1. mkdir
+println("Creating directory: " + testDir);
+let ok = fs.mkdir(testDir);
+println("mkdir result: " + ok);
+
+// 2. stat
+println("Stat directory: " + testDir);
+let st = fs.stat(testDir);
+println("Is Dir: " + st.isDir);
+// println("Permissions: " + st.permissions);
+
+// 3. File write (using moved File class)
+println("Writing file: " + testFile);
+let f = new fs.File(testFile);
+f.write("Hello FS");
+
+// 4. stat file
+println("Stat file: " + testFile);
+let stf = fs.stat(testFile);
+println("Is File: " + stf.isFile);
+println("Size: " + stf.size);
+// println("MTime: " + stf.mtime);
+
+// 5. copy
+println("Copying file...");
+fs.copy(testFile, copyFile);
+println("Copy exists: " + new fs.File(copyFile).exists());
+
+// 6. move
+let moveFile = "test_fs_dir/moved.txt";
+println("Moving file...");
+fs.move(copyFile, moveFile);
+println("Moved exists: " + new fs.File(moveFile).exists());
+println("Old copy exists: " + new fs.File(copyFile).exists());
+
+// 7. walk
+println("Walking directory...");
+fs.walk(testDir, [](path, isDir) {
+    println("Walk: " + path + " [Dir: " + isDir + "]");
+});
+
+// 8. chmod (mock test, just call it)
+println("Chmod...");
+fs.chmod(testFile, 511); // 0777 decimal
+
+// 9. rmdir
+println("Cleaning up...");
+fs.rmdir(testDir);
+println("Dir exists: " + new fs.Dir(testDir).exists());
+
+println("=== OS Test ===");
+import os;
+println("Platform: " + os.platform());
+println("Arch: " + os.arch());
+os.setEnv("ALANG_TEST", "123");
+println("Env ALANG_TEST: " + os.getEnv("ALANG_TEST"));

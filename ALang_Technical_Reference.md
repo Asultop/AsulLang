@@ -79,19 +79,28 @@ ALang 提供了一组全局可用的内置函数：
 | `appendFile` | `path, data` | 末尾追加文本/数据到文件。返回 `true`。 |
 | `exists` | `path` | 判断路径是否存在，返回布尔。 |
 | `listDir` | `path` | 返回目录下 (非递归) 文件/子目录名数组。 |
-| `std.io.File` | `class` | 内置文件类：支持 `write/append/read/exists/size` 方法。 |
-| `std.io.Dir` | `class` | 内置目录类：支持 `create/list/exists` 方法。 |
+| `std.io.fileSystem.File` | `class` | 内置文件类：支持 `write/append/read/exists/size` 等方法。 |
+| `std.io.fileSystem.Dir` | `class` | 内置目录类：支持 `create/list/exists` 等方法。 |
 | `std.io.FileStream` | `class` | 流式读写：`read(n)`, `write(data)`, `eof()`, `close()`。由 `File.open(mode)` 创建。 |
-### 4.x 文件与目录内置类扩展
 
-`File` 额外方法：`delete`, `rename`, `readBytes`, `writeBytes`, `appendBytes`, `open`。`open(mode)` 返回 `FileStream`，`mode` 可为：
-- `r`: 只读，支持 `read(n)`
-- `w`: 覆盖写，支持 `write(data)`
-- `a`: 追加写，支持 `write(data)`
+### 4.x 文件系统扩展 (std.io.fileSystem)
 
-`FileStream` 维护位置 `pos` 与 `closed` 标记；`eof()` 基于文件大小与当前位置判断。
+`std.io.fileSystem` 提供了更丰富的文件系统操作接口。
 
-`Dir` 额外方法：`delete`(递归删除)，`rename`，`walk`(递归列出相对路径)。
+#### 核心类
+- **`File`**: 文件操作类。
+- **`Dir`**: 目录操作类。
+
+#### 静态函数
+| 函数 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `mkdir(path)` | 路径 | 创建目录（递归）。 |
+| `rmdir(path)` | 路径 | 删除目录（递归）。 |
+| `stat(path)` | 路径 | 获取文件/目录元数据。返回对象 `{ size, mtime, isFile, isDir, permissions }`。 |
+| `copy(src, dest)` | 源, 目标 | 复制文件或目录（递归）。 |
+| `move(src, dest)` | 源, 目标 | 移动/重命名文件或目录。 |
+| `chmod(path, mode)` | 路径, 模式 | 修改权限（模式为数字）。 |
+| `walk(path, callback)` | 路径, 回调 | 递归遍历目录。回调 `fn(path, isDir)`。若回调返回 `false` 则停止遍历。 |
 
 #### File / Dir / FileStream 方法速览
 
@@ -396,6 +405,19 @@ println(arr.join("-"));                             // "5-4-3-2-1"
 ```
 
 示例：参见 `Example/array_methods_test.alang`。
+
+### 4.6 操作系统交互 (os)
+
+`os` 包提供与操作系统交互的功能。
+
+| 函数 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `call(program, [args], [cwd])` | 程序名, 参数数组, 工作目录 | 异步执行外部命令，返回 Promise。 |
+| `getEnv(name)` | 变量名 | 获取环境变量值，不存在返回 `null`。 |
+| `setEnv(name, value)` | 变量名, 值 | 设置环境变量。 |
+| `exit(code)` | 退出码 | 终止进程。 |
+| `platform()` | 无 | 返回操作系统名称 (`linux`, `windows`, `darwin`, `unknown`)。 |
+| `arch()` | 无 | 返回 CPU 架构 (`x64`, `x86`)。 |
 
 ---
 

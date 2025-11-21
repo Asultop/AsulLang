@@ -59,7 +59,7 @@ enum class TokenType {
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, Static,
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, As, Static,
 	EndOfFile
 };
 
@@ -185,7 +185,7 @@ size_t startLineStart = lineStart;  // Save starting line position
 			{"go", TokenType::Go},
 			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
 			{"interface", TokenType::Interface},
-			{"import", TokenType::Import}, {"from", TokenType::From},
+			{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As},
 			{"static", TokenType::Static},
 		};
 		auto it = keywords.find(text);
@@ -669,6 +669,7 @@ struct ImportStmt : Stmt {
 		// File import: when isFile == true, use filePath and ignore packageName/symbol
 		bool isFile{false};
 		std::string filePath; // may be relative or absolute; .alang suffix may be omitted
+		std::optional<std::string> alias;
 		int line{0};
 		int column{1};
 		int length{1};
@@ -771,13 +772,21 @@ private:
 			if (match({TokenType::LeftParen})) {
 				while (!check(TokenType::RightParen) && !isAtEnd()) {
 					auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
-					ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length; imp->entries.push_back(e);
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
 					(void)match({TokenType::Comma});
 				}
 				consume(TokenType::RightParen, "Expect ')' after import list");
 			} else {
 				auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
-				ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length; imp->entries.push_back(e);
+				ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+				if (match({TokenType::As})) {
+					e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+				}
+				imp->entries.push_back(e);
 			}
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
@@ -796,7 +805,11 @@ private:
 						if (parts.size() < 2) throw std::runtime_error("import list entries must reference package.symbol");
 						auto symTok = parts.back();
 						auto pkg = joinIdentifiers(parts, 0, parts.size()-1);
-						ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
+						ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+						if (match({TokenType::As})) {
+							e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+						}
+						imp->entries.push_back(e);
 					}
 				(void)match({TokenType::Comma});
 			}
@@ -824,7 +837,11 @@ private:
 			if (match({TokenType::LeftParen})) {
 				while (!check(TokenType::RightParen) && !isAtEnd()) {
 					auto symTok = consume(TokenType::Identifier, "Expect symbol name");
-					ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
+					ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
 					(void)match({TokenType::Comma});
 				}
 				consume(TokenType::RightParen, "Expect ')' after symbol list");
@@ -837,7 +854,11 @@ private:
 		} else if (pathParts.size() >= 2) {
 			auto symTok = pathParts.back();
 			auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size() - 1);
-			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length; imp->entries.push_back(e);
+			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		} else {
@@ -846,7 +867,11 @@ private:
 			auto tok = pathParts.back();
 			std::string shorthandPkg = tok.lexeme;
 			// Use special symbol marker to indicate binding the package object itself
-			ImportStmt::Entry e; e.packageName = shorthandPkg; e.symbol = std::string("__module__"); e.isFile = false; e.line = tok.line; e.column = tok.column; e.length = tok.length; imp->entries.push_back(e);
+			ImportStmt::Entry e; e.packageName = shorthandPkg; e.symbol = std::string("__module__"); e.isFile = false; e.line = tok.line; e.column = tok.column; e.length = tok.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "Expect ';' after import statement");
 			return imp;
 		}
@@ -2466,17 +2491,30 @@ public:
 					std::string pkg = ent.packageName;
 					size_t p = pkg.rfind('.');
 					std::string varName = (p == std::string::npos) ? pkg : pkg.substr(p+1);
+					if (ent.alias.has_value()) varName = ent.alias.value();
 					env->define(varName, Value{pobj});
 				} else if (ent.symbol == "*") {
 					for (auto& kv : *pobj) env->define(kv.first, kv.second);
 				} else {
 					auto fit = pobj->find(ent.symbol);
 					if (fit == pobj->end()) {
+						// Check if it is a sub-package import
+						std::string subPkgName = ent.packageName + "." + ent.symbol;
+						auto subIt = packages.find(subPkgName);
+						if (subIt != packages.end()) {
+							std::string varName = ent.symbol;
+							if (ent.alias.has_value()) varName = ent.alias.value();
+							env->define(varName, Value{subIt->second});
+							continue;
+						}
+
 						std::ostringstream oss; oss << "Package '" << ent.packageName << "' has no symbol '" << ent.symbol << "'"
 							<< " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
 						throw std::runtime_error(oss.str());
 					}
-					env->define(ent.symbol, fit->second);
+					std::string varName = ent.symbol;
+					if (ent.alias.has_value()) varName = ent.alias.value();
+					env->define(varName, fit->second);
 				}
 			}
 			return;
@@ -3589,8 +3627,13 @@ public:
 	void installBuiltins() {
 		stdRoot = std::make_shared<Object>();
 		globals->define("std", Value{stdRoot});
+		packages["std"] = stdRoot;
 
 		auto ioPkg = ensurePackage("std.io");
+		// Register std.io.fileSystem as a package so it can be imported directly
+		// It will also be available as std.io.fileSystem due to ensurePackage logic
+		auto fsPkg = ensurePackage("std.io.fileSystem");
+
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;
 		printFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
@@ -3812,7 +3855,7 @@ public:
 				streamClass = std::get<std::shared_ptr<ClassInfo>>(itFS->second);
 				auto fsInst = std::make_shared<Instance>(); fsInst->klass = streamClass; fsInst->fields["path"] = Value{path}; fsInst->fields["mode"] = Value{mode}; fsInst->fields["pos"] = Value{0.0}; fsInst->fields["closed"] = Value{false}; return Value{fsInst};
 			}; fileClass->methods["open"] = openM;
-			(*ioPkg)["File"] = Value{fileClass};
+			(*fsPkg)["File"] = Value{fileClass};
 		}
 
 		// Built-in Dir class
@@ -3873,7 +3916,7 @@ public:
 				for (auto &entry : std::filesystem::recursive_directory_iterator(base, ec)) { if (ec) break; std::string rel = std::filesystem::relative(entry.path(), base, ec).string(); arr->push_back(Value{rel}); }
 				return Value{arr};
 			}; dirClass->methods["walk"] = walkM;
-			(*ioPkg)["Dir"] = Value{dirClass};
+			(*fsPkg)["Dir"] = Value{dirClass};
 		}
 
 		// FileStream class (lightweight streaming wrapper)
@@ -3919,6 +3962,101 @@ public:
 				if (!args.empty()) throw std::runtime_error("FileStream.close expects 0 arguments"); Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal); inst->fields["closed"] = Value{true}; return Value{true};
 			}; fsClass->methods["close"] = fsClose;
 			(*ioPkg)["FileStream"] = Value{fsClass};
+		}
+
+		// Extended File System Operations (std.io.fileSystem)
+		{
+			// mkdir(path)
+			auto mkdirFn = std::make_shared<Function>(); mkdirFn->isBuiltin=true; mkdirFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("mkdir expects path string");
+				std::string path = std::get<std::string>(args[0]);
+				std::error_code ec; bool ok = std::filesystem::create_directories(path, ec);
+				if(ec) return Value{false}; return Value{true};
+			};
+			(*fsPkg)["mkdir"] = Value{mkdirFn};
+
+			// rmdir(path) - recursive remove
+			auto rmdirFn = std::make_shared<Function>(); rmdirFn->isBuiltin=true; rmdirFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("rmdir expects path string");
+				std::string path = std::get<std::string>(args[0]);
+				std::error_code ec; auto n = std::filesystem::remove_all(path, ec);
+				if(ec) return Value{false}; return Value{true};
+			};
+			(*fsPkg)["rmdir"] = Value{rmdirFn};
+
+			// stat(path)
+			auto statFn = std::make_shared<Function>(); statFn->isBuiltin=true; statFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=1 || !std::holds_alternative<std::string>(args[0])) throw std::runtime_error("stat expects path string");
+				std::string path = std::get<std::string>(args[0]);
+				std::error_code ec; auto s = std::filesystem::status(path, ec);
+				if(ec) return Value{std::monostate{}};
+				auto obj = std::make_shared<Object>();
+				(*obj)["isFile"] = Value{std::filesystem::is_regular_file(s)};
+				(*obj)["isDir"] = Value{std::filesystem::is_directory(s)};
+				(*obj)["size"] = Value{static_cast<double>(std::filesystem::file_size(path, ec))};
+				auto perms = s.permissions();
+				(*obj)["permissions"] = Value{static_cast<double>(static_cast<int>(perms))};
+				auto ftime = std::filesystem::last_write_time(path, ec);
+				auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+				std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
+				(*obj)["mtime"] = Value{static_cast<double>(tt)};
+				return Value{obj};
+			};
+			(*fsPkg)["stat"] = Value{statFn};
+
+			// copy(src, dest)
+			auto copyFn = std::make_shared<Function>(); copyFn->isBuiltin=true; copyFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=2) throw std::runtime_error("copy expects src, dest");
+				std::string src = toString(args[0]); std::string dest = toString(args[1]);
+				std::error_code ec; std::filesystem::copy(src, dest, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+				if(ec) return Value{false}; return Value{true};
+			};
+			(*fsPkg)["copy"] = Value{copyFn};
+
+			// move(src, dest)
+			auto moveFn = std::make_shared<Function>(); moveFn->isBuiltin=true; moveFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=2) throw std::runtime_error("move expects src, dest");
+				std::string src = toString(args[0]); std::string dest = toString(args[1]);
+				std::error_code ec; std::filesystem::rename(src, dest, ec);
+				if(ec) return Value{false}; return Value{true};
+			};
+			(*fsPkg)["move"] = Value{moveFn};
+
+			// chmod(path, mode)
+			auto chmodFn = std::make_shared<Function>(); chmodFn->isBuiltin=true; chmodFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=2) throw std::runtime_error("chmod expects path, mode");
+				std::string path = toString(args[0]); double mode = getNumber(args[1], "chmod mode");
+				std::error_code ec; std::filesystem::permissions(path, static_cast<std::filesystem::perms>(static_cast<int>(mode)), ec);
+				if(ec) return Value{false}; return Value{true};
+			};
+			(*fsPkg)["chmod"] = Value{chmodFn};
+
+			// walk(path, callback)
+			auto walkFn = std::make_shared<Function>(); walkFn->isBuiltin=true; walkFn->builtin=[this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if(args.size()!=2) throw std::runtime_error("walk expects path, callback");
+				std::string path = toString(args[0]);
+				if(!std::holds_alternative<std::shared_ptr<Function>>(args[1])) throw std::runtime_error("walk callback must be function");
+				auto cb = std::get<std::shared_ptr<Function>>(args[1]);
+				std::error_code ec;
+				for(auto& entry: std::filesystem::recursive_directory_iterator(path, ec)) {
+					if(ec) break;
+					std::string p = entry.path().string();
+					bool isDir = entry.is_directory();
+					Value res{std::monostate{}};
+					if(cb->isBuiltin) {
+						std::vector<Value> cargs{Value{p}, Value{isDir}};
+						res = cb->builtin(cargs, cb->closure);
+					} else {
+						auto local = std::make_shared<Environment>(cb->closure);
+						if(cb->params.size()>0) local->define(cb->params[0], Value{p});
+						if(cb->params.size()>1) local->define(cb->params[1], Value{isDir});
+						try { executeBlock(cb->body, local); } catch(const ReturnSignal& rs) { res = rs.value; }
+					}
+					if(std::holds_alternative<bool>(res) && std::get<bool>(res)==false) break;
+				}
+				return Value{std::monostate{}};
+			};
+			(*fsPkg)["walk"] = Value{walkFn};
 		}
 		importPackageSymbols("std.io");
 
@@ -4586,6 +4724,55 @@ public:
 			return Value{ p };
 		};
 		(*osPkg)["call"] = Value{ callFn };
+
+		// getEnv(name)
+		auto getEnvFn = std::make_shared<Function>(); getEnvFn->isBuiltin=true; getEnvFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if(args.empty()) throw std::runtime_error("getEnv expects name");
+			std::string name = toString(args[0]);
+			const char* val = std::getenv(name.c_str());
+			if(val) return Value{std::string(val)};
+			return Value{std::monostate{}};
+		};
+		(*osPkg)["getEnv"] = Value{getEnvFn};
+
+		// setEnv(name, value)
+		auto setEnvFn = std::make_shared<Function>(); setEnvFn->isBuiltin=true; setEnvFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if(args.size()!=2) throw std::runtime_error("setEnv expects name, value");
+			std::string name = toString(args[0]); std::string val = toString(args[1]);
+			setenv(name.c_str(), val.c_str(), 1);
+			return Value{true};
+		};
+		(*osPkg)["setEnv"] = Value{setEnvFn};
+
+		// exit(code)
+		auto exitFn = std::make_shared<Function>(); exitFn->isBuiltin=true; exitFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			int code = 0;
+			if(!args.empty()) code = static_cast<int>(getNumber(args[0], "exit code"));
+			std::exit(code);
+			return Value{std::monostate{}};
+		};
+		(*osPkg)["exit"] = Value{exitFn};
+
+		// platform()
+		auto platformFn = std::make_shared<Function>(); platformFn->isBuiltin=true; platformFn->builtin=[](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+			#ifdef __linux__
+			return Value{std::string("linux")};
+			#elif _WIN32
+			return Value{std::string("windows")};
+			#elif __APPLE__
+			return Value{std::string("darwin")};
+			#else
+			return Value{std::string("unknown")};
+			#endif
+		};
+		(*osPkg)["platform"] = Value{platformFn};
+
+		// arch()
+		auto archFn = std::make_shared<Function>(); archFn->isBuiltin=true; archFn->builtin=[](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+			if(sizeof(void*) == 8) return Value{std::string("x64")};
+			return Value{std::string("x86")};
+		};
+		(*osPkg)["arch"] = Value{archFn};
 
 
 		// ---- Builtin containers and helpers ----

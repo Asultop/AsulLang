@@ -1,0 +1,17 @@
+// Test that fileSystem is not available by default
+try {
+    println(fileSystem);
+} catch (e) {
+    println("fileSystem is not defined (Expected)");
+}
+
+// Test that std.io.fileSystem IS available (because it's in std)
+if (std.io.fileSystem) {
+    println("std.io.fileSystem is available via std");
+}
+
+// import std.io.fileSystem;
+import std.io.*;
+// import std.io.fileSystem;
+println("Imported std.io.fileSystem");
+println("mkdir is now: " + typeof(fileSystem.mkdir));
