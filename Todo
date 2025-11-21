@@ -1,0 +1,54 @@
+# ALang 标准库 - 缺失功能与待办事项
+
+## 1. 字符串处理 (std.string)
+- [ ] **大小写转换**: `toUpperCase()`, `toLowerCase()`
+- [ ] **去除空白**: `trim()`, `trimLeft()`, `trimRight()`
+- [ ] **分割/合并**: `split(delimiter)`, `join(separator)` (目前 Array 有 `join`，但缺失 `split`)
+- [ ] **搜索**: `indexOf(substr)`, `lastIndexOf(substr)`, `startsWith(prefix)`, `endsWith(suffix)`, `includes(substr)`
+- [ ] **子串**: `substring(start, end)`, `slice(start, end)`
+- [ ] **填充**: `padStart(len, char)`, `padEnd(len, char)`
+- [ ] **编码**: `std.encoding.base64`, `std.encoding.hex`, `std.encoding.url`
+
+## 2. 集合与算法 (std.collections)
+- [ ] **排序**: 数组的 `sort(comparator)` (目前有基础排序，需要稳定排序/自定义比较器)
+- [ ] **过滤/映射**: `filter`, `map`, `reduce` (作为全局/数组方法已存在，需验证完整性)
+- [ ] **集合操作**: `Set` 类的 `union` (并集), `intersection` (交集), `difference` (差集)
+- [ ] **优先队列**: `std.collections.PriorityQueue` (堆)
+- [ ] **二分查找**: `std.collections.binarySearch`
+
+## 3. 日期与时间 (std.time)
+- [ ] **格式化**: `strftime` 风格格式化 (例如 `format("YYYY-MM-DD")`)
+- [ ] **解析**: `parse(dateString, formatString)`
+- [ ] **时区**: 存在基础 UTC/Local 支持，但可能缺失完整的 TZDB 支持
+- [ ] **时间段**: 用于时间运算的 `Duration` 类 (例如 `date + duration`)
+- [ ] **高精度计时器**: 用于基准测试的 `performance.now()`
+
+## 4. 输入/输出与操作系统 (std.io / std.os)
+- [ ] **路径操作**: `std.path` 模块 (`join`, `resolve`, `dirname`, `basename`, `extname`, `isAbsolute`)
+- [ ] **文件流**: 缓冲读写 (行, 块) - `FileStream` 已存在但需验证缓冲机制
+- [ ] **标准流**: 作为流对象访问 `stdin`, `stdout`, `stderr`
+- [ ] **进程控制**: `exec` (作为 `os.call` 存在)，但需要 `spawn` 以与长运行进程交互 (stdin/stdout 管道)
+- [ ] **信号**: 处理 `SIGINT`, `SIGTERM`
+
+## 5. 网络 (std.network)
+- [ ] **Socket API**: 用于原始连接的 `std.net.Socket` (TCP/UDP)
+- [ ] **HTTP 服务器**: 用于构建 Web 后端的 `std.http.Server`
+- [ ] **URL 解析**: `std.url.URL` 类 (`protocol`, `host`, `path`, `query`)
+- [ ] **Fetch API**: 更健壮的 `fetch`，支持 headers, methods, body types (目前仅有基础的 `get`/`post`)
+
+## 6. 数据格式 (std.data)
+- [ ] **CSV**: 用于读写 CSV 文件的 `std.csv`
+- [ ] **XML/YAML**: 如果需要，提供基础解析器
+- [x] **JSON**: `json.parse` 和 `json.stringify` 已在 `ALangEngine.cpp` 中实现。
+
+## 7. 加密 (std.crypto)
+- [ ] **哈希**: `md5`, `sha1`, `sha256`
+- [ ] **随机数**: `crypto.randomUUID()`, `crypto.getRandomValues()` (安全随机数)
+
+## 8. 开发者工具
+- [ ] **单元测试**: `std.test` 模块 (`assert`, `describe`, `it`)
+- [ ] **日志**: 带有级别 (INFO, WARN, ERROR) 和输出配置的 `std.log`
+- [ ] **调试器**: 用于附加调试器或编程方式检查栈帧的钩子
+
+## 9. 系统集成
+- [ ] **FFI (外部函数接口)**: 调用动态库 (`.so`/`.dll`) 中 C 函数的能力
