@@ -25,6 +25,7 @@ func_files=(
     "defaultParamsExample.alang"
     "doWhileExample.alang"
     "emptySemicolons.alang"
+    "array_methods_test.alang"
     "evalExample.alang"
     "example.alang"
     "fileImportExample.alang"

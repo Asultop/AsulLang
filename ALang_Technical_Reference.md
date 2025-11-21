@@ -243,10 +243,39 @@ ALang 的位运算针对 `number` 值：在执行时把双精度浮点转为 `lo
 - **`Promise.reject(reason)`**: 返回一个已拒绝的 Promise。
 
 ### 4.2 std.math
-数学工具库包。
-- **`std.math.pi`**: 圆周率常量。
-- **`std.math.abs(x)`**: 返回绝对值。
-- **`std.math.Math`**: 内置 `Math` 类，可通过 `import std.math.*` 或 `std.math.Math` 构造使用。
+
+数学工具库包，提供基础数学常量与函数：
+
+#### 常量
+- **`std.math.pi`**: 圆周率 π ≈ 3.14159。
+
+#### 基础函数
+- **`abs(x)`**: 返回绝对值。
+
+#### 三角函数（弧度制）
+- **`sin(x)`**, **`cos(x)`**, **`tan(x)`**: 正弦、余弦、正切。
+
+#### 指数与对数
+- **`exp(x)`**: e^x。
+- **`log(x)`**: 自然对数 ln(x)。
+- **`pow(base, exp)`**: 幂运算 base^exp。
+- **`sqrt(x)`**: 平方根 √x。
+
+#### 取整
+- **`ceil(x)`**: 向上取整。
+- **`floor(x)`**: 向下取整。
+- **`round(x)`**: 四舍五入到最近整数。
+
+#### 最值与随机
+- **`min(...nums)`**: 返回最小值（可变参数）。
+- **`max(...nums)`**: 返回最大值（可变参数）。
+- **`random()`**: 返回 [0, 1) 内随机数。
+- **`random(max)`**: 返回 [0, max) 内随机数。
+- **`random(min, max)`**: 返回 [min, max) 内随机数。
+
+使用方式：`import std.math.*` 或 `std.math.sin()` 等完全限定名。
+
+示例：参见 `Example/mathExample.alang`。
 
 ### 4.3 数据结构类
 ALang 内置了基于宿主 C++ 实现的高效数据结构。
@@ -287,6 +316,86 @@ ALang 内置了基于宿主 C++ 实现的高效数据结构。
 - `pop()`: 出栈。
 - `peek()`: 查看栈顶。
 - `size()`: 大小。
+
+### 4.4 字符串方法 (String Methods)
+
+ALang 字符串对象提供以下合成方法：
+
+| 方法 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `len()` | 无 | 返回字符串长度。 |
+| `split(delim)` | 分隔符 | 按分隔符拆分字符串，返回数组；若分隔符为空，按字符分割。 |
+| `substring(start, [end])` | 起点、可选终点 | 返回子串；索引越界返回空串。 |
+| `replace(search, repl)` | 查找串、替换串 | 替换首次出现的查找串，返回新字符串。 |
+| `trim()` | 无 | 移除首尾空白，返回新字符串。 |
+| `toLowerCase()` | 无 | 转小写。 |
+| `toUpperCase()` | 无 | 转大写。 |
+| `startsWith(prefix)` | 前缀串 | 返回布尔，检查是否以给定前缀开头。 |
+| `endsWith(suffix)` | 后缀串 | 返回布尔，检查是否以给定后缀结尾。 |
+| `includes(sub)` | 子串 | 返回布尔，检查是否包含子串。 |
+| `indexOf(search, [start])` | 查找串、可选起点 | 返回首次出现的索引，不存在返回 -1；若提供起点则从该位置开始。 |
+
+示例：
+```alang
+let s = "  Hello World  ";
+println(s.trim());              // "Hello World"
+println(s.toLowerCase());       // "  hello world  "
+println(s.indexOf("World"));     // 8
+println(s.includes("lo"));       // true
+println(s.split(" "));          // ["", "", "Hello", "World", "", ""]
+```
+
+示例：参见 `Example/interpolationExample.alang`。
+
+### 4.5 数组方法 (Array Methods)
+
+ALang 数组对象提供以下合成方法：
+
+#### 查询与判断
+| 方法 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `len()` | 无 | 返回数组长度。 |
+| `includes(value)` | 值 | 返回布尔，检查数组是否包含该值。 |
+| `indexOf(value, [start])` | 值、可选起点 | 返回首次出现的索引，不存在返回 -1。 |
+| `find(predicate)` | 谓词函数 | 返回首个满足条件的元素，不存在返回 `null`。 |
+| `some(predicate)` | 谓词函数 | 返回布尔，是否存在满足条件的元素。 |
+| `every(predicate)` | 谓词函数 | 返回布尔，是否所有元素都满足条件。 |
+
+#### 转换
+| 方法 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `map(callback)` | 映射函数 | 映射每个元素，返回新数组；回调参数为 `(elem, index, array)`。 |
+| `filter(predicate)` | 谓词函数 | 筛选满足条件的元素，返回新数组。 |
+| `reduce(callback, [init])` | 归约函数、可选初值 | 累积计算，返回单一值；回调参数为 `(acc, elem, index, array)`。 |
+| `slice(start, [end])` | 起点、可选终点 | 返回数组片段的浅拷贝。 |
+| `join(delim)` | 分隔符 | 将数组元素用分隔符连接成字符串。 |
+
+#### 修改
+| 方法 | 参数 | 描述 |
+| :-- | :-- | :-- |
+| `push(...values)` | 待添加值 | 在末尾添加元素，返回新长度。 |
+| `pop()` | 无 | 移除末尾元素并返回，空数组返回 `null`。 |
+| `shift()` | 无 | 移除首个元素并返回，空数组返回 `null`。 |
+| `unshift(...values)` | 待添加值 | 在首部添加元素，返回新长度。 |
+| `reverse()` | 无 | 原地反转数组，返回数组自身。 |
+| `sort([comparator])` | 可选比较函数 | 原地排序；若无比较函数，数字升序，其他字典序；若提供比较函数，返回值 truthy 表示左 < 右。 |
+| `splice(start, [deleteCount], ...items)` | 起点、删除数、插入项 | 原地修改数组，返回删除的元素组成的数组。 |
+
+**回调函数参数说明**：
+- `map`, `filter`, `find`, `some`, `every`: 回调接收 `(element, index, array)`。
+- `reduce`: 回调接收 `(accumulator, element, index, array)`。
+
+示例：
+```alang
+let arr = [1, 2, 3, 4, 5];
+println(arr.map([](x) { return x * 2; }));        // [2, 4, 6, 8, 10]
+println(arr.filter([](x) { return x % 2 == 0; })); // [2, 4]
+println(arr.reduce([](sum, x) { return sum + x; }, 0)); // 15
+println(arr.reverse());                            // [5, 4, 3, 2, 1]
+println(arr.join("-"));                             // "5-4-3-2-1"
+```
+
+示例：参见 `Example/array_methods_test.alang`。
 
 ---
 
@@ -330,4 +439,4 @@ ALang 支持多种导入语法来组织代码。
 
 ---
 
-*文档生成日期: 2025-11-20*
+*文档更新日期: 2025-11-21*

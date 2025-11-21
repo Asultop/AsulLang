@@ -1,6 +1,6 @@
 // 数组方法测试：map / filter / reduce / find / some / every / includes
 
-println("=== 数组方法测试 ===");
+println("=== 数组方法测试 (基础 + 扩展) ===");
 
 // 测试数据
 let numbers = [1, 2, 3, 4, 5];
@@ -105,5 +105,32 @@ println("年龄总和:", totalAge);
 
 let hasBob = users.some([](u) { return u.name == "Bob"; });
 println("是否有Bob:", hasBob);
+
+// 11. 新增扩展方法测试
+println("\n== 扩展方法测试 ==");
+let ext = [10, 3, 5, 7, 2];
+println("原始数组 ext:", ext);
+println("pop():", ext.pop()); // 2
+println("pop() 后:", ext);
+println("shift():", ext.shift()); // 10
+println("shift() 后:", ext);
+println("unshift(99,100) 返回新长度:", ext.unshift(99,100));
+println("unshift 后:", ext);
+println("slice(1,3):", ext.slice(1,3));
+println("indexOf(7):", ext.indexOf(7));
+println("indexOf(404):", ext.indexOf(404));
+println("join('-'):", ext.join("-"));
+println("reverse():", ext.reverse());
+println("reverse 后 ext:", ext);
+// sort 默认数字升序
+println("sort():", ext.sort());
+println("sort 后 ext:", ext);
+// 使用比较函数实现降序
+// 比较函数：返回 true 表示 a 排在 b 前面（实现中 isTruthy(ret) 用于决定顺序）
+println("sort(降序):", ext.sort([](a, b) { return a > b; }));
+println("splice(2,1,'X','Y') 删除元素:", ext.splice(2,1,"X","Y"));
+println("splice 后 ext:", ext);
+println("splice(0,0,'HEAD'):", ext.splice(0,0,"HEAD"));
+println("最终 ext:", ext);
 
 println("\n=== 数组方法测试完成 ===");
