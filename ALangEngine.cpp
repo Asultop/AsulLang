@@ -33,6 +33,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+// Networking
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 namespace {
 
@@ -3680,6 +3685,138 @@ public:
 		// Register std.io.fileSystem as a package so it can be imported directly
 		// It will also be available as std.io.fileSystem due to ensurePackage logic
 		auto fsPkg = ensurePackage("std.io.fileSystem");
+
+		// Network Package (std.network)
+		auto netPkg = ensurePackage("std.network");
+		
+		// Helper for HTTP requests (Simple blocking implementation)
+		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {
+			// 1. Parse URL
+			std::string host;
+			int port = 80;
+			std::string path = "/";
+			
+			std::string protocol = "http://";
+			if (url.substr(0, 7) != protocol) throw std::runtime_error("Only http:// supported currently");
+			
+			size_t hostStart = 7;
+			size_t pathStart = url.find('/', hostStart);
+			size_t portStart = url.find(':', hostStart);
+			
+			if (pathStart == std::string::npos) {
+				if (portStart == std::string::npos) {
+					host = url.substr(hostStart);
+				} else {
+					host = url.substr(hostStart, portStart - hostStart);
+					port = std::stoi(url.substr(portStart + 1));
+				}
+			} else {
+				if (portStart != std::string::npos && portStart < pathStart) {
+					host = url.substr(hostStart, portStart - hostStart);
+					port = std::stoi(url.substr(portStart + 1, pathStart - portStart - 1));
+				} else {
+					host = url.substr(hostStart, pathStart - hostStart);
+				}
+				path = url.substr(pathStart);
+			}
+
+			// 2. Resolve Host
+			struct hostent* server = gethostbyname(host.c_str());
+			if (server == NULL) throw std::runtime_error("No such host: " + host);
+
+			// 3. Create Socket
+			int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+			if (sockfd < 0) throw std::runtime_error("Error opening socket");
+
+			struct sockaddr_in serv_addr;
+			std::memset(&serv_addr, 0, sizeof(serv_addr));
+			serv_addr.sin_family = AF_INET;
+			std::memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+			serv_addr.sin_port = htons(port);
+
+			// 4. Connect
+			if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+				close(sockfd);
+				throw std::runtime_error("Error connecting to " + host);
+			}
+
+			// 5. Send Request
+			std::ostringstream req;
+			req << method << " " << path << " HTTP/1.1\r\n";
+			req << "Host: " << host << "\r\n";
+			req << "Connection: close\r\n";
+			req << "User-Agent: ALang/1.0\r\n";
+			if (!data.empty()) {
+				req << "Content-Length: " << data.length() << "\r\n";
+				req << "Content-Type: application/x-www-form-urlencoded\r\n";
+			}
+			req << "\r\n";
+			if (!data.empty()) req << data;
+
+			std::string reqStr = req.str();
+			if (write(sockfd, reqStr.c_str(), reqStr.length()) < 0) {
+				close(sockfd);
+				throw std::runtime_error("Error writing to socket");
+			}
+
+			// 6. Read Response
+			std::string response;
+			char buffer[4096];
+			int n;
+			while ((n = read(sockfd, buffer, sizeof(buffer))) > 0) {
+				response.append(buffer, n);
+			}
+			close(sockfd);
+
+			// 7. Parse Response
+			auto obj = std::make_shared<Object>();
+			
+			size_t headerEnd = response.find("\r\n\r\n");
+			if (headerEnd != std::string::npos) {
+				std::string headers = response.substr(0, headerEnd);
+				std::string body = response.substr(headerEnd + 4);
+				(*obj)["body"] = Value{body};
+				(*obj)["headers"] = Value{headers};
+				
+				// Parse status code (e.g., "HTTP/1.1 200 OK")
+				size_t firstSpace = headers.find(' ');
+				size_t secondSpace = headers.find(' ', firstSpace + 1);
+				if (firstSpace != std::string::npos && secondSpace != std::string::npos) {
+					std::string statusStr = headers.substr(firstSpace + 1, secondSpace - firstSpace - 1);
+					try {
+						(*obj)["status"] = Value{std::stod(statusStr)};
+					} catch(...) {
+						(*obj)["status"] = Value{0.0};
+					}
+				} else {
+					(*obj)["status"] = Value{0.0};
+				}
+			} else {
+				 (*obj)["body"] = Value{response};
+				 (*obj)["status"] = Value{0.0};
+				 (*obj)["headers"] = Value{std::string("")};
+			}
+
+			return Value{obj};
+		};
+
+		auto getFn = std::make_shared<Function>();
+		getFn->isBuiltin = true;
+		getFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("http.get expects 1 argument (url)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("GET", std::get<std::string>(args[0]), "");
+		};
+		(*netPkg)["get"] = Value{getFn};
+
+		auto postFn = std::make_shared<Function>();
+		postFn->isBuiltin = true;
+		postFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 2) throw std::runtime_error("http.post expects 2 arguments (url, data)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("POST", std::get<std::string>(args[0]), toString(args[1]));
+		};
+		(*netPkg)["post"] = Value{postFn};
 
 		auto printFn = std::make_shared<Function>();
 		printFn->isBuiltin = true;

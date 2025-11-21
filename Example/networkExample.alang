@@ -1,0 +1,37 @@
+// Example/networkExample.alang
+// Demonstrates basic HTTP requests using std.network
+
+import std.network;
+
+println("== HTTP GET Request ==");
+try {
+    // Note: This requires internet access
+    let res = std.network.get("http://example.com");
+    println("Status: " + res.status);
+    println("Headers length: " + res.headers.len());
+    println("Body length: " + res.body.len());
+    
+    if (res.status == 200) {
+        println("GET Success!");
+    } else {
+        println("GET Failed with status: " + res.status);
+    }
+} catch (e) {
+    println("GET Error: " + e.message);
+}
+
+println("\n== HTTP POST Request ==");
+try {
+    // Using httpbin.org for POST test if available, otherwise this might fail or timeout
+    // We'll wrap it in try-catch and just print the result
+    let res = std.network.post("http://httpbin.org/post", "key=value&foo=bar");
+    println("Status: " + res.status);
+    if (res.status == 200) {
+        println("POST Success!");
+        // println("Body: " + res.body); // Body might be large
+    } else {
+        println("POST Failed (or endpoint unavailable) with status: " + res.status);
+    }
+} catch (e) {
+    println("POST Error: " + e.message);
+}

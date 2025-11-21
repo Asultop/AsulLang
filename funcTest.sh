@@ -35,6 +35,7 @@ func_files=(
     "goExample.alang"
     "importExample.alang"
     "mathExample.alang"
+    "networkExample.alang"
     "incrementExample.alang"
     "interfaceExample.alang"
     "interfaceValidationTest.alang"

@@ -9,7 +9,7 @@ println("Trying to access private variable 'internalSecret'...");
 // In ALang, accessing undefined property on module object returns null/undefined usually, 
 // but let's see if we can force an error or just show it's missing.
 
-if (utils.internalSecret != null) {
+if (utils.internalSecret != undefined) {
     throw "Error: internalSecret should be hidden!";
 }
 

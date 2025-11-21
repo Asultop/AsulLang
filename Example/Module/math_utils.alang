@@ -40,3 +40,6 @@ class Solver {
 class helper {
     function help() { return "helping"; }
 }
+function hiddenNotExported() {
+    return "true";
+}

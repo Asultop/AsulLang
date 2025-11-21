@@ -47,3 +47,4 @@ try {
 } catch (e) {
     println("PASS: helper class is hidden");
 }
+import "Module/math_utils.alang".hiddenNotExported;
