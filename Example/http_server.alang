@@ -1,0 +1,18 @@
+import std.network;
+
+let PORT = 18081;
+println("HTTP server starting on "+PORT);
+let srv = new std.network.http.Server();
+srv.listen(PORT, [](req, res){
+    if (req.url == "/hello") {
+        res.writeHead(200, {"Content-Type": "text/plain"});
+        res.end("ok");
+        return;
+    }
+    res.writeHead(404, {"Content-Type": "text/plain"});
+    res.end("not found");
+});
+
+// Keep server alive for a short while to handle requests
+await sleep(1200);
+println("HTTP server shutting down");

@@ -31,10 +31,10 @@
 - [x] **信号**: 处理 `SIGINT`, `SIGTERM`
 
 ## 5. 网络 (std.network)
-- [x] **Socket API**: 用于原始连接的 `std.net.Socket` (TCP/UDP)
-- [ ] **HTTP 服务器**: 用于构建 Web 后端的 `std.http.Server`
-- [ ] **URL 解析**: `std.url.URL` 类 (`protocol`, `host`, `path`, `query`)
-- [ ] **Fetch API**: 更健壮的 `fetch`，支持 headers, methods, body types (目前仅有基础的 `get`/`post`)
+- [x] **Socket API**: 用于原始连接的 `std.network.Socket` (TCP/UDP)
+- [x] **HTTP 服务器**: 用于构建 Web 后端的 `std.network.http.Server`
+- [x] **URL 解析**: `std.network.URL` 类 (`protocol`, `host`, `path`, `query`)
+- [x] **Fetch API**: 基础版 `std.network.fetch`（headers/method/body），后续可扩展；保留同步 `get/post` 辅助
 
 ## 6. 数据格式 (std.data)
 - [ ] **CSV**: 用于读写 CSV 文件的 `std.csv`

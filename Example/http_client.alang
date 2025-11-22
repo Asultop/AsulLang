@@ -1,0 +1,5 @@
+import std.network;
+
+let res = std.network.get("http://127.0.0.1:18081/hello");
+println("CLIENT STATUS: "+res.status);
+println("CLIENT BODY: "+res.body);

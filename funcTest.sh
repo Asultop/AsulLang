@@ -73,6 +73,7 @@ func_files=(
     "stringExample.alang"
     "test_lazy.alang"
     "test_wildcard.alang"
+    "test_wildcard_std.alang"
     "setExample.alang"
     "stackExample.alang"
     "priorityQueueExample.alang"
@@ -80,6 +81,7 @@ func_files=(
     "string_methods_extended.alang"
     "encoding_test.alang"
     "socket_test.alang"
+    "http_test.alang"
 )
 
 # Counter for passed/failed tests

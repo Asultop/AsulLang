@@ -1,0 +1,22 @@
+// Example/http_test.alang
+// End-to-end test for std.network.http.Server + std.network.fetch
+
+import std.os;
+
+// Orchestrate server and client in separate processes to avoid event-loop coupling
+let alangPath = "../alang";
+
+println("Starting HTTP server process...");
+let server = std.os.popen(alangPath + " http_server.alang", "r");
+
+// small delay to ensure server listens
+await sleep(200);
+
+println("Starting HTTP client process...");
+let client = std.os.popen(alangPath + " http_client.alang", "r");
+
+let clientOut = client.read(4096);
+println("Client Output:\n" + clientOut);
+
+let serverOut = server.read(4096);
+println("Server Output:\n" + serverOut);

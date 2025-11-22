@@ -4567,6 +4567,251 @@ public:
 			};
 			socketClass->methods["close"] = closeFn;
 
+			// URL class: new URL(str) -> fields: protocol, host, port, path, query
+			{
+				auto urlClass = std::make_shared<ClassInfo>();
+				urlClass->name = "URL";
+				auto ctor = std::make_shared<Function>();
+				ctor->isBuiltin = true;
+				ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+					if (args.size() != 1) throw std::runtime_error("URL constructor expects 1 argument (string)");
+					std::string u = toString(args[0]);
+					std::string protocol; std::string host; int port = -1; std::string path = "/"; std::string query;
+					size_t schemePos = u.find("://");
+					if (schemePos != std::string::npos) { protocol = u.substr(0, schemePos); }
+					size_t hostStart = (schemePos == std::string::npos) ? 0 : (schemePos + 3);
+					size_t pathStart = u.find('/', hostStart);
+					size_t qmark = std::string::npos;
+					if (pathStart == std::string::npos) { pathStart = u.size(); }
+					// host[:port]
+					{
+						size_t hpEnd = pathStart;
+						size_t colon = u.find(':', hostStart);
+						if (colon != std::string::npos && colon < hpEnd) {
+							host = u.substr(hostStart, colon - hostStart);
+							std::string pstr = u.substr(colon + 1, hpEnd - (colon + 1));
+							try { port = std::stoi(pstr); } catch (...) { port = -1; }
+						} else {
+							host = u.substr(hostStart, hpEnd - hostStart);
+						}
+					}
+					// path?query
+					if (pathStart < u.size()) {
+						qmark = u.find('?', pathStart);
+						if (qmark == std::string::npos) { path = u.substr(pathStart); }
+						else { path = u.substr(pathStart, qmark - pathStart); query = u.substr(qmark + 1); }
+					}
+					if (port < 0) { if (protocol == "http") port = 80; else if (protocol == "https") port = 443; }
+					Value thisVal = closure->get("this");
+					auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+					inst->fields["protocol"] = Value{ protocol };
+					inst->fields["host"] = Value{ host };
+					inst->fields["port"] = Value{ static_cast<double>(port) };
+					inst->fields["path"] = Value{ path };
+					inst->fields["query"] = Value{ query };
+					return Value{ std::monostate{} };
+				};
+				urlClass->methods["constructor"] = ctor;
+				(*netPkg)["URL"] = Value{ urlClass };
+			}
+
+			// fetch(url[, options]) -> Promise<Response-like>
+			{
+				auto fetchFn = std::make_shared<Function>();
+				fetchFn->isBuiltin = true;
+				fetchFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.empty()) throw std::runtime_error("fetch expects at least 1 argument (url)");
+					std::string url = toString(args[0]);
+					std::string method = "GET";
+					std::shared_ptr<Object> hdrObj;
+					std::string body;
+					if (args.size() >= 2) {
+						if (!std::holds_alternative<std::shared_ptr<Object>>(args[1])) throw std::runtime_error("fetch options must be object");
+						auto opt = std::get<std::shared_ptr<Object>>(args[1]);
+						auto itM = opt->find("method"); if (itM != opt->end()) method = toString(itM->second);
+						auto itH = opt->find("headers"); if (itH != opt->end() && std::holds_alternative<std::shared_ptr<Object>>(itH->second)) hdrObj = std::get<std::shared_ptr<Object>>(itH->second);
+						auto itB = opt->find("body"); if (itB != opt->end()) body = toString(itB->second);
+					}
+					// Promise
+					auto p = std::make_shared<PromiseState>(); p->loopPtr = this;
+					std::thread([this, p, url, method, hdrObj, body]{
+						try {
+							// Parse URL
+							std::string proto = "http"; std::string host; int port = 80; std::string path = "/";
+							size_t schemePos = url.find("://"); if (schemePos != std::string::npos) proto = url.substr(0, schemePos);
+							size_t hostStart = (schemePos == std::string::npos) ? 0 : (schemePos + 3);
+							size_t pathStart = url.find('/', hostStart); if (pathStart == std::string::npos) pathStart = url.size();
+							size_t colon = url.find(':', hostStart);
+							if (colon != std::string::npos && colon < pathStart) { host = url.substr(hostStart, colon - hostStart); port = std::stoi(url.substr(colon + 1, pathStart - colon - 1)); }
+							else { host = url.substr(hostStart, pathStart - hostStart); }
+							if (pathStart < url.size()) path = url.substr(pathStart);
+							if (proto == "https") { settlePromise(p, true, Value{ std::string("HTTPS not supported") }); return; }
+							// DNS
+							struct hostent* server = gethostbyname(host.c_str());
+							if (server == NULL) { settlePromise(p, true, Value{ std::string("No such host: ")+host }); return; }
+							int sockfd = socket(AF_INET, SOCK_STREAM, 0); if (sockfd < 0) { settlePromise(p, true, Value{ std::string("socket failed") }); return; }
+							struct sockaddr_in serv_addr; std::memset(&serv_addr, 0, sizeof(serv_addr));
+							serv_addr.sin_family = AF_INET; std::memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length); serv_addr.sin_port = htons(port);
+							if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sockfd); settlePromise(p, true, Value{ std::string("connect failed") }); return; }
+							std::ostringstream req;
+							req << method << " " << path << " HTTP/1.1\r\n";
+							req << "Host: " << host << "\r\n";
+							req << "Connection: close\r\n";
+							req << "User-Agent: ALang/1.0\r\n";
+							if (hdrObj) { for (auto& kv : *hdrObj) { req << kv.first << ": " << toString(kv.second) << "\r\n"; } }
+							if (!body.empty()) { req << "Content-Length: " << body.size() << "\r\n"; }
+							req << "\r\n"; if (!body.empty()) req << body;
+							std::string rs = req.str(); if (write(sockfd, rs.c_str(), rs.size()) < 0) { close(sockfd); settlePromise(p, true, Value{ std::string("write failed") }); return; }
+							std::string response; char buf[4096]; int n; while ((n = read(sockfd, buf, sizeof(buf))) > 0) response.append(buf, n); close(sockfd);
+							auto respObj = std::make_shared<Object>();
+							size_t headerEnd = response.find("\r\n\r\n"); std::string headers, bodyStr; double status = 0.0;
+							if (headerEnd != std::string::npos) { headers = response.substr(0, headerEnd); bodyStr = response.substr(headerEnd + 4);
+								size_t sp1 = headers.find(' '); size_t sp2 = headers.find(' ', sp1 + 1);
+								if (sp1 != std::string::npos && sp2 != std::string::npos) { try { status = std::stod(headers.substr(sp1 + 1, sp2 - sp1 - 1)); } catch (...) {} }
+							}
+							(*respObj)["status"] = Value{ status };
+							(*respObj)["headers"] = Value{ headers };
+							// text(): Promise<string>
+							{
+								auto textFn = std::make_shared<Function>(); textFn->isBuiltin = true;
+								std::string copy = bodyStr;
+								textFn->builtin = [this, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+									auto tp = std::make_shared<PromiseState>(); tp->loopPtr = this; settlePromise(tp, false, Value{ copy }); return Value{ tp };
+								};
+								(*respObj)["text"] = Value{ textFn };
+							}
+							// json(): Promise<any>
+							{
+								auto jsonFn = std::make_shared<Function>(); jsonFn->isBuiltin = true; std::string copy = bodyStr;
+								jsonFn->builtin = [this, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+									auto tp = std::make_shared<PromiseState>(); tp->loopPtr = this;
+									postTask([this, tp, copy]{
+										try {
+											auto jsonPkg = ensurePackage("json");
+											Value parseV = (*jsonPkg)["parse"]; if (!std::holds_alternative<std::shared_ptr<Function>>(parseV)) { settlePromise(tp, true, Value{ std::string("json.parse not found") }); return; }
+											auto parseFn = std::get<std::shared_ptr<Function>>(parseV);
+											Value res = parseFn->builtin({ Value{ copy } }, parseFn->closure);
+											settlePromise(tp, false, res);
+										} catch (const std::exception& ex) {
+											settlePromise(tp, true, Value{ std::string(ex.what()) });
+										}
+									});
+									return Value{ tp };
+								};
+								(*respObj)["json"] = Value{ jsonFn };
+							}
+							settlePromise(p, false, Value{ respObj });
+						} catch (const std::exception& ex) {
+							settlePromise(p, true, Value{ std::string(ex.what()) });
+						}
+					}).detach();
+					return Value{ p };
+				};
+				(*netPkg)["fetch"] = Value{ fetchFn };
+			}
+
+			// std.network.http.Server
+			{
+				auto httpObj = std::make_shared<Object>();
+				(*netPkg)["http"] = Value{ httpObj };
+				auto serverClass = std::make_shared<ClassInfo>(); serverClass->name = "Server"; serverClass->isNative = true; (*httpObj)["Server"] = Value{ serverClass };
+				// constructor(): no-op
+				auto ctor = std::make_shared<Function>(); ctor->isBuiltin = true; ctor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { return Value{ std::monostate{} }; }; serverClass->methods["constructor"] = ctor;
+				// listen(port, callback)
+				auto listenFn = std::make_shared<Function>(); listenFn->isBuiltin = true;
+				listenFn->builtin = [this, serverClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+					if (args.size() != 2) throw std::runtime_error("listen expects (port, callback)");
+					int port = static_cast<int>(getNumber(args[0], "port"));
+					if (!std::holds_alternative<std::shared_ptr<Function>>(args[1])) throw std::runtime_error("callback must be function");
+					auto cb = std::get<std::shared_ptr<Function>>(args[1]);
+					int sfd = socket(AF_INET, SOCK_STREAM, 0); if (sfd < 0) throw std::runtime_error("socket failed");
+					int opt=1; setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+					struct sockaddr_in addr; std::memset(&addr,0,sizeof(addr)); addr.sin_family=AF_INET; addr.sin_addr.s_addr=INADDR_ANY; addr.sin_port=htons(port);
+					if (bind(sfd,(struct sockaddr*)&addr,sizeof(addr))<0){ close(sfd); throw std::runtime_error("bind failed"); }
+					if (listen(sfd, 16)<0){ close(sfd); throw std::runtime_error("listen failed"); }
+					// store on instance to keep fd lifetime
+					Value thisVal = closure->get("this"); auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
+					if (inst) {
+						inst->nativeHandle = new int(sfd);
+						inst->nativeDestructor = [](void* p){ if(!p) return; int* fd=(int*)p; if(*fd>=0) close(*fd); delete fd; };
+					}
+					std::thread([this, cb, sfd]{
+						for(;;){
+							struct sockaddr_in cli; socklen_t cl = sizeof(cli);
+							int cfd = accept(sfd,(struct sockaddr*)&cli,&cl);
+							if (cfd < 0) break;
+							std::thread([this, cb, cfd]{
+								char buf[8192]; ssize_t n = read(cfd, buf, sizeof(buf)); if (n <= 0) { close(cfd); return; }
+								std::string reqStr(buf, n);
+								postTask([this, cb, cfd, reqStr]{
+									// Build req
+									auto req = std::make_shared<Object>();
+									std::string method="GET", url="/", body=""; auto headersObj = std::make_shared<Object>();
+									size_t lineEnd = reqStr.find("\r\n");
+									if (lineEnd != std::string::npos) {
+										std::string line = reqStr.substr(0, lineEnd);
+										size_t s1 = line.find(' '); size_t s2 = (s1==std::string::npos)?std::string::npos:line.find(' ', s1+1);
+										if (s1 != std::string::npos) method = line.substr(0, s1);
+										if (s2 != std::string::npos) url = line.substr(s1+1, s2-s1-1);
+										// headers
+										size_t hStart = lineEnd + 2; size_t hEnd = reqStr.find("\r\n\r\n", hStart);
+										if (hEnd != std::string::npos) {
+											std::string hs = reqStr.substr(hStart, hEnd - hStart);
+											std::istringstream iss(hs); std::string hline;
+											while (std::getline(iss, hline)) {
+												if (!hline.empty() && hline.back()=='\r') hline.pop_back();
+												size_t col = hline.find(':');
+												if (col != std::string::npos) {
+													std::string k = hline.substr(0,col); std::string v = hline.substr(col+1);
+													// trim leading space in v
+													size_t p=0; while(p<v.size() && (v[p]==' '||v[p]=='\t')) p++; v = v.substr(p);
+													(*headersObj)[k] = Value{ v };
+												}
+											}
+											body = reqStr.substr(hEnd + 4);
+										}
+									}
+									(*req)["method"] = Value{ method }; (*req)["url"] = Value{ url }; (*req)["headers"] = Value{ headersObj }; (*req)["body"] = Value{ body };
+
+									// Build res
+									auto res = std::make_shared<Object>();
+									auto sent = std::make_shared<bool>(false);
+									// writeHead(code, headers)
+									auto writeHeadFn = std::make_shared<Function>(); writeHeadFn->isBuiltin = true;
+									writeHeadFn->builtin = [cfd, sent](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+										int code = 200; if (!args.empty()) code = static_cast<int>(getNumber(args[0], "code"));
+										std::ostringstream oss; oss << "HTTP/1.1 " << code << " OK\r\n";
+										if (args.size() >= 2 && std::holds_alternative<std::shared_ptr<Object>>(args[1])) {
+											auto h = std::get<std::shared_ptr<Object>>(args[1]); for (auto& kv : *h) { oss << kv.first << ": " << toString(kv.second) << "\r\n"; }
+										}
+										oss << "\r\n"; std::string hs = oss.str(); write(cfd, hs.c_str(), hs.size()); *sent = true; return Value{ std::monostate{} };
+									}; (*res)["writeHead"] = Value{ writeHeadFn };
+									// write(data)
+									auto writeFn2 = std::make_shared<Function>(); writeFn2->isBuiltin = true; writeFn2->builtin = [cfd](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!args.empty()) { std::string s = toString(args[0]); write(cfd, s.c_str(), s.size()); } return Value{ std::monostate{} }; }; (*res)["write"] = Value{ writeFn2 };
+									// end([data])
+									auto endFn = std::make_shared<Function>(); endFn->isBuiltin = true;
+									endFn->builtin = [cfd, sent](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+										std::string s; if (!args.empty()) s = toString(args[0]);
+										if (!*sent) {
+											std::ostringstream oss; oss << "HTTP/1.1 200 OK\r\n"; oss << "Content-Length: " << s.size() << "\r\n"; oss << "Connection: close\r\n\r\n"; std::string h = oss.str(); write(cfd, h.c_str(), h.size()); *sent = true;
+										}
+										if (!s.empty()) write(cfd, s.c_str(), s.size()); close(cfd); return Value{ std::monostate{} };
+									}; (*res)["end"] = Value{ endFn };
+
+									std::vector<Value> cargs{ Value{ req }, Value{ res } };
+									try {
+										if (cb->isBuiltin) cb->builtin(cargs, cb->closure);
+										else { auto local = std::make_shared<Environment>(cb->closure); if(cb->params.size()>0) local->define(cb->params[0], cargs[0]); if(cb->params.size()>1) local->define(cb->params[1], cargs[1]); executeBlock(cb->body, local); }
+									} catch (...) { /* ignore user errors */ }
+								});
+							}).detach();
+						}
+					}).detach();
+					return Value{ std::monostate{} };
+				};
+				serverClass->methods["listen"] = listenFn;
+			}
+
 		// Helper for HTTP requests (Simple blocking implementation)
 		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {
 			// 1. Parse URL
