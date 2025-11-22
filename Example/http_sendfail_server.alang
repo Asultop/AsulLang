@@ -1,0 +1,21 @@
+import std.network;
+
+let PORT = 18082;
+println("HTTP send-fail server starting on " + PORT);
+let srv = new std.network.http.Server();
+srv.listen(PORT, [](req, res){
+    println("SERVER: received " + req.url);
+    // give client time to close immediately
+    await sleep(200);
+    // attempt to send body; res.end may return an error object on send failure
+    let ret = res.end("This is the response body");
+    if (typeof(ret) == "object" && ret.message) {
+        println("SERVER SEND ERROR: " + ret.message);
+    } else {
+        println("SERVER SEND OK");
+    }
+});
+
+// Keep server alive long enough to handle the test
+await sleep(800);
+println("HTTP send-fail server shutting down");

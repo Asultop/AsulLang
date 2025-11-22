@@ -1,0 +1,11 @@
+import std.network;
+
+try {
+    let client = new std.network.Socket("inet", "tcp");
+    await client.connect("127.0.0.1", 18082);
+    // Close immediately to provoke server send failure
+    client.close();
+    println("CLIENT: closed connection");
+} catch (e) {
+    println("CLIENT ERROR: " + e.message);
+}

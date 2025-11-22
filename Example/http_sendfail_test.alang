@@ -1,0 +1,32 @@
+import std.os;
+
+// Orchestrate server and client processes to reproduce send failure
+let alangPath = "../alang";
+
+println("Starting HTTP send-fail server process...");
+let server = std.os.popen(alangPath + " http_sendfail_server.alang", "r");
+
+// small delay to ensure server listens
+await sleep(100);
+
+println("Starting HTTP send-fail client process...");
+let client = std.os.popen(alangPath + " http_sendfail_client.alang", "r");
+
+let clientOut = client.read(4096);
+// try converting byte array to readable string; if conversion fails, print raw
+try {
+	import std.encoding;
+	let s = std.encoding.bytesToString(clientOut);
+	println("Client Output:\n" + s);
+} catch (e) {
+	println("Client Output:\n" + clientOut);
+}
+
+let serverOut = server.read(4096);
+try {
+	import std.encoding;
+	let s2 = std.encoding.bytesToString(serverOut);
+	println("Server Output:\n" + s2);
+} catch (e) {
+	println("Server Output:\n" + serverOut);
+}

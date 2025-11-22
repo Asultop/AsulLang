@@ -4248,6 +4248,24 @@ public:
 		};
 		(*base64Obj)["decode"] = Value{b64dec};
 
+		// bytesToString(arr): convert array of numeric byte values to a string
+		auto bytesToStringFn = std::make_shared<Function>(); bytesToStringFn->isBuiltin = true;
+		bytesToStringFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() != 1) throw std::runtime_error("bytesToString expects 1 argument (array)");
+			if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("bytesToString argument must be array");
+			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+			if (!arr) return Value{std::string("")};
+			std::string out;
+			out.reserve(arr->size());
+			for (auto &v : *arr) {
+				double d = getNumber(v, "bytesToString element");
+				unsigned char c = static_cast<unsigned char>(static_cast<int>(d));
+				out.push_back(static_cast<char>(c));
+			}
+			return Value{out};
+		};
+		(*encPkg)["bytesToString"] = Value{bytesToStringFn};
+
 		// Hex
 		auto hexObj = std::make_shared<Object>();
 		(*encPkg)["hex"] = Value{hexObj};
@@ -4780,22 +4798,61 @@ public:
 									auto writeHeadFn = std::make_shared<Function>(); writeHeadFn->isBuiltin = true;
 									writeHeadFn->builtin = [cfd, sent](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 										int code = 200; if (!args.empty()) code = static_cast<int>(getNumber(args[0], "code"));
-										std::ostringstream oss; oss << "HTTP/1.1 " << code << " OK\r\n";
-										if (args.size() >= 2 && std::holds_alternative<std::shared_ptr<Object>>(args[1])) {
-											auto h = std::get<std::shared_ptr<Object>>(args[1]); for (auto& kv : *h) { oss << kv.first << ": " << toString(kv.second) << "\r\n"; }
-										}
-										oss << "\r\n"; std::string hs = oss.str(); write(cfd, hs.c_str(), hs.size()); *sent = true; return Value{ std::monostate{} };
+												std::ostringstream oss; oss << "HTTP/1.1 " << code << " OK\r\n";
+												if (args.size() >= 2 && std::holds_alternative<std::shared_ptr<Object>>(args[1])) {
+													auto h = std::get<std::shared_ptr<Object>>(args[1]); for (auto& kv : *h) { oss << kv.first << ": " << toString(kv.second) << "\r\n"; }
+												}
+												oss << "\r\n"; std::string hs = oss.str();
+												auto sendAll = [cfd](const char* buf, size_t len)->int{ size_t off=0; while(off<len){ ssize_t w=::write(cfd, buf+off, len-off); if(w<0){ if(errno==EINTR) continue; return errno; } off += (size_t)w; } return 0; };
+												int serr = sendAll(hs.c_str(), hs.size());
+												if (serr != 0) {
+													std::cerr << "[HTTP] send error (writeHead) fd=" << cfd << ": " << std::strerror(serr) << " (" << serr << ")\n";
+													auto errObj = std::make_shared<Object>(); (*errObj)["type"] = Value{ std::string("Error") }; (*errObj)["message"] = Value{ std::string(std::strerror(serr)) }; (*errObj)["errno"] = Value{ static_cast<double>(serr) };
+													return Value{ errObj };
+												}
+												*sent = true; return Value{ std::monostate{} };
 									}; (*res)["writeHead"] = Value{ writeHeadFn };
 									// write(data)
-									auto writeFn2 = std::make_shared<Function>(); writeFn2->isBuiltin = true; writeFn2->builtin = [cfd](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!args.empty()) { std::string s = toString(args[0]); write(cfd, s.c_str(), s.size()); } return Value{ std::monostate{} }; }; (*res)["write"] = Value{ writeFn2 };
+											auto writeFn2 = std::make_shared<Function>(); writeFn2->isBuiltin = true; writeFn2->builtin = [cfd](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+												if (!args.empty()) {
+													std::string s = toString(args[0]);
+													auto sendAll = [cfd](const char* buf, size_t len)->int{ size_t off=0; while(off<len){ ssize_t w=::write(cfd, buf+off, len-off); if(w<0){ if(errno==EINTR) continue; return errno; } off += (size_t)w; } return 0; };
+													int serr = sendAll(s.c_str(), s.size());
+													if (serr != 0) {
+														std::cerr << "[HTTP] send error (write) fd=" << cfd << ": " << std::strerror(serr) << " (" << serr << ")\n";
+														auto errObj = std::make_shared<Object>(); (*errObj)["type"] = Value{ std::string("Error") }; (*errObj)["message"] = Value{ std::string(std::strerror(serr)) }; (*errObj)["errno"] = Value{ static_cast<double>(serr) };
+														return Value{ errObj };
+													}
+												}
+												return Value{ std::monostate{} };
+											}; (*res)["write"] = Value{ writeFn2 };
 									// end([data])
 									auto endFn = std::make_shared<Function>(); endFn->isBuiltin = true;
 									endFn->builtin = [cfd, sent](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 										std::string s; if (!args.empty()) s = toString(args[0]);
-										if (!*sent) {
-											std::ostringstream oss; oss << "HTTP/1.1 200 OK\r\n"; oss << "Content-Length: " << s.size() << "\r\n"; oss << "Connection: close\r\n\r\n"; std::string h = oss.str(); write(cfd, h.c_str(), h.size()); *sent = true;
-										}
-										if (!s.empty()) write(cfd, s.c_str(), s.size()); close(cfd); return Value{ std::monostate{} };
+												auto sendAll = [cfd](const char* buf, size_t len)->int{ size_t off=0; while(off<len){ ssize_t w=::write(cfd, buf+off, len-off); if(w<0){ if(errno==EINTR) continue; return errno; } off += (size_t)w; } return 0; };
+												if (!*sent) {
+													std::ostringstream oss; oss << "HTTP/1.1 200 OK\r\n"; oss << "Content-Length: " << s.size() << "\r\n"; oss << "Connection: close\r\n\r\n"; std::string h = oss.str(); int serr = sendAll(h.c_str(), h.size()); if (serr != 0) {
+														std::cerr << "[HTTP] send error (end writeHead) fd=" << cfd << ": " << std::strerror(serr) << " (" << serr << ")\n";
+														auto errObj = std::make_shared<Object>(); (*errObj)["type"] = Value{ std::string("Error") }; (*errObj)["message"] = Value{ std::string(std::strerror(serr)) }; (*errObj)["errno"] = Value{ static_cast<double>(serr) };
+														// attempt shutdown then close
+														shutdown(cfd, SHUT_WR);
+														close(cfd);
+														return Value{ errObj };
+													}
+													*sent = true;
+												}
+												if (!s.empty()) { int serr2 = sendAll(s.c_str(), s.size()); if (serr2 != 0) {
+													std::cerr << "[HTTP] send error (end body) fd=" << cfd << ": " << std::strerror(serr2) << " (" << serr2 << ")\n";
+													auto errObj = std::make_shared<Object>(); (*errObj)["type"] = Value{ std::string("Error") }; (*errObj)["message"] = Value{ std::string(std::strerror(serr2)) }; (*errObj)["errno"] = Value{ static_cast<double>(serr2) };
+													shutdown(cfd, SHUT_WR);
+													close(cfd);
+													return Value{ errObj };
+												} }
+												// graceful shutdown of write side before close
+												shutdown(cfd, SHUT_WR);
+												close(cfd);
+												return Value{ std::monostate{} };
 									}; (*res)["end"] = Value{ endFn };
 
 									std::vector<Value> cargs{ Value{ req }, Value{ res } };
@@ -5897,6 +5954,146 @@ public:
 			};
 			return Value{ emit(args[0]) };
 		}; (*jsonPkg)["stringify"] = Value{ stringifyFn };
+		});
+
+		// ===== XML (xml) =====
+		registerLazyPackage("xml", [](std::shared_ptr<Object> xmlPkg) {
+
+		// xml.parse(text) -> Node object { name, attrs: object, children: array }
+		auto parseFn = std::make_shared<Function>();
+		parseFn->isBuiltin = true;
+		parseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() != 1) throw std::runtime_error("xml.parse expects 1 argument (string)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("xml.parse argument must be string");
+			std::string s = std::get<std::string>(args[0]);
+			size_t i = 0; auto n = s.size();
+			auto skipWS = [&](){ while (i < n && std::isspace(static_cast<unsigned char>(s[i]))) i++; };
+			auto parseName = [&]() -> std::string { size_t st = i; while (i < n && (std::isalnum(static_cast<unsigned char>(s[i])) || s[i]=='_' || s[i]=='-' || s[i]==':' )) i++; if (i==st) throw std::runtime_error("xml: expected name"); return s.substr(st, i-st); };
+			auto parseAttrVal = [&]() -> std::string { skipWS(); if (i>=n || (s[i] != '"' && s[i] != '\'')) throw std::runtime_error("xml: expected quote for attribute value"); char q = s[i++]; std::string out; while (i<n && s[i] != q) { out.push_back(s[i++]); } if (i>=n) throw std::runtime_error("xml: unterminated attribute value"); i++; return out; };
+			auto parseAttrs = [&]() -> std::shared_ptr<Object> { auto obj = std::make_shared<Object>(); for(;;){ skipWS(); if (i>=n) break; if (s[i]=='/' || s[i]=='>') break; std::string k = parseName(); skipWS(); if (i>=n || s[i] != '=') throw std::runtime_error("xml: expected '=' after attribute name"); i++; std::string v = parseAttrVal(); (*obj)[k] = Value{ v }; }
+				return obj; };
+			std::function<std::shared_ptr<Object>()> parseElement = [&]() -> std::shared_ptr<Object> {
+				skipWS(); if (i>=n || s[i] != '<') throw std::runtime_error("xml: expected '<'"); i++;
+				if (i<n && s[i]=='?') { // skip processing instruction
+					while (i+1<n && !(s[i]=='?' && s[i+1]=='>')) i++; i+=2; return parseElement();
+				}
+				if (i+3<n && s[i]=='!' && s[i+1]=='-' && s[i+2]=='-') { // comment
+					i+=3; while (i+2<n && !(s[i]=='-'&&s[i+1]=='-'&&s[i+2]=='>')) i++; i+=3; return parseElement();
+				}
+				std::string name = parseName();
+				auto attrs = parseAttrs();
+				skipWS(); bool selfClose=false; if (i<n && s[i]=='/') { selfClose=true; i++; }
+				if (i>=n || s[i] != '>') throw std::runtime_error("xml: expected '>'"); i++;
+				auto node = std::make_shared<Object>();
+				(*node)["name"] = Value{ name };
+				(*node)["attrs"] = Value{ attrs };
+				auto children = std::make_shared<Array>();
+				if (!selfClose) {
+					// parse children (text or elements) until </name>
+					for(;;){
+						skipWS(); if (i>=n) break;
+						if (i<n && s[i]=='<' && i+1<n && s[i+1]=='/') {
+							i+=2; std::string endName = parseName(); skipWS(); if (i>=n || s[i] != '>') throw std::runtime_error("xml: expected '>' in end tag"); i++;
+							if (endName != name) throw std::runtime_error("xml: mismatched end tag");
+							break;
+						} else if (i<n && s[i]=='<') {
+							children->push_back(Value{ parseElement() });
+						} else {
+							// text node
+							size_t st=i; while (i<n && s[i] != '<') i++; std::string text = s.substr(st, i-st);
+							// trim only CRLF around
+							if (!text.empty()) children->push_back(Value{ text });
+						}
+					}
+				}
+				(*node)["children"] = Value{ children };
+				return node;
+			};
+			return Value{ parseElement() };
+		};
+		(*xmlPkg)["parse"] = Value{ parseFn };
+		});
+
+		// ===== YAML (yaml) =====
+		registerLazyPackage("yaml", [](std::shared_ptr<Object> yamlPkg) {
+		// yaml.parse(text) -> ALang Value (object/array/scalars) for a small subset
+		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true;
+		parseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() != 1) throw std::runtime_error("yaml.parse expects 1 argument (string)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("yaml.parse argument must be string");
+			std::string s = std::get<std::string>(args[0]);
+			std::vector<std::string> lines; {
+				std::istringstream iss(s); std::string line; while (std::getline(iss, line)) { if (!line.empty() && line.back()=='\r') line.pop_back(); lines.push_back(line); }
+			}
+			struct Ctx { int indent; Value value; bool isSeq; std::shared_ptr<Object> parentMap; std::string keyInParent; }; std::vector<Ctx> stack;
+			auto newMap = [](){ return Value{ std::make_shared<Object>() }; };
+			auto newSeq = [](){ return Value{ std::make_shared<Array>() }; };
+			auto asMap = [](Value& v)->std::shared_ptr<Object>{ return std::get<std::shared_ptr<Object>>(v); };
+			auto asSeq = [](Value& v)->std::shared_ptr<Array>{ return std::get<std::shared_ptr<Array>>(v); };
+			auto parseScalar = [](const std::string& t)->Value{
+				if (t == "null" || t == "~" || t == "Null" || t == "NULL") return Value{ std::monostate{} };
+				if (t == "true" || t == "True" || t == "TRUE") return Value{ true };
+				if (t == "false" || t == "False" || t == "FALSE") return Value{ false };
+				// number
+				char* end=nullptr; double dv = std::strtod(t.c_str(), &end); if (end && *end=='\0' && !t.empty()) return Value{ dv };
+				return Value{ t };
+			};
+			auto currentIndent = [](const std::string& l){ int k=0; for(char c: l){ if(c==' ') k++; else break; } return k; };
+			Value root{ std::make_shared<Object>() }; stack.push_back(Ctx{ -1, root, false, nullptr, std::string() });
+			for (size_t idx=0; idx<lines.size(); ++idx) {
+				std::string line = lines[idx]; if (line.find_first_not_of(' ') == std::string::npos) continue; // skip empty
+				int ind = currentIndent(line); std::string trimmed = line.substr(ind);
+				// pop to matching indent
+				while (!stack.empty() && ind <= stack.back().indent) stack.pop_back();
+				if (stack.empty()) throw std::runtime_error("yaml: bad indentation");
+				// sequence item
+				if (trimmed.rfind("- ", 0) == 0) {
+					Value* container = &stack.back().value; if (!stack.back().isSeq) {
+						// If current context is a map created for a key, convert that key's value to a sequence
+						if (stack.back().parentMap) {
+							Value seq = newSeq();
+							(*stack.back().parentMap)[stack.back().keyInParent] = seq;
+							stack.back().value = seq;
+							stack.back().isSeq = true;
+						} else {
+							// Otherwise, create a new sequence context (e.g., at root)
+							stack.push_back(Ctx{ ind, newSeq(), true, nullptr, std::string() });
+							container = &stack.back().value;
+						}
+					}
+					auto itemText = trimmed.substr(2);
+					auto seq = asSeq(*container);
+					// if item ends with ':' then nested map follows
+					if (!itemText.empty() && itemText.back() == ':') {
+						Value m = newMap(); seq->push_back(m); stack.push_back(Ctx{ ind, m, false });
+					} else {
+						seq->push_back(parseScalar(itemText));
+					}
+					continue;
+				}
+				// mapping: key: value or key:
+				size_t colon = trimmed.find(':'); if (colon == std::string::npos) throw std::runtime_error("yaml: expected ':'");
+				std::string key = trimmed.substr(0, colon); // no unescape
+				std::string rest = trimmed.substr(colon+1); if (!rest.empty() && rest[0]==' ') rest.erase(0,1);
+				auto parent = asMap(stack.back().value);
+				if (rest.empty()) {
+					// nested block (placeholder map; may convert to sequence if '-' items follow)
+					Value m = newMap(); (*parent)[key] = m; stack.push_back(Ctx{ ind, m, false, parent, key });
+				} else if (rest == "|") {
+					// literal block scalar
+					std::ostringstream oss; size_t j = idx+1; int base = -1; for (; j<lines.size(); ++j) { int ind2 = currentIndent(lines[j]); if (ind2 <= ind) break; if (base<0) base=ind2; std::string t = lines[j].substr(base); oss << t; if (j+1<lines.size()) oss << "\n"; }
+					(*parent)[key] = Value{ oss.str() }; idx = j-1;
+				} else if (rest == ">") {
+					// folded block scalar
+					std::ostringstream oss; size_t j = idx+1; int base=-1; for (; j<lines.size(); ++j) { int ind2=currentIndent(lines[j]); if (ind2 <= ind) break; if (base<0) base=ind2; std::string t = lines[j].substr(base); if (oss.tellp()>0) oss << ' '; oss << t; }
+					(*parent)[key] = Value{ oss.str() }; idx = j-1;
+				} else {
+					(*parent)[key] = parseScalar(rest);
+				}
+			}
+			return stack.front().value;
+		};
+		(*yamlPkg)["parse"] = Value{ parseFn };
 		});
 
 		// 注意: 不将 json 自动导入到全局，使用方可通过 `import json.*;` 或 `json.<name>` 访问

@@ -81,7 +81,9 @@ func_files=(
     "string_methods_extended.alang"
     "encoding_test.alang"
     "socket_test.alang"
+    "xml_yaml_example.alang"
     "http_test.alang"
+    "http_sendfail_test.alang"
 )
 
 # Counter for passed/failed tests
