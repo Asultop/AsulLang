@@ -17,9 +17,30 @@ if [ -z "$CXX" ]; then
 fi
 
 # Default flags (kept similar to build.sh)
-CXXFLAGS="-std=c++17 -O2 "
+CXXFLAGS="-std=c++17 -O2"
 
-if [ "${1:-}" = "debug" ]; then
+# Parse arguments: support -j/--jobs, debug, clean, --use-pch (placeholder)
+MODE="build"
+USE_PCH=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -j|--jobs)
+      JOBS="$2"; shift 2;;
+    --jobs=*)
+      JOBS="${1#*=}"; shift;;
+    debug)
+      MODE="debug"; shift;;
+    clean)
+      MODE="clean"; shift;;
+    --use-pch)
+      USE_PCH=1; shift;;
+    *)
+      # ignore unknown
+      shift;;
+  esac
+done
+
+if [ "$MODE" = "debug" ]; then
   CXXFLAGS="-std=c++17 -g -O0"
 fi
 
@@ -34,14 +55,24 @@ SRCS=(ALangEngine.cpp Main.cpp)
 # Determine number of parallel jobs (macOS uses sysctl)
 JOBS=${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 1)}
 
-echo "Using compiler: $CXX"
+REAL_CXX="$CXX"
+# Detect and enable ccache if available (compile-time cache)
+if command -v ccache >/dev/null 2>&1; then
+  echo "ccache found — enabling ccache for compilation"
+  CXX_CMD="ccache $REAL_CXX"
+else
+  CXX_CMD="$REAL_CXX"
+fi
+
+echo "Using compiler: $REAL_CXX"
+echo "Compiler wrapper: $CXX_CMD"
 echo "Jobs: $JOBS"
 
 COMPILE_PIDS=()
 
 prune_pids() {
   local -a new=()
-  for pid in "${COMPILE_PIDS[@]}"; do
+  for pid in "${COMPILE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       new+=("$pid")
     else
@@ -56,7 +87,8 @@ for src in "${SRCS[@]}"; do
   obj="$OBJDIR/${src%.cpp}.o"
   if [ ! -f "$obj" ] || [ "$src" -nt "$obj" ]; then
     echo "Compiling $src -> $obj"
-    "$CXX" -c $CXXFLAGS "$src" -o "$obj" &
+    # Use CXX_CMD for compilation (may be ccache wrapper). Use -I. to ensure local headers found.
+    $CXX_CMD -c $CXXFLAGS -I. "$src" -o "$obj" &
     COMPILE_PIDS+=("$!")
     # throttle by pruning finished background pids until we have capacity
     while [ "${#COMPILE_PIDS[@]}" -ge "$JOBS" ]; do
@@ -70,7 +102,7 @@ done
 
 # wait for remaining background compiles
 prune_pids
-for pid in "${COMPILE_PIDS[@]}"; do
+for pid in "${COMPILE_PIDS[@]:-}"; do
   wait "$pid" 2>/dev/null || true
 done
 
