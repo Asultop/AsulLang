@@ -48,7 +48,8 @@ OBJDIR="build/obj"
 mkdir -p "$OBJDIR"
 
 # Source files (explicit for deterministic build)
-SRCS=(ALangEngine.cpp Main.cpp)
+# Include Console.cpp so the REPL front-end is built into the executable
+SRCS=(ALangEngine.cpp Console.cpp Main.cpp)
 
 # Determine number of parallel jobs (macOS uses sysctl)
 
@@ -67,6 +68,29 @@ fi
 echo "Using compiler: $REAL_CXX"
 echo "Compiler wrapper: $CXX_CMD"
 echo "Jobs: $JOBS"
+
+# Detect readline (pkg-config preferred). If found, add -DUSE_READLINE and link flags.
+LINK_LIBS=""
+if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists readline 2>/dev/null; then
+  echo "readline detected via pkg-config"
+  RL_CFLAGS=$(pkg-config --cflags readline)
+  RL_LIBS=$(pkg-config --libs readline)
+  CXXFLAGS="$CXXFLAGS $RL_CFLAGS -DUSE_READLINE"
+  LINK_LIBS="$RL_LIBS"
+else
+  # Common Homebrew locations
+  if [ -f /opt/homebrew/opt/readline/include/readline/readline.h ]; then
+    echo "readline headers found in /opt/homebrew/opt/readline"
+    CXXFLAGS="$CXXFLAGS -I/opt/homebrew/opt/readline/include -DUSE_READLINE"
+    LINK_LIBS="$LINK_LIBS -L/opt/homebrew/opt/readline/lib -lreadline"
+  elif [ -f /usr/local/opt/readline/include/readline/readline.h ]; then
+    echo "readline headers found in /usr/local/opt/readline"
+    CXXFLAGS="$CXXFLAGS -I/usr/local/opt/readline/include -DUSE_READLINE"
+    LINK_LIBS="$LINK_LIBS -L/usr/local/opt/readline/lib -lreadline"
+  else
+    echo "readline not detected; REPL will use simple getline (no arrow keys/history)."
+  fi
+fi
 
 COMPILE_PIDS=()
 
@@ -108,7 +132,7 @@ done
 
 OBJS=($OBJDIR/*.o)
 echo "Linking -> alang"
-"$CXX" $CXXFLAGS "${OBJS[@]}" -o alang
+"$REAL_CXX" $CXXFLAGS "${OBJS[@]}" $LINK_LIBS -o alang
 
 echo "Build completed."
 

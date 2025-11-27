@@ -15,6 +15,7 @@
         "regex": "cpp",
         "condition_variable": "cpp",
         "optional": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "istream": "cpp"
     }
 }
