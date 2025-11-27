@@ -1,5 +1,5 @@
 alang.exe
 alang
-build/*
 build/
+build_cmake/
 *.o

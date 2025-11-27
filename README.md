@@ -24,38 +24,58 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 
 **快速开始**
 
-构建（在仓库根目录）：
+构建（推荐 — 使用 CMake，跨平台）：
+
+1. 在源码根目录创建独立构建目录并配置：
 
 ```bash
-bash build.sh
+mkdir -p build_cmake
+cd build_cmake
+cmake ..
 ```
-说明：`build.sh` 会用编译器（如 g++）编译 `Main.cpp` 与 `ALangEngine.cpp`。也可以手动使用：
+
+可选：指定构建类型或安装前缀：
 
 ```bash
-g++ -std=c++17 -O2 Main.cpp ALangEngine.cpp -o alang
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
+```
+
+2. 并行构建（macOS 示例，使用 CPU 核心数）：
+
+```bash
+cmake --build . -- -j $(sysctl -n hw.ncpu)
+# 或者： make -jN
+```
+
+3. 可选安装：
+
+```bash
+cmake --install .
 ```
 
 运行：
 
 ```bash
-# 运行单个示例文件
-./alang Example/example.alang
+# 启动交互式 REPL
+./alang
 
-# 运行其它示例
-./alang Example/lambdaExample.alang
-./alang Example/evalExample.alang
+# 执行一个脚本文件
+./alang -f Example/example.alang
 
-// 简短 JSON 使用示例
-```alang
-import json;
-
-let j = { name: "Alice", age: 30, tags: ["dev", "rust"], active: true };
-println(json.stringify(j));
-
-let p = json.parse(json.stringify(j));
-println(p.name);
+# 查看帮助/版本
+./alang --help
+./alang --version
 ```
+
+macOS 注意事项：
+- 推荐安装 `readline`（用于 REPL 行编辑与历史）和 `ccache`（可选，用于加速增量构建）：
+
+```bash
+brew install readline ccache
 ```
+
+CMake 会尝试检测 `readline` 并在可用时链接；若未安装，项目仍可构建但 REPL 会回退到简单输入（无箭头历史）。
+
 
 如果脚本使用了异步（`then/catch` / `go`），宿主（CLI）通常在脚本执行后调用 `runEventLoopUntilIdle()` 来处理事件循环任务（CLI 已在 `Main.cpp` 中演示此调用）。
 
