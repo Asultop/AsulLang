@@ -1864,6 +1864,10 @@ public:
 	void registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value);
 	std::shared_ptr<Object> ensurePackage(const std::string& name);
 	void importPackageSymbols(const std::string& name);
+	
+	// Module loader methods
+	void registerModuleLoader(const std::string& prefix, std::function<std::shared_ptr<Object>()> loader);
+	std::shared_ptr<Object> loadModule(const std::string& name);
 
 	void setImportBaseDir(const std::string& base) {
 		try { importBaseDir = std::filesystem::path(base); }
@@ -3167,6 +3171,10 @@ private:
 
 	// Lazy loading support
 	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
+	
+	// Module loader support
+	std::unordered_map<std::string, std::function<std::shared_ptr<Object>()>> moduleLoaders;
+	std::mutex moduleLoaderMutex;
 
 	void registerLazyPackage(const std::string& name, std::function<void(std::shared_ptr<Object>)> init) {
 		lazyPackages[name] = init;
@@ -7105,6 +7113,16 @@ std::shared_ptr<Object> Interpreter::ensurePackage(const std::string& name) {
 	if (it != packages.end() && it->second) return it->second;
 	auto pkg = std::make_shared<Object>();
 	packages[name] = pkg;
+	
+	// Add package metadata
+	auto meta = std::make_shared<Object>();
+	(*meta)["name"] = Value{name};
+	(*meta)["version"] = Value{std::string("1.0.0")}; // Default version
+	(*meta)["description"] = Value{std::string("")};
+	(*meta)["author"] = Value{std::string("")};
+	(*meta)["license"] = Value{std::string("")};
+	(*pkg)["__meta__"] = Value{meta};
+	
 	if (stdRoot && name.rfind("std.", 0) == 0) {
 		std::string suffix = name.substr(4);
 		auto parent = stdRoot;
@@ -7144,6 +7162,33 @@ void Interpreter::importPackageSymbols(const std::string& name) {
 void Interpreter::registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value) {
 	auto pkg = ensurePackage(pkgName);
 	(*pkg)[symbol] = value;
+}
+
+void Interpreter::registerModuleLoader(const std::string& prefix, std::function<std::shared_ptr<Object>()> loader) {
+	std::lock_guard<std::mutex> lk(moduleLoaderMutex);
+	moduleLoaders[prefix] = loader;
+}
+
+std::shared_ptr<Object> Interpreter::loadModule(const std::string& name) {
+	// Check if package already exists
+	auto it = packages.find(name);
+	if (it != packages.end() && it->second) return it->second;
+	
+	// Try to find a matching module loader
+	std::lock_guard<std::mutex> lk(moduleLoaderMutex);
+	for (const auto& [prefix, loader] : moduleLoaders) {
+		if (name == prefix || (name.rfind(prefix + ".", 0) == 0)) {
+			return loader();
+		}
+	}
+	
+	// Try lazy loading
+	if (loadLazyPackage(name)) {
+		return ensurePackage(name);
+	}
+	
+	// Create empty package if no loader found
+	return ensurePackage(name);
 }
 
 } // namespace

@@ -1,0 +1,132 @@
+// Package Management Test
+// This file tests the package management features including module loaders and package metadata
+
+println("=== Package Management Test ===");
+
+// Test 1: Check if packages have metadata
+println("\n1. Testing package metadata...");
+
+// Test built-in package metadata
+let stdPkg = std;
+if (stdPkg && stdPkg.__meta__) {
+    println("✓ std package has metadata");
+    println("   Name: " + stdPkg.__meta__.name);
+    println("   Version: " + stdPkg.__meta__.version);
+} else {
+    println("✗ std package missing metadata");
+}
+
+// Test 2: Test ensurePackage behavior
+println("\n2. Testing ensurePackage behavior...");
+
+// Create a new package
+try {
+    let testPkg = ensurePackage("test.package");
+    if (testPkg) {
+        println("✓ ensurePackage created package successfully");
+        
+        // Check if it has metadata
+        if (testPkg.__meta__) {
+            println("✓ New package has metadata");
+            println("   Name: " + testPkg.__meta__.name);
+            println("   Version: " + testPkg.__meta__.version);
+        } else {
+            println("✗ New package missing metadata");
+        }
+    } else {
+        println("✗ ensurePackage returned null");
+    }
+} catch (e) {
+    println("✗ ensurePackage threw exception: " + e.message);
+}
+
+// Test 3: Test package symbols
+println("\n3. Testing package symbols...");
+
+try {
+    // Create a test package
+    let testPkg = ensurePackage("test.package");
+    
+    // Add a function directly to the package
+    testPkg.testFunction = [](x) {
+        return "Hello from test package!";
+    };
+    
+    // Test the function
+    if (testPkg.testFunction) {
+        let result = testPkg.testFunction();
+        if (result === "Hello from test package!") {
+            println("✓ Package symbol registration and invocation successful");
+        } else {
+            println("✗ Package function returned unexpected result: " + result);
+        }
+    } else {
+        println("✗ Package symbol not found");
+    }
+} catch (e) {
+    println("✗ Package symbol test threw exception: " + e.message);
+}
+
+// Test 4: Test nested packages
+println("\n4. Testing nested packages...");
+
+try {
+    let nestedPkg = ensurePackage("test.nested.deep");
+    if (nestedPkg) {
+        println("✓ Nested package created successfully");
+        
+        // Check if parent packages exist
+        let testPkg = ensurePackage("test");
+        let nestedParent = ensurePackage("test.nested");
+        
+        if (testPkg && nestedParent) {
+            println("✓ Parent packages exist");
+            
+            // Check if nested structure is correct
+            if (testPkg.nested && testPkg.nested.deep === nestedPkg) {
+                println("✓ Nested package structure is correct");
+            } else {
+                println("✗ Nested package structure is incorrect");
+            }
+        } else {
+            println("✗ Parent packages missing");
+        }
+    } else {
+        println("✗ Nested package creation failed");
+    }
+} catch (e) {
+    println("✗ Nested package test threw exception: " + e.message);
+}
+
+// Test 5: Test importPackageSymbols
+println("\n5. Testing importPackageSymbols...");
+
+try {
+    // Create a package with multiple symbols
+    let importTestPkg = ensurePackage("test.import");
+    importTestPkg.symbol1 = "value1";
+    importTestPkg.symbol2 = 42;
+    importTestPkg.symbol3 = [](x) { return "imported function"; };
+    
+    // Import symbols into current scope
+    importPackageSymbols("test.import");
+    
+    // Test if symbols are available
+    let success = true;
+    if (symbol1.type() !== "string" || symbol1 !== "value1") success = false;
+    if (symbol2.type() !== "number" || symbol2 !== 42) success = false;
+    if (symbol3.type() !== "function" || symbol3() !== "imported function") success = false;
+    
+    if (success) {
+        println("✓ importPackageSymbols successfully imported symbols");
+        println("   symbol1: " + symbol1);
+        println("   symbol2: " + symbol2);
+        println("   symbol3(): " + symbol3());
+    } else {
+        println("✗ importPackageSymbols failed to import symbols correctly");
+    }
+} catch (e) {
+    println("✗ importPackageSymbols test threw exception: " + e.message);
+}
+
+println("\n=== Package Management Test Complete ===");

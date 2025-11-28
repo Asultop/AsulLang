@@ -12,6 +12,18 @@ if(CCACHE_PROGRAM)
   set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
 endif()
 
+# Use FetchContent to manage external dependencies
+include(FetchContent)
+
+# AsulFormatString dependency
+FetchContent_Declare(
+    AsulFormatString
+    GIT_REPOSITORY https://github.com/AsulTop/AsulFormatString.git
+    GIT_TAG main
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(AsulFormatString)
+
 set(SRCS
   ALangEngine.cpp
   Console.cpp
@@ -52,6 +64,7 @@ endif()
 
 add_executable(alang ${SRCS})
 target_include_directories(alang PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(alang PRIVATE ${asulformatstring_SOURCE_DIR})
 
 if(READLINE_FOUND)
   target_link_libraries(alang PRIVATE ${READLINE_LIBS})

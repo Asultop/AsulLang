@@ -83,6 +83,7 @@ func_files=(
     "socket_test.alang"
     "xml_yaml_example.alang"
     "http_test.alang"
+    "package_management_test.alang"
     
 )
 
