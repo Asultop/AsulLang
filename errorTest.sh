@@ -39,6 +39,7 @@ error_files=(
     "spread_value_not_object.alang"
     "undefined_variable.alang"
     "unterminated_string.alang"
+    "http_sendfail_test.alang"
 )
 
 # Counter for passed/failed tests

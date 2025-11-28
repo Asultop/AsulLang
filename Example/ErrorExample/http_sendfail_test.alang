@@ -1,7 +1,7 @@
 import std.os;
 
 // Orchestrate server and client processes to reproduce send failure
-let alangPath = "../alang";
+let alangPath = "../../alang";
 
 println("Starting HTTP send-fail server process...");
 let server = std.os.popen(alangPath + " http_sendfail_server.alang", "r");
