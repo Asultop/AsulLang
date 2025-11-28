@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <cmath>
+#include <optional>
 
 #if defined(USE_READLINE)
 #include <readline/readline.h>
@@ -76,18 +78,18 @@ int runConsole(int argc, char* argv[]) {
     engine.registerClass(
         "Math",
         [](const std::vector<ALangEngine::NativeValue>& /*args*/, void* /*thisHandle*/) -> ALangEngine::NativeValue {
-            return ALangEngine::NativeValue{std::monostate{}};
+            return ALangEngine::NativeValue{std::in_place_type<std::monostate>};
         },
         std::unordered_map<std::string, ALangEngine::NativeFunc>{
             {"sum", [](const std::vector<ALangEngine::NativeValue>& args, void*) {
                 double a = 0, b = 0;
                 if (args.size() > 0) if (auto p = std::get_if<double>(&args[0])) a = *p;
                 if (args.size() > 1) if (auto p = std::get_if<double>(&args[1])) b = *p;
-                return ALangEngine::NativeValue{a + b};
+                return ALangEngine::NativeValue{std::in_place_type<double>, a + b};
             }},
             {"abs", [](const std::vector<ALangEngine::NativeValue>& args, void*) {
                 double x = 0; if (!args.empty()) if (auto p = std::get_if<double>(&args[0])) x = *p;
-                return ALangEngine::NativeValue{ std::fabs(x) };
+                return ALangEngine::NativeValue{ std::in_place_type<double>, std::fabs(x) };
             }}
         }
     );

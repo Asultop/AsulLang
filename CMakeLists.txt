@@ -21,10 +21,9 @@ set(SRCS
 option(USE_READLINE "Enable readline support for REPL if available" ON)
 
 if(USE_READLINE)
-  find_package(PkgConfig)
-  if(PKG_CONFIG_FOUND)
-    pkg_check_modules(READLINE readline)
-  endif()
+  # 首先尝试pkg-config
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(READLINE readline)
 
   if(READLINE_FOUND)
     message(STATUS "readline found via pkg-config")
@@ -32,18 +31,18 @@ if(USE_READLINE)
     set(READLINE_LIBS ${READLINE_LIBRARIES})
     add_compile_definitions(USE_READLINE)
   else()
-    # Common Homebrew locations
-    if(EXISTS "/opt/homebrew/opt/readline/include/readline/readline.h")
-      message(STATUS "readline headers found in /opt/homebrew/opt/readline")
-      include_directories("/opt/homebrew/opt/readline/include")
-      link_directories("/opt/homebrew/opt/readline/lib")
-      set(READLINE_LIBS readline)
-      add_compile_definitions(USE_READLINE)
-    elseif(EXISTS "/usr/local/opt/readline/include/readline/readline.h")
-      message(STATUS "readline headers found in /usr/local/opt/readline")
-      include_directories("/usr/local/opt/readline/include")
-      link_directories("/usr/local/opt/readline/lib")
-      set(READLINE_LIBS readline)
+    # 如果pkg-config失败，尝试直接查找
+    find_path(READLINE_INCLUDE_DIRS readline/readline.h
+      PATHS /usr/include /usr/local/include /opt/homebrew/opt/readline/include
+    )
+    find_library(READLINE_LIBRARIES readline
+      PATHS /usr/lib /usr/local/lib /opt/homebrew/opt/readline/lib
+    )
+    
+    if(READLINE_INCLUDE_DIRS AND READLINE_LIBRARIES)
+      message(STATUS "readline found directly")
+      include_directories(${READLINE_INCLUDE_DIRS})
+      set(READLINE_LIBS ${READLINE_LIBRARIES})
       add_compile_definitions(USE_READLINE)
     else()
       message(STATUS "readline not found; REPL will fall back to getline")
