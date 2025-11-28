@@ -12,7 +12,7 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Path to alang executable (same directory as this script)
-ALANG="$SCRIPT_DIR/alang"
+ALANG="$SCRIPT_DIR/build/alang"
 
 # Example directory
 EXAMPLE_DIR="$SCRIPT_DIR/Example"

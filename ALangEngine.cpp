@@ -36,7 +36,10 @@
 #include <netdb.h>
 #include "AsulFormatString/AsulFormatString.h"
 // AsulModule includes
-#include "AsulModule/Json/json_module.h"
+#include "AsulModule/Json/json.h"
+#include "AsulModule/Xml/xml.h"
+#include "AsulModule/Yaml/yaml.h"
+#include "AsulModule/Os/os.h"
 // POSIX process control for `os.call`
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -5883,64 +5886,17 @@ public:
 
 		// ===== XML (xml) =====
 		registerLazyPackage("xml", [](std::shared_ptr<Object> xmlPkg) {
-
-		// xml.parse(text) -> Node object { name, attrs: object, children: array }
-		auto parseFn = std::make_shared<Function>();
-		parseFn->isBuiltin = true;
-		parseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (args.size() != 1) throw std::runtime_error("xml.parse expects 1 argument (string)");
-			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("xml.parse argument must be string");
-			std::string s = std::get<std::string>(args[0]);
-			size_t i = 0; auto n = s.size();
-			auto skipWS = [&](){ while (i < n && std::isspace(static_cast<unsigned char>(s[i]))) i++; };
-			auto parseName = [&]() -> std::string { size_t st = i; while (i < n && (std::isalnum(static_cast<unsigned char>(s[i])) || s[i]=='_' || s[i]=='-' || s[i]==':' )) i++; if (i==st) throw std::runtime_error("xml: expected name"); return s.substr(st, i-st); };
-			auto parseAttrVal = [&]() -> std::string { skipWS(); if (i>=n || (s[i] != '"' && s[i] != '\'')) throw std::runtime_error("xml: expected quote for attribute value"); char q = s[i++]; std::string out; while (i<n && s[i] != q) { out.push_back(s[i++]); } if (i>=n) throw std::runtime_error("xml: unterminated attribute value"); i++; return out; };
-			auto parseAttrs = [&]() -> std::shared_ptr<Object> { auto obj = std::make_shared<Object>(); for(;;){ skipWS(); if (i>=n) break; if (s[i]=='/' || s[i]=='>') break; std::string k = parseName(); skipWS(); if (i>=n || s[i] != '=') throw std::runtime_error("xml: expected '=' after attribute name"); i++; std::string v = parseAttrVal(); (*obj)[k] = Value{ v }; }
-				return obj; };
-			std::function<std::shared_ptr<Object>()> parseElement = [&]() -> std::shared_ptr<Object> {
-				skipWS(); if (i>=n || s[i] != '<') throw std::runtime_error("xml: expected '<'"); i++;
-				if (i<n && s[i]=='?') { // skip processing instruction
-					while (i+1<n && !(s[i]=='?' && s[i+1]=='>')) i++; i+=2; return parseElement();
-				}
-				if (i+3<n && s[i]=='!' && s[i+1]=='-' && s[i+2]=='-') { // comment
-					i+=3; while (i+2<n && !(s[i]=='-'&&s[i+1]=='-'&&s[i+2]=='>')) i++; i+=3; return parseElement();
-				}
-				std::string name = parseName();
-				auto attrs = parseAttrs();
-				skipWS(); bool selfClose=false; if (i<n && s[i]=='/') { selfClose=true; i++; }
-				if (i>=n || s[i] != '>') throw std::runtime_error("xml: expected '>'"); i++;
-				auto node = std::make_shared<Object>();
-				(*node)["name"] = Value{ name };
-				(*node)["attrs"] = Value{ attrs };
-				auto children = std::make_shared<Array>();
-				if (!selfClose) {
-					// parse children (text or elements) until </name>
-					for(;;){
-						skipWS(); if (i>=n) break;
-						if (i<n && s[i]=='<' && i+1<n && s[i+1]=='/') {
-							i+=2; std::string endName = parseName(); skipWS(); if (i>=n || s[i] != '>') throw std::runtime_error("xml: expected '>' in end tag"); i++;
-							if (endName != name) throw std::runtime_error("xml: mismatched end tag");
-							break;
-						} else if (i<n && s[i]=='<') {
-							children->push_back(Value{ parseElement() });
-						} else {
-							// text node
-							size_t st=i; while (i<n && s[i] != '<') i++; std::string text = s.substr(st, i-st);
-							// trim only CRLF around
-							if (!text.empty()) children->push_back(Value{ text });
-						}
-					}
-				}
-				(*node)["children"] = Value{ children };
-				return node;
-			};
-			return Value{ parseElement() };
-		};
-		(*xmlPkg)["parse"] = Value{ parseFn };
+			// 使用模板函数初始化xml package
+			AsulModule::Xml::initialize<std::shared_ptr<Function>, Value, std::shared_ptr<Environment>, std::shared_ptr<Object>, std::shared_ptr<Array>>(xmlPkg);
 		});
 
 		// ===== YAML (yaml) =====
 		registerLazyPackage("yaml", [](std::shared_ptr<Object> yamlPkg) {
+			// 使用模板函数初始化yaml package
+			AsulModule::Yaml::initialize<std::shared_ptr<Function>, Value, std::shared_ptr<Environment>, std::shared_ptr<Object>, std::shared_ptr<Array>>(yamlPkg);
+			return;
+			// 以下是旧的实现，已被模板函数替换
+			
 		// yaml.parse(text) -> ALang Value (object/array/scalars) for a small subset
 		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true;
 		parseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
@@ -6439,121 +6395,76 @@ public:
 		// ===== OS (os) =====
 		// 提供异步系统调用：`os.call(program, argsArray, cwd)` 返回 Promise
 		registerLazyPackage("os", [this](std::shared_ptr<Object> osPkg) {
-		auto callFn = std::make_shared<Function>(); callFn->isBuiltin = true;
-		callFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (args.size() < 1) throw std::runtime_error("os.call expects at least 1 argument (program)");
-			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("os.call: program must be a string");
-			std::string prog = std::get<std::string>(args[0]);
-			std::vector<std::string> argv;
-			if (args.size() >= 2 && !std::holds_alternative<std::monostate>(args[1])) {
-				if (auto parr = std::get_if<std::shared_ptr<Array>>(&args[1])) {
-					auto a = *parr; if (a) for (auto &v : *a) { if (!std::holds_alternative<std::string>(v)) throw std::runtime_error("os.call: args must be array of strings"); argv.push_back(std::get<std::string>(v)); }
-				} else if (std::holds_alternative<std::string>(args[1])) {
-					argv.push_back(std::get<std::string>(args[1]));
-				} else {
-					throw std::runtime_error("os.call: second argument must be array of strings or a string");
-				}
-			}
-			std::string cwd;
-			if (args.size() >= 3 && std::holds_alternative<std::string>(args[2])) cwd = std::get<std::string>(args[2]);
-			auto p = std::make_shared<PromiseState>(); p->loopPtr = this;
-			// spawn thread to run the process and settle the promise when done
-			std::thread([p, this, prog, argv, cwd]() {
-				int outpipe[2]; int errpipe[2];
-				if (pipe(outpipe) != 0 || pipe(errpipe) != 0) {
-					settlePromise(p, true, Value{ std::string("os.call: pipe failed") });
-					return;
-				}
-				pid_t pid = fork();
-				if (pid == 0) {
-					// child
-					if (!cwd.empty()) {
-						auto ret = chdir(cwd.c_str());
-						ret = ret; // suppress unused warning
+			// 首先调用模板函数初始化不需要访问内部状态的函数
+			AsulModule::Os::initialize<std::shared_ptr<Function>, Value, std::shared_ptr<Environment>, std::shared_ptr<Object>, std::shared_ptr<Array>>(osPkg);
+			
+			// 保留os.call函数的实现，因为它需要访问ALangEngine的内部状态
+			auto callFn = std::make_shared<Function>(); callFn->isBuiltin = true;
+			callFn->builtin = [this](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.size() < 1) throw std::runtime_error("os.call expects at least 1 argument (program)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("os.call: program must be a string");
+				std::string prog = std::get<std::string>(args[0]);
+				std::vector<std::string> argv;
+				if (args.size() >= 2 && !std::holds_alternative<std::monostate>(args[1])) {
+					if (auto parr = std::get_if<std::shared_ptr<Array>>(&args[1])) {
+						auto a = *parr; if (a) for (auto &v : *a) { if (!std::holds_alternative<std::string>(v)) throw std::runtime_error("os.call: args must be array of strings"); argv.push_back(std::get<std::string>(v)); }
+					} else if (std::holds_alternative<std::string>(args[1])) {
+						argv.push_back(std::get<std::string>(args[1]));
+					} else {
+						throw std::runtime_error("os.call: second argument must be array of strings or a string");
 					}
-					dup2(outpipe[1], STDOUT_FILENO);
-					dup2(errpipe[1], STDERR_FILENO);
-					close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
-					std::vector<char*> cargv;
-					cargv.reserve(argv.size() + 2);
-					cargv.push_back(const_cast<char*>(prog.c_str()));
-					for (auto &s : argv) cargv.push_back(const_cast<char*>(s.c_str()));
-					cargv.push_back(nullptr);
-					execvp(prog.c_str(), cargv.data());
-					// if exec failed
-					_exit(127);
-				} else if (pid > 0) {
-					// parent: close write ends and read output
-					close(outpipe[1]); close(errpipe[1]);
-					std::string out; std::string err;
-					std::thread rout([&]{ char buf[4096]; ssize_t r; while((r = read(outpipe[0], buf, sizeof(buf))) > 0) out.append(buf, (size_t)r); close(outpipe[0]); });
-					std::thread rerr([&]{ char buf[4096]; ssize_t r; while((r = read(errpipe[0], buf, sizeof(buf))) > 0) err.append(buf, (size_t)r); close(errpipe[0]); });
-					int status = 0; waitpid(pid, &status, 0);
-					rout.join(); rerr.join();
-					int exitCode = (WIFEXITED(status) ? WEXITSTATUS(status) : -1);
-					auto res = std::make_shared<Object>();
-					(*res)["exitCode"] = Value{ static_cast<double>(exitCode) };
-					(*res)["stdout"] = Value{ out };
-					(*res)["stderr"] = Value{ err };
-					settlePromise(p, false, Value{ res });
-				} else {
-					// fork failed
-					close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
-					settlePromise(p, true, Value{ std::string("os.call: fork failed") });
 				}
-			}).detach();
-			return Value{ p };
-		};
-		(*osPkg)["call"] = Value{ callFn };
-
-		// getEnv(name)
-		auto getEnvFn = std::make_shared<Function>(); getEnvFn->isBuiltin=true; getEnvFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if(args.empty()) throw std::runtime_error("getEnv expects name");
-			std::string name = toString(args[0]);
-			const char* val = std::getenv(name.c_str());
-			if(val) return Value{std::string(val)};
-			return Value{std::monostate{}};
-		};
-		(*osPkg)["getEnv"] = Value{getEnvFn};
-
-		// setEnv(name, value)
-		auto setEnvFn = std::make_shared<Function>(); setEnvFn->isBuiltin=true; setEnvFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if(args.size()!=2) throw std::runtime_error("setEnv expects name, value");
-			std::string name = toString(args[0]); std::string val = toString(args[1]);
-			setenv(name.c_str(), val.c_str(), 1);
-			return Value{true};
-		};
-		(*osPkg)["setEnv"] = Value{setEnvFn};
-
-		// exit(code)
-		auto exitFn = std::make_shared<Function>(); exitFn->isBuiltin=true; exitFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			int code = 0;
-			if(!args.empty()) code = static_cast<int>(getNumber(args[0], "exit code"));
-			std::exit(code);
-			return Value{std::monostate{}};
-		};
-		(*osPkg)["exit"] = Value{exitFn};
-
-		// platform()
-		auto platformFn = std::make_shared<Function>(); platformFn->isBuiltin=true; platformFn->builtin=[](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
-			#ifdef __linux__
-			return Value{std::string("linux")};
-			#elif _WIN32
-			return Value{std::string("windows")};
-			#elif __APPLE__
-			return Value{std::string("darwin")};
-			#else
-			return Value{std::string("unknown")};
-			#endif
-		};
-		(*osPkg)["platform"] = Value{platformFn};
-
-		// arch()
-		auto archFn = std::make_shared<Function>(); archFn->isBuiltin=true; archFn->builtin=[](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
-			if(sizeof(void*) == 8) return Value{std::string("x64")};
-			return Value{std::string("x86")};
-		};
-		(*osPkg)["arch"] = Value{archFn};
+				std::string cwd;
+				if (args.size() >= 3 && std::holds_alternative<std::string>(args[2])) cwd = std::get<std::string>(args[2]);
+				auto p = std::make_shared<PromiseState>(); p->loopPtr = this;
+				// spawn thread to run the process and settle the promise when done
+				std::thread([p, this, prog, argv, cwd]() {
+					int outpipe[2]; int errpipe[2];
+					if (pipe(outpipe) != 0 || pipe(errpipe) != 0) {
+						settlePromise(p, true, Value{ std::string("os.call: pipe failed") });
+						return;
+					}
+					pid_t pid = fork();
+					if (pid == 0) {
+						// child
+						if (!cwd.empty()) {
+							auto ret = chdir(cwd.c_str());
+							ret = ret; // suppress unused warning
+						}
+						dup2(outpipe[1], STDOUT_FILENO);
+						dup2(errpipe[1], STDERR_FILENO);
+						close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
+						std::vector<char*> cargv;
+						cargv.reserve(argv.size() + 2);
+						cargv.push_back(const_cast<char*>(prog.c_str()));
+						for (auto &s : argv) cargv.push_back(const_cast<char*>(s.c_str()));
+						cargv.push_back(nullptr);
+						execvp(prog.c_str(), cargv.data());
+						// if exec failed
+						_exit(127);
+					} else if (pid > 0) {
+						// parent: close write ends and read output
+						close(outpipe[1]); close(errpipe[1]);
+						std::string out; std::string err;
+						std::thread rout([&]{ char buf[4096]; ssize_t r; while((r = read(outpipe[0], buf, sizeof(buf))) > 0) out.append(buf, (size_t)r); close(outpipe[0]); });
+						std::thread rerr([&]{ char buf[4096]; ssize_t r; while((r = read(errpipe[0], buf, sizeof(buf))) > 0) err.append(buf, (size_t)r); close(errpipe[0]); });
+						int status = 0; waitpid(pid, &status, 0);
+						rout.join(); rerr.join();
+						int exitCode = (WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+						auto res = std::make_shared<Object>();
+						(*res)["exitCode"] = Value{ static_cast<double>(exitCode) };
+						(*res)["stdout"] = Value{ out };
+						(*res)["stderr"] = Value{ err };
+						settlePromise(p, false, Value{ res });
+					} else {
+						// fork failed
+						close(outpipe[0]); close(outpipe[1]); close(errpipe[0]); close(errpipe[1]);
+						settlePromise(p, true, Value{ std::string("os.call: fork failed") });
+					}
+				}).detach();
+				return Value{ p };
+			};
+			(*osPkg)["call"] = Value{ callFn };
 		});
 
 
