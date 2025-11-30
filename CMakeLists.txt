@@ -16,6 +16,7 @@ set(SRCS
   ALangEngine.cpp
   AsulInterpreter.cpp
   AsulLexer.cpp
+  AsulParser.cpp
   Console.cpp
   Main.cpp
 )

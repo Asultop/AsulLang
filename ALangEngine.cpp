@@ -1,5 +1,6 @@
 #include "ALangEngine.h"
 #include "AsulLexer.h"
+#include "AsulParser.h"
 
 #include <cctype>
 #include <cmath>
@@ -458,9 +459,10 @@ struct ImportStmt : Stmt {
 
 // ----------- Parser -----------
 
-class Parser {
+class Parser : public AsulParser {
 public:
-	explicit Parser(const std::vector<Token>& t, const std::string& src): tokens(t), source(src) {}
+	explicit Parser(const std::vector<Token>& t, const std::string& src)
+		: AsulParser(t, src) {}
 	std::vector<StmtPtr> parse() {
 		std::vector<StmtPtr> stmts;
 		while (!isAtEnd()) stmts.push_back(declaration());
@@ -468,26 +470,9 @@ public:
 	}
 
 private:
-	const std::vector<Token>& tokens;
-	size_t current{0};
-	const std::string& source;
-
-	bool isAtEnd() const { return peek().type == TokenType::EndOfFile; }
-	const Token& peek() const { return tokens[current]; }
-	const Token& previous() const { return tokens[current-1]; }
-	const Token& advance() { if (!isAtEnd()) current++; return previous(); }
-	bool check(TokenType type) const { return !isAtEnd() && peek().type == type; }
-	bool match(std::initializer_list<TokenType> types) {
-		for (auto t : types) if (check(t)) { advance(); return true; }
-		return false;
-	}
-	const Token& consume(TokenType type, const char* message) {
-		if (check(type)) return advance();
-		const Token& tok = peek();
-		std::ostringstream oss;
-		oss << "[Parse] " << message << " at line " << tok.line << ", column " << tok.column << "\n";
-		oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
-		throw std::runtime_error(oss.str());
+	const Token& advance() {
+		if (!isAtEnd()) { current++; }
+		return previous();
 	}
 
 	std::string getLineText(int line) const {
