@@ -14,6 +14,8 @@ endif()
 
 set(SRCS
   ALangEngine.cpp
+  AsulInterpreter.cpp
+  AsulLexer.cpp
   Console.cpp
   Main.cpp
 )
