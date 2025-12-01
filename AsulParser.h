@@ -30,10 +30,8 @@ protected:
     bool check(TokenType type) const;
     bool match(std::initializer_list<TokenType> types);
     const Token& consume(TokenType type, const char* message);
-    const Token& advance();
 
-    // Utilities moved from engine Parser to support incremental migration
-    std::string getLineText(int line) const;
+    // Qualified identifier helpers
     std::vector<Token> parseQualifiedIdentifiers(const char* message);
     std::string joinIdentifiers(const std::vector<Token>& parts, size_t begin, size_t end) const;
 };

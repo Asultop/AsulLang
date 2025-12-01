@@ -1,13 +1,21 @@
 #include "AsulParser.h"
-#include "AsulParser.h"
 #include <stdexcept>
 #include <sstream>
+
+static std::runtime_error makeParseError(const Token& t, const std::string& msg) {
+    // Keep message style consistent; engine attaches stack and formatting later
+    std::ostringstream oss;
+    oss << "Undefined variable '" << t.lexeme << "' at line " << t.line
+        << ", column " << t.column << ", length " << t.length;
+    return std::runtime_error(msg.empty() ? oss.str() : msg);
+}
 
 AsulParser::AsulParser(const std::vector<Token>& t, const std::string& src)
     : tokens(t), source(src) {}
 
 std::vector<StmtPtr> AsulParser::parse() {
-    // Placeholder: actual implementation remains in ALangEngine.cpp for now.
+    // Placeholder: actual implementation remains in ALangEngine.cpp.
+    // This file exists to establish the API and allow progressive migration.
     return {};
 }
 
@@ -38,30 +46,8 @@ bool AsulParser::match(std::initializer_list<TokenType> types) {
 
 const Token& AsulParser::consume(TokenType type, const char* message) {
     if (check(type)) { current++; return previous(); }
-    const Token& tok = peek();
-    std::ostringstream oss;
-    oss << "[Parse] " << (message ? message : "") << " at line " << tok.line << ", column " << tok.column << "\n";
-    oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
-    throw std::runtime_error(oss.str());
-}
-
-const Token& AsulParser::advance() {
-    if (!isAtEnd()) { current++; }
-    return previous();
-}
-
-std::string AsulParser::getLineText(int line) const {
-    if (line <= 0) return std::string();
-    int curLine = 1;
-    size_t i = 0, startIdx = 0;
-    for (; i < source.size(); ++i) {
-        if (curLine == line) { startIdx = i; break; }
-        if (source[i] == '\n') curLine++;
-    }
-    if (curLine != line) return std::string();
-    size_t j = startIdx;
-    while (j < source.size() && source[j] != '\n' && source[j] != '\r') j++;
-    return source.substr(startIdx, j - startIdx);
+    // Throwing here is temporary; engine will convert to its error type.
+    throw makeParseError(peek(), message ? message : "parse error");
 }
 
 std::vector<Token> AsulParser::parseQualifiedIdentifiers(const char* message) {
@@ -69,9 +55,9 @@ std::vector<Token> AsulParser::parseQualifiedIdentifiers(const char* message) {
     std::vector<Token> parts{ first };
     while (peek().type == TokenType::Dot) {
         size_t saved = current;
-        advance();
+        current++;
         if (check(TokenType::Identifier)) {
-            parts.push_back(advance());
+            parts.push_back(consume(TokenType::Identifier, "Expect identifier after '.'"));
         } else {
             current = saved;
             break;
@@ -88,6 +74,3 @@ std::string AsulParser::joinIdentifiers(const std::vector<Token>& parts, size_t 
     }
     return res;
 }
-
-// importDeclaration remains implemented in ALangEngine.cpp for now; AsulParser
-// provides helpers used by that implementation (getLineText, parseQualifiedIdentifiers, joinIdentifiers).

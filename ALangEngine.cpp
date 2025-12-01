@@ -475,6 +475,21 @@ private:
 		return previous();
 	}
 
+	std::string getLineText(int line) const {
+		if (line <= 0) return std::string();
+		int curLine = 1;
+		size_t i = 0, startIdx = 0;
+		for (; i < source.size(); ++i) {
+			if (curLine == line) { startIdx = i; break; }
+			if (source[i] == '\n') curLine++;
+		}
+		if (curLine != line) return std::string();
+		size_t j = startIdx;
+		while (j < source.size() && source[j] != '\n' && source[j] != '\r') j++;
+		return source.substr(startIdx, j - startIdx);
+	}
+
+	// parseQualifiedIdentifiers & joinIdentifiers moved to AsulParser
 
 	StmtPtr declaration() {
 		bool isExported = false;
@@ -562,17 +577,17 @@ private:
 					// file import entry from string literal
 					Token t = previous();
 					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
-				} else {
-					auto parts = parseQualifiedIdentifiers("Expect package symbol");
-					if (parts.size() < 2) throw std::runtime_error("import list entries must reference package.symbol");
-					auto symTok = parts.back();
-					auto pkg = joinIdentifiers(parts, 0, parts.size()-1);
-					ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
-					if (match({TokenType::As})) {
-						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					} else {
+						auto parts = parseQualifiedIdentifiers("Expect package symbol");
+						if (parts.size() < 2) throw std::runtime_error("import list entries must reference package.symbol");
+						auto symTok = parts.back();
+						auto pkg = joinIdentifiers(parts, 0, parts.size()-1);
+						ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+						if (match({TokenType::As})) {
+							e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+						}
+						imp->entries.push_back(e);
 					}
-					imp->entries.push_back(e);
-				}
 				(void)match({TokenType::Comma});
 			}
 			consume(TokenType::RightParen, "Expect ')' after import list");
@@ -629,6 +644,7 @@ private:
 			return imp;
 		} else {
 			// Allow shorthand imports like `import json;` and map them to top-level package `json`.
+			// Do NOT implicitly place packages under `std.`; keep top-level packages independent.
 			auto tok = pathParts.back();
 			std::string shorthandPkg = tok.lexeme;
 			// Use special symbol marker to indicate binding the package object itself
@@ -641,8 +657,6 @@ private:
 			return imp;
 		}
 	}
-
-    
 	StmtPtr interfaceDeclaration(bool isExported = false) {
 		// 语法：interface Name ; | interface Name { function sig(...); ... }
 		auto nameTok = consume(TokenType::Identifier, "Expect interface name");
