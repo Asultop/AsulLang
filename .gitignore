@@ -3,3 +3,5 @@ alang
 build/
 build_cmake/
 *.o
+_codeql_build_dir/
+_codeql_detected_source_root
