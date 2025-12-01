@@ -1,6 +1,5 @@
 #include "ALangEngine.h"
 #include "AsulLexer.h"
-#include "AsulParser.h"
 
 #include <cctype>
 #include <cmath>
@@ -459,14 +458,76 @@ struct ImportStmt : Stmt {
 
 // ----------- Parser -----------
 
-class Parser : public AsulParser {
+class Parser {
 public:
 	explicit Parser(const std::vector<Token>& t, const std::string& src)
-		: AsulParser(t, src) {}
+		: tokens(t), source(src), current(0) {}
 	std::vector<StmtPtr> parse() {
 		std::vector<StmtPtr> stmts;
 		while (!isAtEnd()) stmts.push_back(declaration());
 		return stmts;
+	}
+
+protected:
+	const std::vector<Token>& tokens;
+	const std::string& source;
+	size_t current;
+
+	const Token& peek() const {
+		if (current >= tokens.size()) return tokens.back();
+		return tokens[current];
+	}
+
+	const Token& previous() const {
+		if (current == 0) return tokens[0];
+		return tokens[current - 1];
+	}
+
+	bool isAtEnd() const {
+		return peek().type == TokenType::EndOfFile || current >= tokens.size();
+	}
+
+	bool check(TokenType type) const {
+		return !isAtEnd() && peek().type == type;
+	}
+
+	bool match(std::initializer_list<TokenType> types) {
+		for (auto t : types) {
+			if (check(t)) { current++; return true; }
+		}
+		return false;
+	}
+
+	const Token& consume(TokenType type, const char* message) {
+		if (check(type)) { current++; return previous(); }
+		std::ostringstream oss;
+		oss << message << " at line " << peek().line << ", column " << peek().column;
+		throw std::runtime_error(oss.str());
+	}
+
+	std::vector<Token> parseQualifiedIdentifiers(const char* message) {
+		auto first = consume(TokenType::Identifier, message);
+		std::vector<Token> parts{ first };
+		while (peek().type == TokenType::Dot) {
+			size_t saved = current;
+			current++;
+			if (check(TokenType::Identifier)) {
+				parts.push_back(consume(TokenType::Identifier, "Expect identifier after '.'"));
+			} else {
+				current = saved;
+				break;
+			}
+		}
+		return parts;
+	}
+
+	std::string joinIdentifiers(const std::vector<Token>& parts, size_t begin, size_t end) const {
+		std::string res;
+		for (size_t i = begin; i < end && i < parts.size(); ++i) {
+			if (i > begin) res.push_back('.');
+			res += parts[i].lexeme;
+		}
+		return res;
 	}
 
 private:
@@ -488,8 +549,6 @@ private:
 		while (j < source.size() && source[j] != '\n' && source[j] != '\r') j++;
 		return source.substr(startIdx, j - startIdx);
 	}
-
-	// parseQualifiedIdentifiers & joinIdentifiers moved to AsulParser
 
 	StmtPtr declaration() {
 		bool isExported = false;
