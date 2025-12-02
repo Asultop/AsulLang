@@ -16,6 +16,9 @@ set(SRCS
   ALangEngine.cpp
   Console.cpp
   Main.cpp
+  src/AsulLexer.cpp
+  src/AsulRuntime.cpp
+  src/AsulParser.cpp
 )
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
@@ -51,7 +54,7 @@ if(USE_READLINE)
 endif()
 
 add_executable(alang ${SRCS})
-target_include_directories(alang PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(alang PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
 
 if(READLINE_FOUND)
   target_link_libraries(alang PRIVATE ${READLINE_LIBS})
