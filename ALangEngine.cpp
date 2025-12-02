@@ -1,11 +1,5 @@
 #include "ALangEngine.h"
 
-// Include external modules
-#include "AsulLexer.h"
-#include "AsulRuntime.h"
-#include "AsulAst.h"
-#include "AsulParser.h"
-
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -40,13 +34,18 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include "AsulFormatString/AsulFormatString.h"
+// POSIX process control for `os.call`
+#include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
+// Networking
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <csignal>
 #include <atomic>
-#include "AsulFormatString/AsulFormatString.h"
-
-// Use the asul namespace for external modules
-using namespace asul;
 
 // Global mutex for timezone operations (setenv/tzset are not thread-safe)
 std::mutex tzMutex;
@@ -58,7 +57,1793 @@ std::atomic<int> g_pendingSignals[32];
 void globalSignalHandler(int sig) {
     // const char* msg = "Signal received\n"; write(1, msg, 16);
     if (sig > 0 && sig < 32) g_pendingSignals[sig] = 1;
+}// ----------- Lexer -----------
+
+enum class TokenType {
+	// Single-char
+	LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
+	Comma, Semicolon, Colon, Dot,
+	Plus, Minus, Star, Slash, Percent,
+	Ampersand, Pipe, Caret,
+	Tilde,
+	Bang, Equal, Less, Greater, Question,
+	// One, two or three char
+	BangEqual, StrictNotEqual, EqualEqual, StrictEqual, LessEqual, GreaterEqual, LeftArrow,
+	MatchInterface, // '=~=' binary operator for interface/class descriptor matching
+	ShiftLeft, ShiftRight,
+	Arrow,
+	Ellipsis,
+	AndAnd, OrOr,
+	// Increment/Decrement and Compound Assignment
+	PlusPlus, MinusMinus,
+	PlusEqual, MinusEqual, StarEqual, SlashEqual, PercentEqual,
+	// Literals
+	Identifier, String, Number,
+	// Keywords
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, As, Export, Static,
+	EndOfFile
+};
+
+struct Token {
+	TokenType type;
+	std::string lexeme;
+	int line;
+	int column{1};
+	int length{1};
+};
+
+class Lexer {
+public:
+	explicit Lexer(const std::string& src) : source(src) {}
+	std::vector<Token> scanTokens() {
+		while (!isAtEnd()) {
+			start = current;
+			scanToken();
+		}
+		int col = static_cast<int>((current >= lineStart) ? (current - lineStart + 1) : 1);
+		tokens.push_back(Token{TokenType::EndOfFile, "", line, col, 0});
+		return tokens;
+	}
+
+private:
+	const std::string& source;
+	std::vector<Token> tokens;
+	size_t start{0};
+	size_t current{0};
+	int line{1};
+	size_t lineStart{0};
+
+	bool isAtEnd() const { return current >= source.size(); }
+	char advance() { return source[current++]; }
+	char peek() const { return isAtEnd() ? '\0' : source[current]; }
+	char peekNext() const { return (current + 1 >= source.size()) ? '\0' : source[current + 1]; }
+	bool match(char expected) {
+		if (isAtEnd() || source[current] != expected) return false;
+		current++;
+		return true;
+	}
+	void add(TokenType type) {
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		tokens.push_back(Token{type, source.substr(start, current - start), line, col, len});
+	}
+
+	void string() {
+int startLine = line;  // Save the starting line
+size_t startLineStart = lineStart;  // Save starting line position
+		while (!isAtEnd() && peek() != '"') {
+			if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+			advance();
+		}
+		if (isAtEnd()) {
+			int col = static_cast<int>((start >= startLineStart) ? (start - startLineStart + 1) : 1);
+			int len = static_cast<int>(current - start);
+			// construct line text and caret
+			size_t ls = startLineStart;
+			size_t le = ls;
+			while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+			std::string lineStr = source.substr(ls, le - ls);
+			std::ostringstream oss;
+			oss << "Unterminated string at line " << startLine << ", column " << col << ", length " << len << "\n";
+			oss << lineStr << "\n" << std::string(col > 1 ? col - 1 : 0, ' ') << std::string(std::max(1, len), '^');
+			throw std::runtime_error(oss.str());
+		}
+		advance(); // closing quote
+		std::string raw = source.substr(start + 1, current - start - 2);
+		// Unescape common sequences: \n, \t, \r, \\, \", \' and \0
+		auto unescape = [](const std::string& in)->std::string{
+			std::string out; out.reserve(in.size());
+			for (size_t i=0; i<in.size(); ++i) {
+				char c = in[i];
+				if (c == '\\' && i + 1 < in.size()) {
+					char n = in[++i];
+					switch (n) {
+					case 'n': out.push_back('\n'); break;
+					case 't': out.push_back('\t'); break;
+					case 'r': out.push_back('\r'); break;
+					case '\\': out.push_back('\\'); break;
+					case '"': out.push_back('"'); break;
+					case '\'': out.push_back('\''); break;
+					case '0': out.push_back('\0'); break;
+					default: out.push_back(n); break; // unknown escapes: keep the char
+					}
+				} else {
+					out.push_back(c);
+				}
+			}
+			return out;
+		};
+		std::string value = unescape(raw);
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start); // include quotes
+		tokens.push_back(Token{TokenType::String, value, line, col, len});
+	}
+
+	void number() {
+		while (std::isdigit(peek())) advance();
+		if (peek() == '.' && std::isdigit(peekNext())) {
+			advance();
+			while (std::isdigit(peek())) advance();
+		}
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len});
+	}
+
+	void identifier() {
+		while (std::isalnum(peek()) || peek() == '_') advance();
+		std::string text = source.substr(start, current - start);
+		static const std::unordered_map<std::string, TokenType> keywords{
+			{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
+			{"function", TokenType::Function}, {"fn", TokenType::Function}, {"return", TokenType::Return},
+			{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While}, {"do", TokenType::Do},
+			{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+			{"switch", TokenType::Switch}, {"case", TokenType::Case}, {"default", TokenType::Default},
+			{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
+			{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
+			{"await", TokenType::Await},
+			{"async", TokenType::Async},
+			{"go", TokenType::Go},
+			{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
+			{"interface", TokenType::Interface},
+			{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
+			{"static", TokenType::Static},
+		};
+		auto it = keywords.find(text);
+		int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+		int len = static_cast<int>(current - start);
+		if (it != keywords.end()) tokens.push_back(Token{it->second, text, line, col, len});
+		else tokens.push_back(Token{TokenType::Identifier, text, line, col, len});
+	}
+
+	void skipWhitespaceAndComments() {
+		for (;;) {
+			char c = peek();
+			switch (c) {
+			case ' ': case '\r': case '\t': advance(); break;
+			case '\n': line++; advance(); lineStart = current; break;
+			case '"':
+				// Support pure triple-double-quote block comments: """ ... """
+				if (current + 2 < source.size() && peekNext() == '"' && source[current+2] == '"') {
+					// consume three quotes
+					advance(); advance(); advance();
+					while (!isAtEnd() && !(peek() == '"' && peekNext() == '"' && (current + 2 < source.size() && source[current+2] == '"'))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else return;
+				break;
+			case '\'':
+				// Support pure triple-single-quote block comments: ''' ... '''
+				if (current + 2 < source.size() && peekNext() == '\'' && source[current+2] == '\'') {
+					// consume three single quotes
+					advance(); advance(); advance();
+					while (!isAtEnd() && !(peek() == '\'' && peekNext() == '\'' && (current + 2 < source.size() && source[current+2] == '\''))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else return;
+				break;
+			case '/':
+				if (peekNext() == '/') {
+					while (!isAtEnd() && peek() != '\n') advance();
+				} else if (peekNext() == '*') {
+					advance(); advance();
+					while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); }
+				} else return;
+				break;
+			case '#':
+				// Support Python-style single-line comments starting with '#'
+				// and block comments that start with #"""...""" or #'''...'''
+				if (current + 3 < source.size() && source[current+1] == '"' && source[current+2] == '"' && source[current+3] == '"') {
+					// consume '#' and opening triple quotes
+					advance(); advance(); advance(); advance();
+					// scan until closing triple double-quotes
+					while (!isAtEnd() && !(peek() == '"' && peekNext() == '"' && (current + 2 < source.size() && source[current+2] == '"'))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else if (current + 3 < source.size() && source[current+1] == '\'' && source[current+2] == '\'' && source[current+3] == '\'') {
+					// consume '#' and opening triple single-quotes
+					advance(); advance(); advance(); advance();
+					// scan until closing triple single-quotes
+					while (!isAtEnd() && !(peek() == '\'' && peekNext() == '\'' && (current + 2 < source.size() && source[current+2] == '\''))) {
+						if (peek() == '\n') { line++; advance(); lineStart = current; continue; }
+						advance();
+					}
+					if (!isAtEnd()) { advance(); advance(); advance(); }
+				} else {
+					// single-line '#'-style comment
+					advance();
+					while (!isAtEnd() && peek() != '\n') advance();
+				}
+				break;
+			default:
+				return;
+			}
+		}
+	}
+
+	void scanToken() {
+		skipWhitespaceAndComments();
+		if (isAtEnd()) return;
+		start = current;
+		char c = advance();
+		switch (c) {
+		case '~': add(TokenType::Tilde); break;
+		case '(': add(TokenType::LeftParen); break;
+		case ')': add(TokenType::RightParen); break;
+		case '{': add(TokenType::LeftBrace); break;
+		case '}': add(TokenType::RightBrace); break;
+		case '[': add(TokenType::LeftBracket); break;
+		case ']': add(TokenType::RightBracket); break;
+		case ',': add(TokenType::Comma); break;
+		case ';': add(TokenType::Semicolon); break;
+		case ':': add(TokenType::Colon); break;
+		case '?': add(TokenType::Question); break;
+		case '.':
+			// support spread '...'
+			if (match('.') && match('.')) add(TokenType::Ellipsis);
+			else add(TokenType::Dot);
+			break;
+		case '+':
+			if (match('+')) add(TokenType::PlusPlus);
+			else if (match('=')) add(TokenType::PlusEqual);
+			else add(TokenType::Plus);
+			break;
+		case '-':
+			if (match('>')) add(TokenType::Arrow);
+			else if (match('-')) add(TokenType::MinusMinus);
+			else if (match('=')) add(TokenType::MinusEqual);
+			else add(TokenType::Minus);
+			break;
+		case '*':
+			if (match('=')) add(TokenType::StarEqual);
+			else add(TokenType::Star);
+			break;
+		case '%':
+			if (match('=')) add(TokenType::PercentEqual);
+			else add(TokenType::Percent);
+			break;
+		case '!': {
+			if (match('=')) {
+				if (match('=')) add(TokenType::StrictNotEqual);
+				else add(TokenType::BangEqual);
+			} else add(TokenType::Bang);
+			break;
+		}
+		case '=': {
+				// Support '=~=' composite operator for interface matching before checking equality operators
+				if (peek() == '~' && peekNext() == '=') {
+					advance(); // consume '~'
+					advance(); // consume '='
+					add(TokenType::MatchInterface);
+				} else if (match('=')) {
+					if (match('=')) add(TokenType::StrictEqual);
+					else add(TokenType::EqualEqual);
+				} else add(TokenType::Equal);
+			break;
+		}
+		case '<': {
+			if (match('-')) { add(TokenType::LeftArrow); }
+			else if (match('<')) { add(TokenType::ShiftLeft); }
+			else if (match('=')) { add(TokenType::LessEqual); }
+			else { add(TokenType::Less); }
+			break;
+		}
+		case '>': {
+			if (match('>')) add(TokenType::ShiftRight);
+			else if (match('=')) add(TokenType::GreaterEqual);
+			else add(TokenType::Greater);
+			break;
+		}
+		case '&': if (match('&')) add(TokenType::AndAnd); else { add(TokenType::Ampersand); } break;
+		case '|': if (match('|')) add(TokenType::OrOr); else { add(TokenType::Pipe); } break;
+		case '^': add(TokenType::Caret); break;
+		case '/':
+			if (match('=')) add(TokenType::SlashEqual);
+			else add(TokenType::Slash);
+			break;
+		case '"': string(); break;
+		default:
+			if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1); int len = static_cast<int>(current - start); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len}); }
+			else if (std::isalpha(c) || c == '_') identifier();
+			else {
+				size_t pos = current - 1;
+				size_t ls = lineStart;
+				size_t le = pos;
+				while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
+				std::string lineStr = source.substr(ls, le - ls);
+				size_t col = (pos >= ls ? (pos - ls + 1) : 1);
+				std::ostringstream caret; caret << std::string(col > 1 ? col - 1 : 0, ' ') << '^';
+				std::ostringstream ch; ch << '\'' << c << "' (U+" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
+					<< static_cast<int>(static_cast<unsigned char>(c)) << ")";
+				std::ostringstream oss;
+				oss << "Unexpected character " << ch.str() << " at line " << line << ", column " << col << "\n"
+					<< lineStr << "\n" << caret.str();
+				throw std::runtime_error(oss.str());
+			}
+		}
+	}
+};
+
+// ----------- Runtime Values and Environment -----------
+// ----------- Runtime Values and Environment -----------
+
+// Internal runtime Value and related forward declarations.
+// Keep these definitions in the .cpp so the public header doesn't need
+// to expose the full interpreter Value type.
+struct Function;
+struct PromiseState;
+
+using Array = std::vector<struct ValueTag>;
+using Object = std::unordered_map<std::string, struct ValueTag>;
+
+struct ClassInfo;
+struct Instance;
+
+// Recursive variant wrapper to allow shared_ptr recursive types.
+struct ValueTag : public std::variant<std::monostate,double,std::string,bool,std::shared_ptr<Function>,std::shared_ptr<Array>,std::shared_ptr<Object>,std::shared_ptr<ClassInfo>,std::shared_ptr<Instance>,std::shared_ptr<PromiseState>> {
+	using variant::variant;
+};
+
+using Value = ValueTag;
+
+// Helper functions operating on the internal `Value` type.
+inline std::string typeOf(const Value& v) {
+	switch (v.index()) {
+	case 0: return "null";
+	case 1: return "number";
+	case 2: return "string";
+	case 3: return "boolean";
+	case 4: return "function";
+	case 5: return "array";
+	case 6: return "object";
+	case 7: return "class";
+	case 8: return "instance";
+	case 9: return "promise";
+	default: return "unknown";
+	}
 }
+
+inline bool isTruthy(const Value& v) {
+	if (std::holds_alternative<std::monostate>(v)) return false;
+	if (auto b = std::get_if<bool>(&v)) return *b;
+	if (auto n = std::get_if<double>(&v)) return *n != 0.0;
+	if (auto s = std::get_if<std::string>(&v)) return !s->empty();
+	if (std::holds_alternative<std::shared_ptr<Array>>(v)) return true;
+	if (std::holds_alternative<std::shared_ptr<Object>>(v)) return true;
+	return true;
+}
+
+inline std::string toString(const Value& v);
+
+// Compare two Value keys for use in Map/Set: numbers/strings/bools/null compare by value,
+// arrays/objects/functions/etc compare by pointer identity (shared_ptr address).
+inline bool valueEqual(const Value& a, const Value& b) {
+	if (a.index() != b.index()) return false;
+	switch (a.index()) {
+		case 0: return true; // null
+		case 1: return std::get<double>(a) == std::get<double>(b);
+		case 2: return std::get<std::string>(a) == std::get<std::string>(b);
+		case 3: return std::get<bool>(a) == std::get<bool>(b);
+		case 4: return std::get<std::shared_ptr<Function>>(a).get() == std::get<std::shared_ptr<Function>>(b).get();
+		case 5: return std::get<std::shared_ptr<Array>>(a).get() == std::get<std::shared_ptr<Array>>(b).get();
+		case 6: return std::get<std::shared_ptr<Object>>(a).get() == std::get<std::shared_ptr<Object>>(b).get();
+		case 7: return std::get<std::shared_ptr<ClassInfo>>(a).get() == std::get<std::shared_ptr<ClassInfo>>(b).get();
+		case 8: return std::get<std::shared_ptr<Instance>>(a).get() == std::get<std::shared_ptr<Instance>>(b).get();
+		case 9: return std::get<std::shared_ptr<PromiseState>>(a).get() == std::get<std::shared_ptr<PromiseState>>(b).get();
+		default: return false;
+	}
+}
+
+// Stable-ish hash for Value to be used in unordered_map index buckets.
+// Note: For complex types we use pointer identity; for primitives we hash the value.
+inline size_t valueHash(const Value& v) {
+	std::hash<std::string> sh;
+	std::hash<double> dh;
+	switch (v.index()) {
+		case 0: return 0x9e3779b97f4a7c15ULL; // null const
+		case 1: { // number
+			double d = std::get<double>(v);
+			return dh(d) ^ (0x9e3779b97f4a7c15ULL + (dh(d)<<6) + (dh(d)>>2));
+		}
+		case 2: { // string
+			const std::string &s = std::get<std::string>(v);
+			return sh(s);
+		}
+		case 3: { // bool
+			bool b = std::get<bool>(v);
+			return b ? 1231u : 3413u;
+		}
+		case 4: { auto p = std::get<std::shared_ptr<Function>>(v).get(); return reinterpret_cast<size_t>(p); }
+		case 5: { auto p = std::get<std::shared_ptr<Array>>(v).get(); return reinterpret_cast<size_t>(p); }
+		case 6: { auto p = std::get<std::shared_ptr<Object>>(v).get(); return reinterpret_cast<size_t>(p); }
+		case 7: { auto p = std::get<std::shared_ptr<ClassInfo>>(v).get(); return reinterpret_cast<size_t>(p); }
+		case 8: { auto p = std::get<std::shared_ptr<Instance>>(v).get(); return reinterpret_cast<size_t>(p); }
+		case 9: { auto p = std::get<std::shared_ptr<PromiseState>>(v).get(); return reinterpret_cast<size_t>(p); }
+		default: return 0;
+	}
+}
+
+// Functor wrappers to use Value as key in unordered_map/set
+struct ValueHash { size_t operator()(const Value& v) const noexcept { return valueHash(v); } };
+struct ValueEq { bool operator()(const Value& a, const Value& b) const noexcept { return valueEqual(a, b); } };
+
+// Native container holder types (used by host-backed classes)
+struct NativeMap { std::unordered_map<Value, Value, ValueHash, ValueEq> m; std::vector<Value> order; std::unordered_map<Value, size_t, ValueHash, ValueEq> index; };
+struct NativeSet { std::unordered_set<Value, ValueHash, ValueEq> s; std::vector<Value> order; std::unordered_map<Value, size_t, ValueHash, ValueEq> index; };
+struct NativeDeque { std::deque<Value> d; };
+struct NativeStack { std::vector<Value> v; };
+
+struct Environment : std::enable_shared_from_this<Environment> {
+	std::shared_ptr<Environment> parent;
+	std::unordered_map<std::string, Value> values;
+	// declared types for variables (optional): maps variable name -> declared type name
+	std::unordered_map<std::string, std::string> declaredTypes;
+	// Explicitly exported symbols in this environment (for module scopes)
+	std::unordered_set<std::string> explicitExports;
+
+	explicit Environment(std::shared_ptr<Environment> p = nullptr) : parent(std::move(p)) {}
+
+	void define(const std::string& name, const Value& val) { values[name] = val; }
+	// define with optional declared type
+	void defineWithType(const std::string& name, const Value& val, const std::optional<std::string>& typeName) {
+		values[name] = val;
+		if (typeName && !typeName->empty()) declaredTypes[name] = *typeName;
+	}
+	std::optional<std::string> getDeclaredType(const std::string& name) {
+		auto it = declaredTypes.find(name);
+		if (it != declaredTypes.end()) return it->second;
+		if (parent) return parent->getDeclaredType(name);
+		return std::nullopt;
+	}
+	bool assign(const std::string& name, const Value& val) {
+		if (values.find(name) != values.end()) { values[name] = val; return true; }
+		if (parent) return parent->assign(name, val);
+		return false;
+	}
+	Value get(const std::string& name) {
+		auto it = values.find(name);
+		if (it != values.end()) return it->second;
+		if (parent) return parent->get(name);
+		throw std::runtime_error("Undefined variable '" + name + "'");
+	}
+};
+
+// Forward declarations for AST
+struct Stmt; struct Expr; using StmtPtr = std::shared_ptr<Stmt>; using ExprPtr = std::shared_ptr<Expr>;
+
+struct Function {
+	std::vector<std::string> params;
+	int restParamIndex{-1}; // -1 表示没有 rest 参数，否则表示 rest 参数的索引
+	std::vector<ExprPtr> defaultValues;  // 默认参数值（与 params 对应）
+	std::vector<StmtPtr> body;
+	std::shared_ptr<Environment> closure;
+	bool isBuiltin{false};
+	bool isAsync{false};
+	std::function<Value(const std::vector<Value>&, std::shared_ptr<Environment>)> builtin;
+};
+
+struct ClassInfo {
+	std::string name;
+	std::vector<std::shared_ptr<ClassInfo>> supers; // 多继承支持，按声明顺序线性查找
+	std::unordered_map<std::string, std::shared_ptr<Function>> methods;
+	std::unordered_map<std::string, std::shared_ptr<Function>> staticMethods;
+	bool isNative{false}; // If true, new creates InstanceExt
+};
+
+struct Instance {
+	std::shared_ptr<ClassInfo> klass;
+	std::unordered_map<std::string, Value> fields;
+	virtual ~Instance() = default;
+};
+
+// Allow Instance to own a native handle for host-wrapped classes
+struct InstanceExt : Instance {
+	void* nativeHandle{nullptr};
+	std::function<void(void*)> nativeDestructor{nullptr};
+	~InstanceExt() {
+		if (nativeDestructor && nativeHandle) nativeDestructor(nativeHandle);
+	}
+};
+
+struct StreamWrapper {
+	virtual size_t read(char* buf, size_t n) = 0;
+	virtual void write(const char* buf, size_t n) = 0;
+	virtual void close() = 0;
+	virtual bool eof() { return false; }
+	virtual ~StreamWrapper() = default;
+};
+
+struct FStreamWrapper : StreamWrapper {
+	std::fstream fs;
+	FStreamWrapper(const std::string& path, std::ios_base::openmode mode) : fs(path, mode) {}
+	size_t read(char* buf, size_t n) override {
+		fs.read(buf, n);
+		return static_cast<size_t>(fs.gcount());
+	}
+	void write(const char* buf, size_t n) override {
+		fs.write(buf, n);
+	}
+	void close() override { fs.close(); }
+	bool eof() override { return fs.eof(); }
+};
+
+struct StdinWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override {
+		std::cin.read(buf, n);
+		return static_cast<size_t>(std::cin.gcount());
+	}
+	void write(const char* buf, size_t n) override { }
+	void close() override { }
+	bool eof() override { return std::cin.eof(); }
+};
+
+struct StdoutWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override { return 0; }
+	void write(const char* buf, size_t n) override {
+		std::cout.write(buf, n);
+		std::cout.flush();
+	}
+	void close() override { }
+};
+
+struct StderrWrapper : StreamWrapper {
+	size_t read(char* buf, size_t n) override { return 0; }
+	void write(const char* buf, size_t n) override {
+		std::cerr.write(buf, n);
+		std::cerr.flush();
+	}
+	void close() override { }
+};
+
+struct FilePtrWrapper : StreamWrapper {
+	FILE* fp;
+	std::function<void(FILE*)> closer;
+	FilePtrWrapper(FILE* f, std::function<void(FILE*)> c) : fp(f), closer(c) {}
+	size_t read(char* buf, size_t n) override {
+		return fread(buf, 1, n, fp);
+	}
+	void write(const char* buf, size_t n) override {
+		fwrite(buf, 1, n, fp);
+	}
+	void close() override {
+		if (fp && closer) {
+			closer(fp);
+			fp = nullptr;
+		}
+	}
+	bool eof() override { return feof(fp); }
+};
+
+inline std::string toString(const Value& v) {
+	if (std::holds_alternative<std::monostate>(v)) return "null";
+	if (auto n = std::get_if<double>(&v)) {
+		std::ostringstream oss; oss << *n; return oss.str();
+	}
+	if (auto s = std::get_if<std::string>(&v)) return *s;
+	if (auto b = std::get_if<bool>(&v)) return *b ? "true" : "false";
+	if (std::holds_alternative<std::shared_ptr<Function>>(v)) return "[Function]";
+	if (auto arr = std::get_if<std::shared_ptr<Array>>(&v)) {
+		std::ostringstream oss; oss << "[";
+		if (*arr) {
+			for (size_t i=0;i<(*arr)->size();++i) {
+				if (i) oss << ", ";
+				oss << toString((**arr)[i]);
+			}
+		}
+		oss << "]"; return oss.str();
+	}
+	if (auto obj = std::get_if<std::shared_ptr<Object>>(&v)) {
+		std::ostringstream oss; oss << "{"; bool first=true;
+		if (*obj) {
+			for (auto& kv : **obj) {
+				if (!first) oss << ", "; first=false;
+				oss << kv.first << ": " << toString(kv.second);
+			}
+		}
+		oss << "}"; return oss.str();
+	}
+	if (std::holds_alternative<std::shared_ptr<ClassInfo>>(v)) return "[Class]";
+	if (auto inst = std::get_if<std::shared_ptr<Instance>>(&v)) {
+		if (*inst && (*inst)->klass) {
+			if ((*inst)->klass->name == "Date") {
+				auto it = (*inst)->fields.find("iso");
+				if (it != (*inst)->fields.end() && std::holds_alternative<std::string>(it->second)) {
+					return std::get<std::string>(it->second);
+				}
+			}
+			if ((*inst)->klass->name == "Duration") {
+				auto it = (*inst)->fields.find("milliseconds");
+				if (it != (*inst)->fields.end() && std::holds_alternative<double>(it->second)) {
+					std::ostringstream oss; oss << "Duration(" << std::get<double>(it->second) << "ms)";
+					return oss.str();
+				}
+			}
+		}
+		return "[Object]";
+	}
+	if (std::holds_alternative<std::shared_ptr<PromiseState>>(v)) return "[Promise]";
+	return "unknown";
+}
+
+// Promise 状态：用于 await 等待
+struct PromiseState {
+	std::mutex mtx;
+	std::condition_variable cv;
+	bool settled{false};
+	bool rejected{false};
+	Value result{std::monostate{}};
+	// 简单事件循环指针，用于 then/catch 回调分发
+	void* loopPtr{nullptr};
+	// then/catch 回调以及链式的下一 Promise
+	std::vector<std::pair<std::shared_ptr<Function>, std::shared_ptr<PromiseState>>> thenCallbacks;
+	std::vector<std::pair<std::shared_ptr<Function>, std::shared_ptr<PromiseState>>> catchCallbacks;
+};
+
+// ----------- AST Nodes -----------
+
+struct Expr { virtual ~Expr() = default; };
+struct LiteralExpr : Expr { Value value; explicit LiteralExpr(Value v): value(std::move(v)){} };
+struct VariableExpr : Expr { std::string name; int line{0}; int column{1}; int length{1}; VariableExpr(std::string n, int l, int c, int len): name(std::move(n)), line(l), column(c), length(len){} };
+struct AssignExpr : Expr { std::string name; ExprPtr value; int line{0}; AssignExpr(std::string n, ExprPtr v, int l): name(std::move(n)), value(std::move(v)), line(l){} };
+struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r): op(std::move(o)), right(std::move(r)){} };
+struct UpdateExpr : Expr { Token op; ExprPtr operand; bool isPrefix; int line{0}, column{1}, length{1}; UpdateExpr(Token o, ExprPtr e, bool pre, int l, int c, int len): op(std::move(o)), operand(std::move(e)), isPrefix(pre), line(l), column(c), length(len){} };
+struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
+struct LogicalExpr : Expr { ExprPtr left; Token op; ExprPtr right; LogicalExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
+struct ConditionalExpr : Expr { ExprPtr condition; ExprPtr thenBranch; ExprPtr elseBranch; int line{0}, column{1}, length{1}; ConditionalExpr(ExprPtr c, ExprPtr t, ExprPtr e, int l, int col, int len): condition(std::move(c)), thenBranch(std::move(t)), elseBranch(std::move(e)), line(l), column(col), length(len){} };
+struct CallExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; CallExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
+struct NewExpr : Expr { ExprPtr callee; std::vector<ExprPtr> args; int line{0}, column{1}, length{1}; NewExpr(ExprPtr c, std::vector<ExprPtr> a, int l, int c0, int len): callee(std::move(c)), args(std::move(a)), line(l), column(c0), length(len){} };
+struct GetPropExpr : Expr { ExprPtr object; std::string name; int line{0}, column{1}, length{1}; GetPropExpr(ExprPtr o, std::string n, int l, int c0, int len): object(std::move(o)), name(std::move(n)), line(l), column(c0), length(len){} };
+struct IndexExpr : Expr { ExprPtr object; ExprPtr index; int line{0}, column{1}, length{1}; IndexExpr(ExprPtr o, ExprPtr i, int l, int c0, int len): object(std::move(o)), index(std::move(i)), line(l), column(c0), length(len){} };
+struct SetPropExpr : Expr { ExprPtr object; std::string name; ExprPtr value; int line{0}, column{1}, length{1}; SetPropExpr(ExprPtr o, std::string n, ExprPtr v, int l, int c0, int len): object(std::move(o)), name(std::move(n)), value(std::move(v)), line(l), column(c0), length(len){} };
+struct SetIndexExpr : Expr { ExprPtr object; ExprPtr index; ExprPtr value; int line{0}, column{1}, length{1}; SetIndexExpr(ExprPtr o, ExprPtr i, ExprPtr v, int l, int c0, int len): object(std::move(o)), index(std::move(i)), value(std::move(v)), line(l), column(c0), length(len){} };
+struct ArrayLiteralExpr : Expr { std::vector<ExprPtr> elements; explicit ArrayLiteralExpr(std::vector<ExprPtr> e): elements(std::move(e)){} };
+struct ObjectLiteralExpr : Expr {
+	struct Prop { bool computed; bool isSpread{false}; std::string name; ExprPtr keyExpr; ExprPtr value; int line{0}, column{1}, length{1}; };
+	std::vector<Prop> props;
+	explicit ObjectLiteralExpr(std::vector<Prop> p): props(std::move(p)){}
+};
+struct SpreadExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit SpreadExpr(ExprPtr e, int l=0, int c=1, int len=1): expr(std::move(e)), line(l), column(c), length(len){} };
+struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
+struct Param { 
+	std::string name; 
+	std::optional<std::string> type; 
+	bool isRest{false};
+	ExprPtr defaultValue{nullptr};  // 默认参数值
+	Param(std::string n, std::optional<std::string> t = std::nullopt, bool rest = false, ExprPtr defVal = nullptr): 
+		name(std::move(n)), type(std::move(t)), isRest(rest), defaultValue(std::move(defVal)) {} 
+};
+
+struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; explicit FunctionExpr(std::vector<Param> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
+
+struct Stmt { virtual ~Stmt() = default; };
+struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
+struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; bool isExported{false}; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i, bool exported=false): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)), isExported(exported){} };
+struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
+struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
+struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
+struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
+struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)), isStatic(s), isExported(exported){} };
+struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; };
+struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
+struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; bool isExported{false}; };
+struct BreakStmt : Stmt {};
+struct ContinueStmt : Stmt {};
+struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
+struct ForEachStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForEachStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
+struct SwitchStmt : Stmt {
+	struct CaseClause {
+		ExprPtr value; // null for default case
+		std::vector<StmtPtr> body;
+	};
+	ExprPtr expr;
+	std::vector<CaseClause> cases;
+	SwitchStmt(ExprPtr e, std::vector<CaseClause> c): expr(std::move(e)), cases(std::move(c)){}
+};
+struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
+struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
+struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
+struct EmptyStmt : Stmt {};
+struct ImportStmt : Stmt {
+	struct Entry {
+		// Package import (existing behavior): symbol == "*" means wildcard
+		std::string packageName;
+		std::string symbol;
+		// File import: when isFile == true, use filePath and ignore packageName/symbol
+		bool isFile{false};
+		std::string filePath; // may be relative or absolute; .alang suffix may be omitted
+		std::optional<std::string> alias;
+		int line{0};
+		int column{1};
+		int length{1};
+	};
+	std::vector<Entry> entries;
+};
+
+// ----------- Parser -----------
+
+class Parser {
+public:
+	explicit Parser(const std::vector<Token>& t, const std::string& src): tokens(t), source(src) {}
+	std::vector<StmtPtr> parse() {
+		std::vector<StmtPtr> stmts;
+		while (!isAtEnd()) stmts.push_back(declaration());
+		return stmts;
+	}
+
+private:
+	const std::vector<Token>& tokens;
+	size_t current{0};
+	const std::string& source;
+
+	bool isAtEnd() const { return peek().type == TokenType::EndOfFile; }
+	const Token& peek() const { return tokens[current]; }
+	const Token& previous() const { return tokens[current-1]; }
+	const Token& advance() { if (!isAtEnd()) current++; return previous(); }
+	bool check(TokenType type) const { return !isAtEnd() && peek().type == type; }
+	bool match(std::initializer_list<TokenType> types) {
+		for (auto t : types) if (check(t)) { advance(); return true; }
+		return false;
+	}
+	const Token& consume(TokenType type, const char* message) {
+		if (check(type)) return advance();
+		const Token& tok = peek();
+		std::ostringstream oss;
+		oss << "[Parse] " << message << " at line " << tok.line << ", column " << tok.column << "\n";
+		oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+		throw std::runtime_error(oss.str());
+	}
+
+	std::string getLineText(int line) const {
+		if (line <= 0) return std::string();
+		int curLine = 1;
+		size_t i = 0, startIdx = 0;
+		for (; i < source.size(); ++i) {
+			if (curLine == line) { startIdx = i; break; }
+			if (source[i] == '\n') curLine++;
+		}
+		if (curLine != line) return std::string();
+		size_t j = startIdx;
+		while (j < source.size() && source[j] != '\n' && source[j] != '\r') j++;
+		return source.substr(startIdx, j - startIdx);
+	}
+
+	std::vector<Token> parseQualifiedIdentifiers(const char* message) {
+		auto first = consume(TokenType::Identifier, message);
+		std::vector<Token> parts{ first };
+		while (peek().type == TokenType::Dot) {
+			size_t saved = current;
+			advance();
+			if (check(TokenType::Identifier)) {
+				parts.push_back(advance());
+			} else {
+				current = saved;
+				break;
+			}
+		}
+		return parts;
+	}
+
+	std::string joinIdentifiers(const std::vector<Token>& parts, size_t begin, size_t end) const {
+		std::string res;
+		for (size_t i = begin; i < end && i < parts.size(); ++i) {
+			if (i > begin) res.push_back('.');
+			res += parts[i].lexeme;
+		}
+		return res;
+	}
+
+	StmtPtr declaration() {
+		bool isExported = false;
+		if (match({TokenType::Export})) {
+			isExported = true;
+		}
+		if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true, isExported); }
+		if (match({TokenType::Function})) return functionDecl(false, isExported);
+		if (match({TokenType::Class})) return classDeclaration(isExported);
+		if (match({TokenType::Extends})) return extendsDeclaration(); // extends cannot be exported
+		if (match({TokenType::Interface})) return interfaceDeclaration(isExported);
+		if (match({TokenType::Import})) return importDeclaration(false);
+		if (match({TokenType::From})) return importDeclaration(true);
+		if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration(isExported);
+		if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
+		return statement();
+	}
+
+	StmtPtr importDeclaration(bool isFrom) {
+		auto imp = std::make_shared<ImportStmt>();
+		if (isFrom) {
+			// Support both: from Package import name | from "file" import name
+			if (match({TokenType::String})) {
+				// from "file" import symbol | from "file" import (a b ...)
+				Token t = previous();
+				auto filePath = t.lexeme;
+				consume(TokenType::Import, "Expect 'import' after file path");
+				if (match({TokenType::LeftParen})) {
+					while (!check(TokenType::RightParen) && !isAtEnd()) {
+						auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+						ImportStmt::Entry e; e.isFile = true; e.filePath = filePath; e.symbol = nameTok.lexeme; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+						if (match({TokenType::As})) {
+							e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+						}
+						imp->entries.push_back(e);
+						(void)match({TokenType::Comma});
+					}
+					consume(TokenType::RightParen, "Expect ')' after import list");
+					consume(TokenType::Semicolon, "Expect ';' after import statement");
+					return imp;
+				} else {
+					auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.isFile = true; e.filePath = filePath; e.symbol = nameTok.lexeme; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
+					consume(TokenType::Semicolon, "Expect ';' after import statement");
+					return imp;
+				}
+			}
+			// from Package import name | from Package import (name1 name2 ...)
+			// fallthrough to existing package handling
+			auto pkgParts = parseQualifiedIdentifiers("Expect package name after 'from'");
+			auto pkg = joinIdentifiers(pkgParts, 0, pkgParts.size());
+			consume(TokenType::Import, "Expect 'import' after package name");
+			if (match({TokenType::LeftParen})) {
+				while (!check(TokenType::RightParen) && !isAtEnd()) {
+					auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
+					(void)match({TokenType::Comma});
+				}
+				consume(TokenType::RightParen, "Expect ')' after import list");
+			} else {
+				auto nameTok = consume(TokenType::Identifier, "Expect symbol name");
+				ImportStmt::Entry e; e.packageName = pkg; e.symbol = nameTok.lexeme; e.isFile = false; e.line = nameTok.line; e.column = nameTok.column; e.length = nameTok.length;
+				if (match({TokenType::As})) {
+					e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+				}
+				imp->entries.push_back(e);
+			}
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+
+		// import Package.* | import Package.(a b ...) | import (Pkg.a Pkg.b ...) | import "file" | import ("f1" "f2" ...)
+		if (match({TokenType::LeftParen})) {
+			// import (Pkg.a Pkg.b ...) or ("file1" "file2" ...)
+			while (!check(TokenType::RightParen) && !isAtEnd()) {
+				if (match({TokenType::String})) {
+					// file import entry from string literal
+					Token t = previous();
+					ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length; imp->entries.push_back(e);
+					} else {
+						auto parts = parseQualifiedIdentifiers("Expect package symbol");
+						if (parts.size() < 2) throw std::runtime_error("import list entries must reference package.symbol");
+						auto symTok = parts.back();
+						auto pkg = joinIdentifiers(parts, 0, parts.size()-1);
+						ImportStmt::Entry e; e.packageName = pkg; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+						if (match({TokenType::As})) {
+							e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+						}
+						imp->entries.push_back(e);
+					}
+				(void)match({TokenType::Comma});
+			}
+			consume(TokenType::RightParen, "Expect ')' after import list");
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+		// Support: import "file" [as alias];  OR keep existing package import forms
+		if (match({TokenType::String})) {
+			Token t = previous();
+			ImportStmt::Entry e; e.isFile = true; e.filePath = t.lexeme; e.line = t.line; e.column = t.column; e.length = t.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+		auto pathParts = parseQualifiedIdentifiers("Expect package name");
+		if (check(TokenType::Dot)) {
+			consume(TokenType::Dot, "Expect '.' after package name");
+			auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size());
+			if (match({TokenType::Star})) {
+				Token starTok = previous();
+				ImportStmt::Entry e; e.packageName = pkgName; e.symbol = std::string("*"); e.isFile = false; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
+				consume(TokenType::Semicolon, "Expect ';' after import statement");
+				return imp;
+			}
+			if (match({TokenType::LeftParen})) {
+				while (!check(TokenType::RightParen) && !isAtEnd()) {
+					auto symTok = consume(TokenType::Identifier, "Expect symbol name");
+					ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+					if (match({TokenType::As})) {
+						e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+					}
+					imp->entries.push_back(e);
+					(void)match({TokenType::Comma});
+				}
+				consume(TokenType::RightParen, "Expect ')' after symbol list");
+				consume(TokenType::Semicolon, "Expect ';' after import statement");
+				return imp;
+			}
+			std::ostringstream oss;
+			oss << "Expect '*' or '(' after package '.' at line " << peek().line << ", column " << peek().column;
+			throw std::runtime_error(oss.str());
+		} else if (pathParts.size() >= 2) {
+			auto symTok = pathParts.back();
+			auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size() - 1);
+			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = symTok.lexeme; e.isFile = false; e.line = symTok.line; e.column = symTok.column; e.length = symTok.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		} else {
+			// Allow shorthand imports like `import json;` and map them to top-level package `json`.
+			// Do NOT implicitly place packages under `std.`; keep top-level packages independent.
+			auto tok = pathParts.back();
+			std::string shorthandPkg = tok.lexeme;
+			// Use special symbol marker to indicate binding the package object itself
+			ImportStmt::Entry e; e.packageName = shorthandPkg; e.symbol = std::string("__module__"); e.isFile = false; e.line = tok.line; e.column = tok.column; e.length = tok.length;
+			if (match({TokenType::As})) {
+				e.alias = consume(TokenType::Identifier, "Expect alias name").lexeme;
+			}
+			imp->entries.push_back(e);
+			consume(TokenType::Semicolon, "Expect ';' after import statement");
+			return imp;
+		}
+	}
+	StmtPtr interfaceDeclaration(bool isExported = false) {
+		// 语法：interface Name ; | interface Name { function sig(...); ... }
+		auto nameTok = consume(TokenType::Identifier, "Expect interface name");
+		auto st = std::make_shared<InterfaceStmt>(); st->name = nameTok.lexeme; st->isExported = isExported;
+		if (match({TokenType::Semicolon})) return st;
+		consume(TokenType::LeftBrace, "Expect '{' before interface body");
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			(void)match({TokenType::Async}); // 忽略 async 关键字
+			(void)match({TokenType::Function});
+			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+			consume(TokenType::LeftParen, "Expect '('");
+			// 跳过参数列表
+			if (!check(TokenType::RightParen)) {
+				do {
+					(void)consume(TokenType::Identifier, "Expect parameter name");
+					// optional type annotation after parameter name
+					if (match({TokenType::Colon})) { (void)consume(TokenType::Identifier, "Expect type name after ':'"); }
+				} while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightParen, "Expect ')'");
+			// 检查是否有函数体（不允许）
+			if (check(TokenType::LeftBrace)) {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "Interface methods cannot have function bodies. Use ';' instead of '{...}' at line " << tok.line << ", column " << tok.column << "\n";
+				oss << "Method '" << mname << "' in interface '" << st->name << "' should be declared as: function " << mname << "(...);";
+				throw std::runtime_error(oss.str());
+			}
+			consume(TokenType::Semicolon, "Expect ';' after interface method signature");
+			st->methodNames.push_back(mname);
+		}
+		consume(TokenType::RightBrace, "Expect '}' after interface body");
+		// 允许可选分号：`interface Name { ... };`
+		(void)match({TokenType::Semicolon});
+		return st;
+	}
+
+	StmtPtr classDeclaration(bool isExported = false) {
+		auto nameTok = consume(TokenType::Identifier, "Expect class name");
+		auto cls = std::make_shared<ClassStmt>();
+		cls->name = nameTok.lexeme;
+		cls->isExported = isExported;
+		// 支持三种：class Name ; | class Name <- Supers | class Name [<- Supers] { ... }
+		if (match({TokenType::Semicolon})) return cls; // 空类声明
+		if (match({TokenType::LeftArrow}) || match({TokenType::Extends})) {
+			// 解析父类：单个或 (A,B,...)
+			if (match({TokenType::LeftParen})) {
+				do { cls->superNames.push_back(consume(TokenType::Identifier, "Expect base class name").lexeme); } while (match({TokenType::Comma}));
+				consume(TokenType::RightParen, "Expect ')' after base list");
+			} else {
+				cls->superNames.push_back(consume(TokenType::Identifier, "Expect base class name").lexeme);
+			}
+		}
+		if (match({TokenType::LeftBrace})) {
+			while (!check(TokenType::RightBrace) && !isAtEnd()) {
+				bool isStatic = match({TokenType::Static});
+				bool isAsync = match({TokenType::Async});
+				(void)match({TokenType::Function});
+				auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+				consume(TokenType::LeftParen, "Expect '('");
+				std::vector<Param> params;
+				if (!check(TokenType::RightParen)) {
+					do {
+						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+						std::optional<std::string> ptype = std::nullopt;
+						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+						params.emplace_back(pname, ptype);
+					} while (match({TokenType::Comma}));
+				}
+				consume(TokenType::RightParen, "Expect ')'");
+				// optional return type
+				std::optional<std::string> retType = std::nullopt;
+				if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
+				auto body = statement();
+				cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType, isStatic));
+			}
+			consume(TokenType::RightBrace, "Expect '}' after class body");
+			// 可选分号：class Name { ... };
+			(void)match({TokenType::Semicolon});
+		}
+		return cls;
+	}
+
+	StmtPtr extendsDeclaration() {
+		// 语法：extends Name { methods }
+		auto nameTok = consume(TokenType::Identifier, "Expect class name after 'extends'");
+		consume(TokenType::LeftBrace, "Expect '{' before extension body");
+		auto ext = std::make_shared<ExtendStmt>();
+		ext->name = nameTok.lexeme;
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			bool isAsync = match({TokenType::Async});
+			(void)match({TokenType::Function});
+			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
+			consume(TokenType::LeftParen, "Expect '('");
+			std::vector<Param> params;
+			if (!check(TokenType::RightParen)) {
+				do {
+					auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+					std::optional<std::string> ptype = std::nullopt;
+					if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+					params.emplace_back(pname, ptype);
+				} while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightParen, "Expect ')'");
+			// optional return type
+			std::optional<std::string> retType = std::nullopt;
+			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
+			auto body = statement();
+			ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
+		}
+		consume(TokenType::RightBrace, "Expect '}' after extension body");
+		// 可选分号：extends Name { ... };
+		(void)match({TokenType::Semicolon});
+		return ext;
+	}
+
+	StmtPtr functionDecl(bool isAsync, bool isExported = false) {
+		auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
+		consume(TokenType::LeftParen, "Expect '('");
+		std::vector<Param> params;
+		bool hasRest = false;
+		bool hasDefault = false;  // 跟踪是否有默认参数
+		if (!check(TokenType::RightParen)) {
+			do {
+				// Check for rest parameter: ...paramName
+				bool isRest = false;
+				if (match({TokenType::Ellipsis})) {
+					if (hasRest) {
+						throw std::runtime_error("Only one rest parameter allowed");
+					}
+					isRest = true;
+					hasRest = true;
+				}
+				
+				auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+				std::optional<std::string> ptype = std::nullopt;
+				if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+				
+				// Check for default value: param = defaultExpr
+				ExprPtr defaultValue = nullptr;
+				if (match({TokenType::Equal})) {
+					if (isRest) {
+						throw std::runtime_error("Rest parameter cannot have a default value");
+					}
+					if (hasRest) {
+						throw std::runtime_error("Default parameter cannot come after rest parameter");
+					}
+					defaultValue = assignment();  // 解析默认值表达式
+					hasDefault = true;
+				} else if (hasDefault && !isRest) {
+					throw std::runtime_error("Required parameter cannot follow default parameter");
+				}
+				
+				params.emplace_back(pname, ptype, isRest, defaultValue);
+				
+				// Rest parameter must be last
+				if (isRest && !check(TokenType::RightParen)) {
+					throw std::runtime_error("Rest parameter must be last");
+				}
+			} while (match({TokenType::Comma}));
+		}
+		consume(TokenType::RightParen, "Expect ')'");
+		// optional return type (accept ':' or '->')
+		std::optional<std::string> retType = std::nullopt;
+		if (match({TokenType::Colon, TokenType::Arrow})) retType = consume(TokenType::Identifier, "Expect return type name after ':' or '->'").lexeme;
+		auto body = statement();
+		return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType, false, isExported);
+	}
+
+	StmtPtr varDeclaration(bool isExported = false) {
+		auto name = consume(TokenType::Identifier, "Expect variable name").lexeme;
+		std::optional<std::string> type = std::nullopt;
+		ExprPtr typeExpr = nullptr;
+		if (match({TokenType::Colon})) {
+			// allow a non-assignment expression (e.g. typeof(...)) as the type annotation
+			typeExpr = logicalOr();
+		}
+		ExprPtr init;
+		if (match({TokenType::Equal})) init = expression();
+		consume(TokenType::Semicolon, "Expect ';' after variable declaration");
+		return std::make_shared<VarDecl>(name, type, typeExpr, init, isExported);
+	}
+
+	StmtPtr statement() {
+		if (match({TokenType::If})) return ifStatement();
+		if (match({TokenType::While})) return whileStatement();
+		if (match({TokenType::Do})) return doWhileStatement();
+		if (match({TokenType::For})) return forStatement();
+		if (match({TokenType::ForEach})) return forEachStatement();
+		if (match({TokenType::Switch})) return switchStatement();
+		if (match({TokenType::Return})) return returnStatement();
+		if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
+		// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
+		if (match({TokenType::Semicolon})) { return std::make_shared<EmptyStmt>(); }
+		if (match({TokenType::Try})) {
+			// try 后接任意语句（通常为块）
+			auto tryB = statement();
+			consume(TokenType::Catch, "Expect 'catch' after try block");
+			consume(TokenType::LeftParen, "Expect '(' after catch");
+			auto name = consume(TokenType::Identifier, "Expect identifier in catch").lexeme;
+			consume(TokenType::RightParen, "Expect ')' after catch param");
+			auto catchB = statement();
+			return std::make_shared<TryCatchStmt>(tryB, name, catchB);
+		}
+		if (match({TokenType::Go})) { auto expr = expression(); consume(TokenType::Semicolon, "Expect ';' after go call"); return std::make_shared<GoStmt>(expr); }
+		if (match({TokenType::Break})) { consume(TokenType::Semicolon, "Expect ';' after break"); return std::make_shared<BreakStmt>(); }
+		if (match({TokenType::Continue})) { consume(TokenType::Semicolon, "Expect ';' after continue"); return std::make_shared<ContinueStmt>(); }
+		if (match({TokenType::LeftBrace})) return std::make_shared<BlockStmt>(block());
+		return expressionStatement();
+	}
+
+	StmtPtr forStatement() {
+		consume(TokenType::LeftParen, "Expect '('");
+		StmtPtr init;
+		if (match({TokenType::Semicolon})) {
+			init = nullptr;
+		} else if (match({TokenType::Let, TokenType::Var, TokenType::Const})) {
+			init = varDeclaration();
+		} else {
+			init = expressionStatement();
+		}
+		ExprPtr cond = nullptr;
+		if (!check(TokenType::Semicolon)) cond = expression();
+		consume(TokenType::Semicolon, "Expect ';' after loop condition");
+		ExprPtr post = nullptr;
+		if (!check(TokenType::RightParen)) post = expression();
+		consume(TokenType::RightParen, "Expect ')' after for clauses");
+		auto body = statement();
+		return std::make_shared<ForStmt>(init, cond, post, body);
+	}
+
+	StmtPtr forEachStatement() {
+		// foreach (varName in iterable) body
+		consume(TokenType::LeftParen, "Expect '(' after 'foreach'");
+		
+		if (!check(TokenType::Identifier)) {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect variable name in foreach at line " << tok.line << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+		std::string varName = advance().lexeme;
+		
+		consume(TokenType::In, "Expect 'in' after variable name in foreach");
+		
+		ExprPtr iterable = expression();
+		consume(TokenType::RightParen, "Expect ')' after foreach clauses");
+		auto body = statement();
+		
+		return std::make_shared<ForEachStmt>(varName, iterable, body);
+	}
+
+	StmtPtr switchStatement() {
+		// switch (expr) { case val: ... case val2: ... default: ... }
+		consume(TokenType::LeftParen, "Expect '(' after 'switch'");
+		ExprPtr expr = expression();
+		consume(TokenType::RightParen, "Expect ')' after switch expression");
+		consume(TokenType::LeftBrace, "Expect '{' after switch header");
+		
+		std::vector<SwitchStmt::CaseClause> cases;
+		
+		while (!check(TokenType::RightBrace) && !isAtEnd()) {
+			if (match({TokenType::Case})) {
+				// case value:
+				ExprPtr caseValue = expression();
+				consume(TokenType::Colon, "Expect ':' after case value");
+				
+				// Collect statements until next case/default or closing brace
+				std::vector<StmtPtr> caseBody;
+				while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !isAtEnd()) {
+					caseBody.push_back(statement());
+				}
+				
+				cases.push_back({caseValue, caseBody});
+			} else if (match({TokenType::Default})) {
+				// default:
+				consume(TokenType::Colon, "Expect ':' after 'default'");
+				
+				// Collect statements until next case or closing brace
+				std::vector<StmtPtr> defaultBody;
+				while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !isAtEnd()) {
+					defaultBody.push_back(statement());
+				}
+				
+				cases.push_back({nullptr, defaultBody}); // nullptr indicates default case
+			} else {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "Expect 'case' or 'default' in switch body at line " << tok.line << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+		}
+		
+		consume(TokenType::RightBrace, "Expect '}' after switch body");
+		return std::make_shared<SwitchStmt>(expr, cases);
+	}
+
+	StmtPtr returnStatement() {
+		Token kw = previous();
+		ExprPtr val;
+		if (!check(TokenType::Semicolon)) val = expression();
+		consume(TokenType::Semicolon, "Expect ';' after return value");
+		return std::make_shared<ReturnStmt>(kw, val);
+	}
+
+	StmtPtr ifStatement() {
+		consume(TokenType::LeftParen, "Expect '('");
+		auto cond = expression();
+		consume(TokenType::RightParen, "Expect ')'");
+		auto thenB = statement();
+		StmtPtr elseB;
+		if (match({TokenType::Else})) elseB = statement();
+		return std::make_shared<IfStmt>(cond, thenB, elseB);
+	}
+
+	StmtPtr whileStatement() {
+		consume(TokenType::LeftParen, "Expect '('");
+		auto cond = expression();
+		consume(TokenType::RightParen, "Expect ')'");
+		auto body = statement();
+		return std::make_shared<WhileStmt>(cond, body);
+	}
+
+	StmtPtr doWhileStatement() {
+		auto body = statement();
+		consume(TokenType::While, "Expect 'while' after do-loop body");
+		consume(TokenType::LeftParen, "Expect '(' after 'while'");
+		auto cond = expression();
+		consume(TokenType::RightParen, "Expect ')' after condition");
+		consume(TokenType::Semicolon, "Expect ';' after do-while condition");
+		return std::make_shared<DoWhileStmt>(cond, body);
+	}
+
+	std::vector<StmtPtr> block() {
+		std::vector<StmtPtr> stmts;
+		while (!check(TokenType::RightBrace) && !isAtEnd()) stmts.push_back(declaration());
+		consume(TokenType::RightBrace, "Expect '}' after block");
+		return stmts;
+	}
+
+	StmtPtr expressionStatement() {
+		auto expr = expression();
+		consume(TokenType::Semicolon, "Expect ';' after expression");
+		return std::make_shared<ExprStmt>(expr);
+	}
+
+	ExprPtr expression() { return assignment(); }
+
+	ExprPtr assignment() {
+		auto expr = conditional();
+		
+		// 复合赋值运算符：+=, -=, *=, /=, %=
+		if (match({TokenType::PlusEqual, TokenType::MinusEqual, TokenType::StarEqual, TokenType::SlashEqual, TokenType::PercentEqual})) {
+			Token op = previous();
+			auto value = assignment();
+			
+			// 转换为 x = x op value
+			TokenType binaryOp;
+			switch (op.type) {
+				case TokenType::PlusEqual: binaryOp = TokenType::Plus; break;
+				case TokenType::MinusEqual: binaryOp = TokenType::Minus; break;
+				case TokenType::StarEqual: binaryOp = TokenType::Star; break;
+				case TokenType::SlashEqual: binaryOp = TokenType::Slash; break;
+				case TokenType::PercentEqual: binaryOp = TokenType::Percent; break;
+				default: binaryOp = TokenType::Plus; break;
+			}
+			Token binaryToken{binaryOp, op.lexeme, op.line};
+			auto binaryExpr = std::make_shared<BinaryExpr>(expr, binaryToken, value);
+			
+			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+				return std::make_shared<AssignExpr>(var->name, binaryExpr, var->line);
+			}
+			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+				return std::make_shared<SetPropExpr>(getp->object, getp->name, binaryExpr, getp->line, getp->column, getp->length);
+			}
+			if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+				return std::make_shared<SetIndexExpr>(idx->object, idx->index, binaryExpr, idx->line, idx->column, idx->length);
+			}
+			{
+				const Token& tok = op;
+				std::ostringstream oss;
+				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+		}
+		
+		if (match({TokenType::Equal})) {
+			auto value = assignment();
+			if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+				return std::make_shared<AssignExpr>(var->name, value, var->line);
+			}
+			if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+				return std::make_shared<SetPropExpr>(getp->object, getp->name, value, getp->line, getp->column, getp->length);
+			}
+			if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+				return std::make_shared<SetIndexExpr>(idx->object, idx->index, value, idx->line, idx->column, idx->length);
+			}
+			{
+				const Token& tok = previous();
+				std::ostringstream oss;
+				oss << "Invalid assignment target at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+		}
+		return expr;
+	}
+
+	ExprPtr conditional() {
+		// 三元运算符：condition ? thenExpr : elseExpr
+		auto expr = logicalOr();
+		
+		if (match({TokenType::Question})) {
+			Token questionToken = previous();
+			auto thenBranch = expression();  // 递归调用 expression 以支持嵌套
+			
+			if (!match({TokenType::Colon})) {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "Expect ':' after then branch in ternary operator at line " << tok.line << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+			
+			auto elseBranch = conditional();  // 右结合，支持 a ? b : c ? d : e
+			return std::make_shared<ConditionalExpr>(expr, thenBranch, elseBranch, questionToken.line, questionToken.column, std::max(1, questionToken.length));
+		}
+		
+		return expr;
+	}
+
+	ExprPtr logicalOr() {
+		auto expr = logicalAnd();
+		while (match({TokenType::OrOr})) {
+			Token op = previous();
+			auto right = logicalAnd();
+			expr = std::make_shared<LogicalExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr logicalAnd() {
+		auto expr = bitwiseOr();
+		while (match({TokenType::AndAnd})) {
+			Token op = previous();
+			auto right = bitwiseOr();
+			expr = std::make_shared<LogicalExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	// bitwise OR level
+	ExprPtr bitwiseOr() {
+		auto expr = bitwiseXor();
+		while (match({TokenType::Pipe})) {
+			Token op = previous();
+			auto right = bitwiseXor();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+	ExprPtr bitwiseXor() {
+		auto expr = bitwiseAnd();
+		while (match({TokenType::Caret})) {
+			Token op = previous();
+			auto right = bitwiseAnd();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+	ExprPtr bitwiseAnd() {
+		auto expr = equality();
+		while (match({TokenType::Ampersand})) {
+			Token op = previous();
+			auto right = equality();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr equality() {
+		auto expr = comparison();
+		while (match({TokenType::BangEqual, TokenType::EqualEqual, TokenType::StrictEqual, TokenType::StrictNotEqual})) {
+			Token op = previous();
+			auto right = comparison();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr comparison() {
+		auto expr = shift();
+		while (match({TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual, TokenType::MatchInterface})) {
+			Token op = previous();
+			auto right = shift();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr shift() {
+		auto expr = term();
+		while (match({TokenType::ShiftLeft, TokenType::ShiftRight})) {
+			Token op = previous();
+			auto right = term();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr term() {
+		auto expr = factor();
+		while (match({TokenType::Plus, TokenType::Minus})) {
+			Token op = previous();
+			auto right = factor();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr factor() {
+		auto expr = unary();
+		while (match({TokenType::Star, TokenType::Slash, TokenType::Percent})) {
+			Token op = previous();
+			auto right = unary();
+			expr = std::make_shared<BinaryExpr>(expr, op, right);
+		}
+		return expr;
+	}
+
+	ExprPtr unary() {
+		// 前置递增/递减：++x, --x
+		if (match({TokenType::PlusPlus, TokenType::MinusMinus})) {
+			Token op = previous();
+			auto operand = unary();
+			return std::make_shared<UpdateExpr>(op, operand, true, op.line, op.column, std::max(1, op.length));
+		}
+		if (match({TokenType::Bang, TokenType::Minus, TokenType::Tilde})) {
+			Token op = previous();
+			auto right = unary();
+			return std::make_shared<UnaryExpr>(op, right);
+		}
+		if (match({TokenType::Await})) {
+			Token awTok = previous();
+			auto inner = unary();
+			return std::make_shared<AwaitExpr>(inner, awTok.line, awTok.column, std::max(1, awTok.length));
+		}
+		return postfix();
+	}
+
+	ExprPtr postfix() {
+		auto expr = call();
+		// 后置递增/递减：x++, x--
+		if (match({TokenType::PlusPlus, TokenType::MinusMinus})) {
+			Token op = previous();
+			return std::make_shared<UpdateExpr>(op, expr, false, op.line, op.column, std::max(1, op.length));
+		}
+		return expr;
+	}
+
+	ExprPtr finishCall(ExprPtr callee) {
+		std::vector<ExprPtr> args;
+		if (!check(TokenType::RightParen)) {
+			do { args.push_back(expression()); } while (match({TokenType::Comma}));
+		}
+		Token rp = consume(TokenType::RightParen, "Expect ')' after arguments");
+		return std::make_shared<CallExpr>(callee, args, rp.line, rp.column, std::max(1, rp.length));
+	}
+
+	ExprPtr call() {
+		auto expr = primary();
+		for (;;) {
+			if (match({TokenType::LeftParen})) expr = finishCall(expr);
+			else if (match({TokenType::Dot})) {
+				std::string name; Token nameTok;
+				if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
+				else if (check(TokenType::Catch)) { nameTok = advance(); name = nameTok.lexeme; /* allow .catch */ }
+				else {
+					const Token& tok = peek();
+					std::ostringstream oss;
+					oss << "[Parse] Expect property name after '.' at line " << tok.line << ", column " << tok.column << "\n";
+					oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+					throw std::runtime_error(oss.str());
+				}
+				expr = std::make_shared<GetPropExpr>(expr, name, nameTok.line, nameTok.column, std::max(1, nameTok.length));
+			}
+			else if (match({TokenType::LeftBracket})) {
+				Token lb = previous();
+				auto idx = expression();
+				consume(TokenType::RightBracket, "Expect ']' after index");
+				expr = std::make_shared<IndexExpr>(expr, idx, lb.line, lb.column, 1);
+			}
+			else break;
+		}
+		return expr;
+	}
+
+	ExprPtr primary() {
+		// 支持匿名函数：[](x, y){ ... }
+		if (check(TokenType::LeftBracket)) {
+			// 仅当模式为 [] ( 开始时，识别为 lambda；否则按数组字面量
+			if (current + 2 < tokens.size() && tokens[current].type == TokenType::LeftBracket && tokens[current+1].type == TokenType::RightBracket && tokens[current+2].type == TokenType::LeftParen) {
+				advance(); // [
+				advance(); // ]
+				advance(); // (
+				std::vector<Param> params;
+				bool hasRest = false;
+				bool hasDefault = false;
+				if (!check(TokenType::RightParen)) {
+					do {
+						// Check for rest parameter: ...paramName
+						bool isRest = false;
+						if (match({TokenType::Ellipsis})) {
+							if (hasRest) {
+								throw std::runtime_error("Only one rest parameter allowed");
+							}
+							isRest = true;
+							hasRest = true;
+						}
+						
+						auto pname = consume(TokenType::Identifier, "Expect parameter name").lexeme;
+						std::optional<std::string> ptype = std::nullopt;
+						if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "Expect type name after ':'").lexeme;
+						
+						// Check for default value
+						ExprPtr defaultValue = nullptr;
+						if (match({TokenType::Equal})) {
+							if (isRest) {
+								throw std::runtime_error("Rest parameter cannot have a default value");
+							}
+							if (hasRest) {
+								throw std::runtime_error("Default parameter cannot come after rest parameter");
+							}
+							defaultValue = assignment();
+							hasDefault = true;
+						} else if (hasDefault && !isRest) {
+							throw std::runtime_error("Required parameter cannot follow default parameter");
+						}
+						
+						params.emplace_back(pname, ptype, isRest, defaultValue);
+						
+						// Rest parameter must be last
+						if (isRest && !check(TokenType::RightParen)) {
+							throw std::runtime_error("Rest parameter must be last");
+						}
+					} while (match({TokenType::Comma}));
+				}
+				consume(TokenType::RightParen, "Expect ')' after lambda parameters");
+				auto body = statement();
+				return std::make_shared<FunctionExpr>(params, body);
+			}
+		}
+		if (match({TokenType::New})) {
+			Token newTok = previous();
+			Token nameTok = consume(TokenType::Identifier, "Expect class name after 'new'");
+			ExprPtr callee = std::make_shared<VariableExpr>(nameTok.lexeme, nameTok.line, nameTok.column, nameTok.length);
+			while (match({TokenType::Dot})) {
+				Token propTok = consume(TokenType::Identifier, "Expect property name after '.'");
+				callee = std::make_shared<GetPropExpr>(callee, propTok.lexeme, propTok.line, propTok.column, propTok.length);
+			}
+			consume(TokenType::LeftParen, "Expect '('");
+			std::vector<ExprPtr> args;
+			if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma})); }
+			consume(TokenType::RightParen, "Expect ')'");
+			return std::make_shared<NewExpr>(callee, args, newTok.line, newTok.column, std::max(1, newTok.length));
+		}
+		if (match({TokenType::False})) return std::make_shared<LiteralExpr>(Value{false});
+		if (match({TokenType::True})) return std::make_shared<LiteralExpr>(Value{true});
+		if (match({TokenType::Null})) return std::make_shared<LiteralExpr>(Value{std::monostate{}});
+		if (match({TokenType::Number})) return std::make_shared<LiteralExpr>(Value{std::stod(previous().lexeme)});
+		if (match({TokenType::String})) {
+			auto tok = previous();
+			const std::string& s = tok.lexeme;
+			if (s.find("${") == std::string::npos) {
+				return std::make_shared<LiteralExpr>(Value{s});
+			}
+			return parseInterpolatedString(s, tok.line, tok.column, std::max(1, tok.length));
+		}
+		if (match({TokenType::Identifier})) { auto tok = previous(); return std::make_shared<VariableExpr>(tok.lexeme, tok.line, tok.column, tok.length); }
+		if (match({TokenType::LeftBracket})) {
+			std::vector<ExprPtr> elems;
+			if (!check(TokenType::RightBracket)) {
+				do {
+					if (match({TokenType::Ellipsis})) {
+						// spread element
+						auto spreadTok = previous();
+						auto inner = expression();
+						elems.push_back(std::make_shared<SpreadExpr>(inner, spreadTok.line, spreadTok.column, spreadTok.length));
+					} else {
+						elems.push_back(expression());
+					}
+				} while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightBracket, "Expect ']' after array literal");
+			return std::make_shared<ArrayLiteralExpr>(elems);
+		}
+		if (match({TokenType::LeftBrace})) {
+			std::vector<ObjectLiteralExpr::Prop> props;
+			if (!check(TokenType::RightBrace)) {
+				do {
+					ObjectLiteralExpr::Prop p{};
+
+					if (match({TokenType::Ellipsis})) {
+						auto spreadTok = previous();
+						p.isSpread = true;
+						p.value = expression();
+						p.line = spreadTok.line; p.column = spreadTok.column; p.length = spreadTok.length;
+					} else {
+						if (match({TokenType::Identifier})) { p.computed = false; p.name = previous().lexeme; }
+						else if (match({TokenType::String})) { p.computed = false; p.name = previous().lexeme; }
+						else if (match({TokenType::LeftBracket})) {
+							p.computed = true; p.keyExpr = expression();
+							consume(TokenType::RightBracket, "Expect ']' after computed key");
+						}
+						else throw std::runtime_error("Expect property name in object literal");
+						consume(TokenType::Colon, "Expect ':' after property name");
+						p.value = expression();
+					}
+					props.push_back(std::move(p));
+				} while (match({TokenType::Comma}));
+			}
+			consume(TokenType::RightBrace, "Expect '}' after object literal");
+			return std::make_shared<ObjectLiteralExpr>(props);
+		}
+		if (match({TokenType::LeftParen})) { auto e = expression(); consume(TokenType::RightParen, "Expect ')'"); return e; }
+		{
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect expression at line " << tok.line << ", column " << tok.column << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+	}
+
+	// --- 插值字符串支持："hello ${expr} world" -> 通过'+'串联 ---
+	ExprPtr parseInterpolatedString(const std::string& s, int line, int column, int length) {
+		std::vector<ExprPtr> parts;
+		std::string raw;
+		auto flushRaw = [&](){ if (!raw.empty()) { parts.push_back(std::make_shared<LiteralExpr>(Value{raw})); raw.clear(); } };
+		for (size_t i=0;i<s.size();) {
+			if (s[i] == '$' && i+1 < s.size() && s[i+1] == '{') {
+				flushRaw();
+				size_t startPos = i; // 记录 ${ 的起始位置
+				i += 2; // skip ${
+				int depth = 1; bool inStr = false; bool esc = false;
+				std::string exprText;
+				for (; i < s.size(); ++i) {
+					char c = s[i];
+					if (inStr) {
+						if (esc) { esc = false; exprText.push_back(c); continue; }
+						if (c == '\\') { esc = true; exprText.push_back(c); continue; }
+						if (c == '"') { inStr = false; exprText.push_back(c); continue; }
+						exprText.push_back(c); continue;
+					}
+					if (c == '"') { inStr = true; exprText.push_back(c); continue; }
+					if (c == '{') { depth++; exprText.push_back(c); continue; }
+					if (c == '}') { depth--; if (depth == 0) { ++i; break; } exprText.push_back(c); continue; }
+					exprText.push_back(c);
+				}
+				// 计算插值表达式在源代码中的准确列位置
+				// column 是字符串开始的列，加上开头的引号(1)，再加上字符串内的偏移
+				int interpolationColumn = column + 1 + startPos;
+				int interpolationLength = i - startPos; // 包含 ${ ... } 的完整长度
+				// 解析 exprText 为表达式
+				parts.push_back(parseExprSnippet(exprText, line, interpolationColumn, interpolationLength));
+				continue;
+			}
+			raw.push_back(s[i]);
+			++i;
+		}
+		flushRaw();
+		if (parts.empty()) return std::make_shared<LiteralExpr>(Value{std::string("")});
+		// 折叠为加号连接
+		ExprPtr acc = parts[0];
+		for (size_t i=1;i<parts.size();++i) {
+			Token plusTok{TokenType::Plus, "+", line};
+			acc = std::make_shared<BinaryExpr>(acc, plusTok, parts[i]);
+		}
+		return acc;
+	}
+
+	ExprPtr parseExprSnippet(const std::string& code, int line, int column, int length) {
+		// 将子表达式封装为一个独立的解析： (expr);
+		// 使用括号避免以 '{' 开头被误判为块语句。
+		std::string snippet = "(";
+		snippet += code;
+		snippet += ")";
+		snippet.push_back(';');
+		Lexer lx(snippet);
+		auto toks = lx.scanTokens();
+		Parser sub(toks, snippet);
+		std::vector<StmtPtr> stmts;
+		try {
+			stmts = sub.parse();
+		} catch (const std::exception& e) {
+			// 捕获子解析器的异常，重新抛出为包含正确位置信息的异常
+			// 不包含行文本和箭头，让 printErrorWithContext 来格式化
+			std::ostringstream oss;
+			oss << "Expect expression at line " << line << ", column " << column << ", length " << length;
+			throw std::runtime_error(oss.str());
+		}
+		if (stmts.empty()) {
+			std::ostringstream oss;
+			oss << "Empty interpolation expression at line " << line << ", column " << column << ", length " << length;
+			throw std::runtime_error(oss.str());
+		}
+		if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmts[0])) return es->expr;
+		std::ostringstream oss;
+		oss << "Invalid interpolation expression at line " << line << ", column " << column << ", length " << length;
+		throw std::runtime_error(oss.str());
+	}
+};
 
 // ----------- Interpreter -----------
 
