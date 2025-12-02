@@ -5,6 +5,13 @@
 #include "AsulPackages/Std/Path/StdPath.h"
 #include "AsulPackages/Std/String/StdString.h"
 #include "AsulPackages/Std/Math/StdMath.h"
+#include "AsulPackages/Std/Time/StdTime.h"
+#include "AsulPackages/Std/Os/StdOs.h"
+#include "AsulPackages/Std/Regex/StdRegex.h"
+#include "AsulPackages/Json/Json.h"
+#include "AsulPackages/Xml/Xml.h"
+#include "AsulPackages/Yaml/Yaml.h"
+#include "AsulPackages/Os/Os.h"
 
 // Declaration only - implementation in AsulInterpreter.cpp
 void registerExternalPackages(asul::Interpreter& interp);

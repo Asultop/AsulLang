@@ -17,6 +17,13 @@ void registerExternalPackages(asul::Interpreter& interp) {
     asul::registerStdPathPackage(interp);
     asul::registerStdStringPackage(interp);
     asul::registerStdMathPackage(interp);
+    asul::registerStdTimePackage(interp);
+    asul::registerStdOsPackage(interp);
+    asul::registerStdRegexPackage(interp);
+    asul::registerJsonPackage(interp);
+    asul::registerXmlPackage(interp);
+    asul::registerYamlPackage(interp);
+    asul::registerOsPackage(interp);
 }
 
 namespace asul {

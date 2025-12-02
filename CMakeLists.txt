@@ -23,6 +23,13 @@ set(SRCS
   src/AsulPackages/Std/Path/StdPath.cpp
   src/AsulPackages/Std/String/StdString.cpp
   src/AsulPackages/Std/Math/StdMath.cpp
+  src/AsulPackages/Std/Time/StdTime.cpp
+  src/AsulPackages/Std/Os/StdOs.cpp
+  src/AsulPackages/Std/Regex/StdRegex.cpp
+  src/AsulPackages/Json/Json.cpp
+  src/AsulPackages/Xml/Xml.cpp
+  src/AsulPackages/Yaml/Yaml.cpp
+  src/AsulPackages/Os/Os.cpp
 )
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
