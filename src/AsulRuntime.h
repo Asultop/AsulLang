@@ -1,8 +1,6 @@
 #ifndef ASUL_RUNTIME_H
 #define ASUL_RUNTIME_H
 
-#include "AsulLexer.h"
-
 #include <condition_variable>
 #include <deque>
 #include <fstream>

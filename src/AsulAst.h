@@ -1,6 +1,7 @@
 #ifndef ASUL_AST_H
 #define ASUL_AST_H
 
+#include "AsulLexer.h"
 #include "AsulRuntime.h"
 
 #include <memory>
