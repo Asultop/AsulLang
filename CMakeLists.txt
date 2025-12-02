@@ -20,6 +20,9 @@ set(SRCS
   src/AsulRuntime.cpp
   src/AsulParser.cpp
   src/AsulInterpreter.cpp
+  src/AsulPackages/Std/Path/StdPath.cpp
+  src/AsulPackages/Std/String/StdString.cpp
+  src/AsulPackages/Std/Math/StdMath.cpp
 )
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)

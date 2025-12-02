@@ -39,6 +39,10 @@
 
 #include "AsulFormatString/AsulFormatString.h"
 
+// Forward declare external package registration
+namespace asul { class Interpreter; }
+void registerExternalPackages(asul::Interpreter& interp);
+
 // Global mutex for timezone operations
 extern std::mutex tzMutex;
 
@@ -61,6 +65,9 @@ public:
 	void registerPackageSymbol(const std::string& pkgName, const std::string& symbol, const Value& value);
 	std::shared_ptr<Object> ensurePackage(const std::string& name);
 	void importPackageSymbols(const std::string& name);
+
+	// Package registration for external packages
+	void registerLazyPackage(const std::string& name, std::function<void(std::shared_ptr<Object>)> init);
 
 	void setImportBaseDir(const std::string& base) {
 		try { importBaseDir = std::filesystem::path(base); }
@@ -1365,10 +1372,6 @@ private:
 	// Lazy loading support
 	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
 
-	void registerLazyPackage(const std::string& name, std::function<void(std::shared_ptr<Object>)> init) {
-		lazyPackages[name] = init;
-	}
-
 	bool loadLazyPackage(const std::string& name) {
 		auto it = lazyPackages.find(name);
 		if (it != lazyPackages.end()) {
@@ -2218,76 +2221,9 @@ public:
 		globals->define("undefined", Value{std::monostate{}});
 		packages["std"] = stdRoot;
 
-		// ===== Path Manipulation (std.path) =====
-		registerLazyPackage("std.path", [](std::shared_ptr<Object> pathPkg) {
-			namespace fs = std::filesystem;
-			// join(...paths)
-			auto joinFn = std::make_shared<Function>(); joinFn->isBuiltin = true;
-			joinFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				fs::path p;
-				for (const auto& arg : args) {
-					p /= toString(arg);
-				}
-				return Value{ p.string() };
-			};
-			(*pathPkg)["join"] = Value{ joinFn };
+		// Register external packages (std.path, std.string, std.math, etc.)
+		registerExternalPackages(*this);
 
-			// resolve(...paths)
-			auto resolveFn = std::make_shared<Function>(); resolveFn->isBuiltin = true;
-			resolveFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				fs::path p = fs::current_path();
-				for (const auto& arg : args) {
-					p /= toString(arg);
-				}
-				return Value{ fs::weakly_canonical(p).string() };
-			};
-			(*pathPkg)["resolve"] = Value{ resolveFn };
-
-			// dirname(path)
-			auto dirnameFn = std::make_shared<Function>(); dirnameFn->isBuiltin = true;
-			dirnameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				if (args.empty()) return Value{ std::string(".") };
-				fs::path p(toString(args[0]));
-				return Value{ p.parent_path().string() };
-			};
-			(*pathPkg)["dirname"] = Value{ dirnameFn };
-
-			// basename(path, [ext])
-			auto basenameFn = std::make_shared<Function>(); basenameFn->isBuiltin = true;
-			basenameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				if (args.empty()) return Value{ std::string("") };
-				fs::path p(toString(args[0]));
-				std::string name = p.filename().string();
-				if (args.size() > 1) {
-					std::string ext = toString(args[1]);
-					if (name.size() >= ext.size() && name.compare(name.size() - ext.size(), ext.size(), ext) == 0) {
-						return Value{ name.substr(0, name.size() - ext.size()) };
-					}
-				}
-				return Value{ name };
-			};
-			(*pathPkg)["basename"] = Value{ basenameFn };
-
-			// extname(path)
-			auto extnameFn = std::make_shared<Function>(); extnameFn->isBuiltin = true;
-			extnameFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				if (args.empty()) return Value{ std::string("") };
-				fs::path p(toString(args[0]));
-				return Value{ p.extension().string() };
-			};
-			(*pathPkg)["extname"] = Value{ extnameFn };
-
-			// isAbsolute(path)
-			auto isAbsFn = std::make_shared<Function>(); isAbsFn->isBuiltin = true;
-			isAbsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				if (args.empty()) return Value{ false };
-				fs::path p(toString(args[0]));
-				return Value{ p.is_absolute() };
-			};
-			(*pathPkg)["isAbsolute"] = Value{ isAbsFn };
-
-			(*pathPkg)["sep"] = Value{ std::string(1, fs::path::preferred_separator) };
-		});
 
 		// ===== OS Interaction (std.os) =====
 		registerLazyPackage("std.os", [this](std::shared_ptr<Object> osPkg) {
@@ -3732,56 +3668,6 @@ public:
 		}
 		importPackageSymbols("std.io");
 
-		// ===== String Manipulation (std.string) =====
-		registerLazyPackage("std.string", [](std::shared_ptr<Object> stringPkg) {
-
-		// toUpperCase(str)
-		auto toUpperCaseFn = std::make_shared<Function>();
-		toUpperCaseFn->isBuiltin = true;
-		toUpperCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("toUpperCase expects 1 string argument");
-			}
-			std::string input = std::get<std::string>(args[0]);
-			std::transform(input.begin(), input.end(), input.begin(), ::toupper);
-			return Value{input};
-		};
-		(*stringPkg)["toUpperCase"] = Value{toUpperCaseFn};
-
-		// toLowerCase(str)
-		auto toLowerCaseFn = std::make_shared<Function>();
-		toLowerCaseFn->isBuiltin = true;
-		toLowerCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("toLowerCase expects 1 string argument");
-			}
-			std::string input = std::get<std::string>(args[0]);
-			std::transform(input.begin(), input.end(), input.begin(), ::tolower);
-			return Value{input};
-		};
-		(*stringPkg)["toLowerCase"] = Value{toLowerCaseFn};
-
-		// trim(str)
-		auto trimFn = std::make_shared<Function>();
-		trimFn->isBuiltin = true;
-		trimFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("trim expects 1 string argument");
-			}
-			std::string input = std::get<std::string>(args[0]);
-			auto start = input.find_first_not_of(" \t\n\r");
-			auto end = input.find_last_not_of(" \t\n\r");
-			if (start == std::string::npos || end == std::string::npos) {
-				return Value{std::string("")};
-			}
-			return Value{input.substr(start, end - start + 1)};
-		};
-		(*stringPkg)["trim"] = Value{trimFn};
-
-		// Register std.string package
-		// globals->define("std.string", Value{stringPkg});
-		});
-
 		// ===== Date & Time (std.time) =====
 		registerLazyPackage("std.time", [this](std::shared_ptr<Object> timePkg) {
 
@@ -4629,90 +4515,6 @@ public:
 
 		// --- Packages ---
 		// Math: pi, abs
-		registerLazyPackage("std.math", [](std::shared_ptr<Object> mathPkg) {
-		(*mathPkg)["pi"] = Value{ 3.14159265358979323846 };
-		{
-			auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
-			fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-				if (args.empty()) return Value{0.0};
-				double x = getNumber(args[0], "abs x");
-				return Value{ x < 0 ? -x : x };
-			};
-			(*mathPkg)["abs"] = fn;
-		}
-		// === Added extended math functions ===
-		{
-			auto unary = [](auto op, const char* name){
-				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
-				fn->builtin = [op,name](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					if (args.size() != 1) throw std::runtime_error(std::string(name) + " expects 1 number argument");
-					double x = getNumber(args[0], name);
-					return Value{ op(x) };
-				};
-				return fn;
-			};
-			(*mathPkg)["sin"] = unary(static_cast<double(*)(double)>(std::sin), "sin");
-			(*mathPkg)["cos"] = unary(static_cast<double(*)(double)>(std::cos), "cos");
-			(*mathPkg)["tan"] = unary(static_cast<double(*)(double)>(std::tan), "tan");
-			(*mathPkg)["sqrt"] = unary(static_cast<double(*)(double)>(std::sqrt), "sqrt");
-			(*mathPkg)["exp"] = unary(static_cast<double(*)(double)>(std::exp), "exp");
-			(*mathPkg)["log"] = unary(static_cast<double(*)(double)>(std::log), "log");
-			// pow(a,b)
-			{
-				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
-				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					if (args.size() != 2) throw std::runtime_error("pow expects 2 number arguments");
-					double a = getNumber(args[0], "pow base");
-					double b = getNumber(args[1], "pow exp");
-					return Value{ std::pow(a,b) };
-				};
-				(*mathPkg)["pow"] = fn;
-			}
-			// ceil / floor / round
-			(*mathPkg)["ceil"] = unary(static_cast<double(*)(double)>(std::ceil), "ceil");
-			(*mathPkg)["floor"] = unary(static_cast<double(*)(double)>(std::floor), "floor");
-			(*mathPkg)["round"] = unary(static_cast<double(*)(double)>(std::round), "round");
-			// min/max support variable number of args
-			{
-				auto mkVar = [](bool isMin){
-					auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
-					fn->builtin = [isMin](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-						if (args.empty()) throw std::runtime_error(std::string(isMin?"min":"max") + " expects at least 1 argument");
-						double best = getNumber(args[0], isMin?"min arg":"max arg");
-						for (size_t i=1;i<args.size();++i){ double v = getNumber(args[i], isMin?"min arg":"max arg"); best = isMin? (v < best ? v : best) : (v > best ? v : best); }
-						return Value{ best };
-					};
-					return fn;
-				};
-				(*mathPkg)["min"] = mkVar(true);
-				(*mathPkg)["max"] = mkVar(false);
-			}
-			// random(): 0<=x<1 ; random(max): [0,max); random(min,max): [min,max)
-			{
-				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
-				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					static thread_local std::mt19937 rng{ std::random_device{}() };
-					if (args.empty()) {
-						std::uniform_real_distribution<double> dist(0.0,1.0);
-						return Value{ dist(rng) };
-					} else if (args.size()==1) {
-						double max = getNumber(args[0], "random max");
-						std::uniform_real_distribution<double> dist(0.0,max);
-						return Value{ dist(rng) };
-					} else if (args.size()==2) {
-						double min = getNumber(args[0], "random min");
-						double max = getNumber(args[1], "random max");
-						if (max < min) std::swap(max,min);
-						std::uniform_real_distribution<double> dist(min,max);
-						return Value{ dist(rng) };
-					}
-					throw std::runtime_error("random expects 0,1 or 2 numeric arguments");
-				};
-				(*mathPkg)["random"] = fn;
-			}
-		}
-		});
-
 		// ===== OS (os) =====
 		// 提供异步系统调用：`os.call(program, argsArray, cwd)` 返回 Promise
 		registerLazyPackage("os", [this](std::shared_ptr<Object> osPkg) {

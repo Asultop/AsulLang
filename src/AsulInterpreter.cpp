@@ -1,4 +1,5 @@
 #include "AsulInterpreter.h"
+#include "AsulPackages.h"
 
 namespace asul {
 
@@ -9,7 +10,22 @@ void globalSignalHandler(int sig) {
     if (sig > 0 && sig < 32) g_pendingSignals[sig] = 1;
 }
 
+} // namespace asul
+
+// Register all external packages
+void registerExternalPackages(asul::Interpreter& interp) {
+    asul::registerStdPathPackage(interp);
+    asul::registerStdStringPackage(interp);
+    asul::registerStdMathPackage(interp);
+}
+
+namespace asul {
+
 // Out-of-line method definitions
+void Interpreter::registerLazyPackage(const std::string& name, std::function<void(std::shared_ptr<Object>)> init) {
+    lazyPackages[name] = init;
+}
+
 std::shared_ptr<Object> Interpreter::ensurePackage(const std::string& name) {
 auto it = packages.find(name);
 if (it != packages.end() && it->second) return it->second;
