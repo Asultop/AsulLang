@@ -1,5 +1,5 @@
-
-<h1 align="center"><img src="./picture/ALang.png" width="64" align="center"> ALang </h1>
+<p align="center"><img src="./picture/ALang.png" width="128" align="center"></p>
+<h1 align="center"> Asul Language </h1>
 
 <div align="center">
   <a href="https://deepwiki.com/Asultop/AsulLang" target="_blank">
@@ -677,6 +677,5 @@ AsulRuntime → AsulAsync → AsulInterpreter
 ---
 
 <div align="center">
-  <p>如果需要补充 API 文档、翻译为英文或生成结构化文档（如 docs/ 目录），可随时扩展！</p>
   <p>© 2025 ALang 开发团队</p>
 </div>
