@@ -26,6 +26,8 @@ set(SRCS
   src/AsulPackages/Std/Time/StdTime.cpp
   src/AsulPackages/Std/Os/StdOs.cpp
   src/AsulPackages/Std/Regex/StdRegex.cpp
+  src/AsulPackages/Std/Encoding/StdEncoding.cpp
+  src/AsulPackages/Std/Network/StdNetwork.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp

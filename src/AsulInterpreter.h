@@ -4,6 +4,7 @@
 #include "AsulAst.h"
 #include "AsulRuntime.h"
 #include "AsulParser.h"
+#include "AsulAsync.h"
 
 #include <algorithm>
 #include <atomic>
@@ -58,7 +59,7 @@ struct ExceptionSignal { Value value; std::vector<std::string> stackTrace = {}; 
 extern std::atomic<int> g_pendingSignals[32];
 void globalSignalHandler(int sig);
 
-class Interpreter {
+class Interpreter : public AsulAsync {
 public:
 	Interpreter() { globals = std::make_shared<Environment>(); env = globals; installBuiltins(); }
 
@@ -82,13 +83,32 @@ public:
 	}
 
 	// 事件循环：用于分发 then/catch 与 go 任务
-	void postTask(std::function<void()> fn) {
+	void postTask(std::function<void()> fn) override {
 		{
 			std::lock_guard<std::mutex> lk(loopMutex);
 			taskQueue.push(std::move(fn));
 		}
 		loopCv.notify_one();
 	}
+	
+	// AsulAsync interface implementation
+	std::shared_ptr<PromiseState> createPromise() override {
+		auto p = std::make_shared<PromiseState>();
+		p->loopPtr = this;
+		return p;
+	}
+	
+	void resolve(std::shared_ptr<PromiseState> promise, const Value& value) override {
+		settlePromise(promise, false, value);
+	}
+	
+	void reject(std::shared_ptr<PromiseState> promise, const Value& error) override {
+		settlePromise(promise, true, error);
+	}
+	
+	// Get the async interface for external packages
+	AsulAsync& getAsyncInterface() { return *this; }
+	
 	void runEventLoopUntilIdle() {
 		for (;;) {
 			std::function<void()> fn;
@@ -1440,7 +1460,7 @@ public:
 		return true;
 	}
 
-	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) {
+	void settlePromise(std::shared_ptr<PromiseState> p, bool rejected, const Value& result) override {
 		{
 			std::lock_guard<std::mutex> lk(p->mtx);
 			p->settled = true; p->rejected = rejected; p->result = result;
@@ -1449,7 +1469,7 @@ public:
 		dispatchPromiseCallbacks(p);
 	}
 
-	void dispatchPromiseCallbacks(std::shared_ptr<PromiseState> p) {
+	void dispatchPromiseCallbacks(std::shared_ptr<PromiseState> p) override {
 		if (!p->loopPtr) return;
 		auto loop = static_cast<Interpreter*>(p->loopPtr);
 		if (!p->rejected) {

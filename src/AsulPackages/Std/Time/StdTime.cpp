@@ -9,12 +9,6 @@ extern std::mutex tzMutex;
 
 namespace asul {
 
-// Helper to get number from Value
-static double getNumber(const Value& v, const char* ctx) {
-	if (auto n = std::get_if<double>(&v)) return *n;
-	throw std::runtime_error(std::string(ctx) + " expects number");
-}
-
 void registerStdTimePackage(Interpreter& interp) {
 	interp.registerLazyPackage("std.time", [&interp](std::shared_ptr<Object> timePkg) {
 

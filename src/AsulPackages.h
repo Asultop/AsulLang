@@ -8,6 +8,8 @@
 #include "AsulPackages/Std/Time/StdTime.h"
 #include "AsulPackages/Std/Os/StdOs.h"
 #include "AsulPackages/Std/Regex/StdRegex.h"
+#include "AsulPackages/Std/Encoding/StdEncoding.h"
+#include "AsulPackages/Std/Network/StdNetwork.h"
 #include "AsulPackages/Json/Json.h"
 #include "AsulPackages/Xml/Xml.h"
 #include "AsulPackages/Yaml/Yaml.h"

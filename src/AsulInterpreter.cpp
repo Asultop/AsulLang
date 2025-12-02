@@ -20,6 +20,8 @@ void registerExternalPackages(asul::Interpreter& interp) {
     asul::registerStdTimePackage(interp);
     asul::registerStdOsPackage(interp);
     asul::registerStdRegexPackage(interp);
+    asul::registerStdEncodingPackage(interp);
+    asul::registerStdNetworkPackage(interp);
     asul::registerJsonPackage(interp);
     asul::registerXmlPackage(interp);
     asul::registerYamlPackage(interp);

@@ -2,12 +2,14 @@
 #define ASUL_RUNTIME_H
 
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,6 +46,15 @@ bool isTruthy(const Value& v);
 std::string toString(const Value& v);
 bool valueEqual(const Value& a, const Value& b);
 size_t valueHash(const Value& v);
+
+// Utility: get numeric value from Value or throw
+inline double getNumber(const Value& v, const char* where) {
+	if (auto n = std::get_if<double>(&v)) return *n;
+	if (auto s = std::get_if<std::string>(&v)) {
+		char* end = nullptr; double d = std::strtod(s->c_str(), &end); if (end && *end=='\0') return d;
+	}
+	throw std::runtime_error(std::string("Expected number at ") + where);
+}
 
 // Functor wrappers to use Value as key in unordered_map/set
 struct ValueHash { size_t operator()(const Value& v) const noexcept { return valueHash(v); } };
