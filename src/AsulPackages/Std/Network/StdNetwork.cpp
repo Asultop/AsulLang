@@ -16,9 +16,12 @@
 namespace asul {
 
 void registerStdNetworkPackage(Interpreter& interp) {
-	AsulAsync& async = interp.getAsyncInterface();
+	// Get pointer to async interface (Interpreter implements AsulAsync)
+	// The Interpreter outlives all packages and threads
+	AsulAsync* asyncPtr = &interp.getAsyncInterface();
+	Interpreter* interpPtr = &interp;
 	
-	interp.registerLazyPackage("std.network", [&interp, &async](std::shared_ptr<Object> netPkg) {
+	interp.registerLazyPackage("std.network", [interpPtr, asyncPtr](std::shared_ptr<Object> netPkg) {
 		
 		// Socket Class
 		auto socketClass = std::make_shared<ClassInfo>();
@@ -111,7 +114,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		// connect(host, port) -> Promise
 		auto connectFn = std::make_shared<Function>();
 		connectFn->isBuiltin = true;
-		connectFn->builtin = [&async](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+		connectFn->builtin = [asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
 			if (args.size() != 2) throw std::runtime_error("connect expects host and port");
 			std::string host = toString(args[0]);
 			int port = static_cast<int>(getNumber(args[1], "port"));
@@ -121,9 +124,9 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
 			int fd = *static_cast<int*>(ext->nativeHandle);
 
-			auto p = async.createPromise();
+			auto p = asyncPtr->createPromise();
 			
-			std::thread([p, &async, fd, host, port]{
+			std::thread([p, asyncPtr, fd, host, port]{
 				struct sockaddr_in addr;
 				std::memset(&addr, 0, sizeof(addr));
 				addr.sin_family = AF_INET;
@@ -131,15 +134,15 @@ void registerStdNetworkPackage(Interpreter& interp) {
 				
 				struct hostent* server = gethostbyname(host.c_str());
 				if (server == NULL) {
-					async.reject(p, Value{std::string("Host resolution failed")});
+					asyncPtr->reject(p, Value{std::string("Host resolution failed")});
 					return;
 				}
 				std::memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
 				if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-					async.reject(p, Value{std::string("Connection failed")});
+					asyncPtr->reject(p, Value{std::string("Connection failed")});
 				} else {
-					async.resolve(p, Value{true});
+					asyncPtr->resolve(p, Value{true});
 				}
 			}).detach();
 			
@@ -150,20 +153,20 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		// accept() -> Promise<Socket>
 		auto acceptFn = std::make_shared<Function>();
 		acceptFn->isBuiltin = true;
-		acceptFn->builtin = [&async, socketClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+		acceptFn->builtin = [asyncPtr, socketClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
 			Value thisVal = closure->get("this");
 			auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 			auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
 			int fd = *static_cast<int*>(ext->nativeHandle);
 
-			auto p = async.createPromise();
+			auto p = asyncPtr->createPromise();
 
-			std::thread([p, &async, fd, socketClass]{
+			std::thread([p, asyncPtr, fd, socketClass]{
 				struct sockaddr_in cli_addr;
 				socklen_t clilen = sizeof(cli_addr);
 				int newsockfd = accept(fd, (struct sockaddr*)&cli_addr, &clilen);
 				if (newsockfd < 0) {
-					async.reject(p, Value{std::string("accept failed")});
+					asyncPtr->reject(p, Value{std::string("accept failed")});
 					return;
 				}
 				
@@ -176,7 +179,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 					delete fdp;
 				};
 				
-				async.resolve(p, Value{std::shared_ptr<Instance>(newInst)});
+				asyncPtr->resolve(p, Value{std::shared_ptr<Instance>(newInst)});
 			}).detach();
 
 			return Value{p};
@@ -186,7 +189,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		// write(data) -> Promise
 		auto writeFn = std::make_shared<Function>();
 		writeFn->isBuiltin = true;
-		writeFn->builtin = [&async](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+		writeFn->builtin = [asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
 			if (args.empty()) throw std::runtime_error("write expects data");
 			std::string data = toString(args[0]);
 			
@@ -195,14 +198,14 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
 			int fd = *static_cast<int*>(ext->nativeHandle);
 
-			auto p = async.createPromise();
+			auto p = asyncPtr->createPromise();
 
-			std::thread([p, &async, fd, data]{
+			std::thread([p, asyncPtr, fd, data]{
 				ssize_t n = write(fd, data.c_str(), data.length());
 				if (n < 0) {
-					async.reject(p, Value{std::string("write failed")});
+					asyncPtr->reject(p, Value{std::string("write failed")});
 				} else {
-					async.resolve(p, Value{static_cast<double>(n)});
+					asyncPtr->resolve(p, Value{static_cast<double>(n)});
 				}
 			}).detach();
 
@@ -213,7 +216,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		// read(size) -> Promise<string>
 		auto readFn = std::make_shared<Function>();
 		readFn->isBuiltin = true;
-		readFn->builtin = [&async](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+		readFn->builtin = [asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
 			int size = 1024;
 			if (!args.empty()) size = static_cast<int>(getNumber(args[0], "size"));
 			
@@ -222,17 +225,17 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
 			int fd = *static_cast<int*>(ext->nativeHandle);
 
-			auto p = async.createPromise();
+			auto p = asyncPtr->createPromise();
 
-			std::thread([p, &async, fd, size]{
+			std::thread([p, asyncPtr, fd, size]{
 				std::vector<char> buf(size);
 				ssize_t n = read(fd, buf.data(), size);
 				if (n < 0) {
-					async.reject(p, Value{std::string("read failed")});
+					asyncPtr->reject(p, Value{std::string("read failed")});
 				} else if (n == 0) {
-					async.resolve(p, Value{std::string("")});
+					asyncPtr->resolve(p, Value{std::string("")});
 				} else {
-					async.resolve(p, Value{std::string(buf.data(), n)});
+					asyncPtr->resolve(p, Value{std::string(buf.data(), n)});
 				}
 			}).detach();
 
@@ -308,7 +311,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		{
 			auto fetchFn = std::make_shared<Function>();
 			fetchFn->isBuiltin = true;
-			fetchFn->builtin = [&interp, &async](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			fetchFn->builtin = [interpPtr, asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 				if (args.empty()) throw std::runtime_error("fetch expects at least 1 argument (url)");
 				std::string url = toString(args[0]);
 				std::string method = "GET";
@@ -322,8 +325,8 @@ void registerStdNetworkPackage(Interpreter& interp) {
 					auto itB = opt->find("body"); if (itB != opt->end()) body = toString(itB->second);
 				}
 				// Promise
-				auto p = async.createPromise();
-				std::thread([&interp, &async, p, url, method, hdrObj, body]{
+				auto p = asyncPtr->createPromise();
+				std::thread([interpPtr, asyncPtr, p, url, method, hdrObj, body]{
 					try {
 						// Parse URL
 						std::string proto = "http"; std::string host; int port = 80; std::string path = "/";
@@ -334,14 +337,14 @@ void registerStdNetworkPackage(Interpreter& interp) {
 						if (colon != std::string::npos && colon < pathStart) { host = url.substr(hostStart, colon - hostStart); port = std::stoi(url.substr(colon + 1, pathStart - colon - 1)); }
 						else { host = url.substr(hostStart, pathStart - hostStart); }
 						if (pathStart < url.size()) path = url.substr(pathStart);
-						if (proto == "https") { async.reject(p, Value{ std::string("HTTPS not supported") }); return; }
+						if (proto == "https") { asyncPtr->reject(p, Value{ std::string("HTTPS not supported") }); return; }
 						// DNS
 						struct hostent* server = gethostbyname(host.c_str());
-						if (server == NULL) { async.reject(p, Value{ std::string("No such host: ")+host }); return; }
-						int sockfd = socket(AF_INET, SOCK_STREAM, 0); if (sockfd < 0) { async.reject(p, Value{ std::string("socket failed") }); return; }
+						if (server == NULL) { asyncPtr->reject(p, Value{ std::string("No such host: ")+host }); return; }
+						int sockfd = socket(AF_INET, SOCK_STREAM, 0); if (sockfd < 0) { asyncPtr->reject(p, Value{ std::string("socket failed") }); return; }
 						struct sockaddr_in serv_addr; std::memset(&serv_addr, 0, sizeof(serv_addr));
 						serv_addr.sin_family = AF_INET; std::memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length); serv_addr.sin_port = htons(port);
-						if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sockfd); async.reject(p, Value{ std::string("connect failed") }); return; }
+						if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sockfd); asyncPtr->reject(p, Value{ std::string("connect failed") }); return; }
 						std::ostringstream req;
 						req << method << " " << path << " HTTP/1.1\r\n";
 						req << "Host: " << host << "\r\n";
@@ -350,7 +353,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 						if (hdrObj) { for (auto& kv : *hdrObj) { req << kv.first << ": " << toString(kv.second) << "\r\n"; } }
 						if (!body.empty()) { req << "Content-Length: " << body.size() << "\r\n"; }
 						req << "\r\n"; if (!body.empty()) req << body;
-						std::string rs = req.str(); if (write(sockfd, rs.c_str(), rs.size()) < 0) { close(sockfd); async.reject(p, Value{ std::string("write failed") }); return; }
+						std::string rs = req.str(); if (write(sockfd, rs.c_str(), rs.size()) < 0) { close(sockfd); asyncPtr->reject(p, Value{ std::string("write failed") }); return; }
 						std::string response; char buf[4096]; int n; while ((n = read(sockfd, buf, sizeof(buf))) > 0) response.append(buf, n); close(sockfd);
 						auto respObj = std::make_shared<Object>();
 						size_t headerEnd = response.find("\r\n\r\n"); std::string headers, bodyStr; double status = 0.0;
@@ -364,34 +367,34 @@ void registerStdNetworkPackage(Interpreter& interp) {
 						{
 							auto textFn = std::make_shared<Function>(); textFn->isBuiltin = true;
 							std::string copy = bodyStr;
-							textFn->builtin = [&async, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
-								auto tp = async.createPromise(); async.resolve(tp, Value{ copy }); return Value{ tp };
+							textFn->builtin = [asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+								auto tp = asyncPtr->createPromise(); asyncPtr->resolve(tp, Value{ copy }); return Value{ tp };
 							};
 							(*respObj)["text"] = Value{ textFn };
 						}
 						// json(): Promise<any>
 						{
 							auto jsonFn = std::make_shared<Function>(); jsonFn->isBuiltin = true; std::string copy = bodyStr;
-							jsonFn->builtin = [&interp, &async, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
-								auto tp = async.createPromise();
-								async.postTask([&interp, &async, tp, copy]{
+							jsonFn->builtin = [interpPtr, asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+								auto tp = asyncPtr->createPromise();
+								asyncPtr->postTask([interpPtr, asyncPtr, tp, copy]{
 									try {
-										auto jsonPkg = interp.ensurePackage("json");
-										Value parseV = (*jsonPkg)["parse"]; if (!std::holds_alternative<std::shared_ptr<Function>>(parseV)) { async.reject(tp, Value{ std::string("json.parse not found") }); return; }
+										auto jsonPkg = interpPtr->ensurePackage("json");
+										Value parseV = (*jsonPkg)["parse"]; if (!std::holds_alternative<std::shared_ptr<Function>>(parseV)) { asyncPtr->reject(tp, Value{ std::string("json.parse not found") }); return; }
 										auto parseFn = std::get<std::shared_ptr<Function>>(parseV);
 										Value res = parseFn->builtin({ Value{ copy } }, parseFn->closure);
-										async.resolve(tp, res);
+										asyncPtr->resolve(tp, res);
 									} catch (const std::exception& ex) {
-										async.reject(tp, Value{ std::string(ex.what()) });
+										asyncPtr->reject(tp, Value{ std::string(ex.what()) });
 									}
 								});
 								return Value{ tp };
 							};
 							(*respObj)["json"] = Value{ jsonFn };
 						}
-						async.resolve(p, Value{ respObj });
+						asyncPtr->resolve(p, Value{ respObj });
 					} catch (const std::exception& ex) {
-						async.reject(p, Value{ std::string(ex.what()) });
+						asyncPtr->reject(p, Value{ std::string(ex.what()) });
 					}
 				}).detach();
 				return Value{ p };
