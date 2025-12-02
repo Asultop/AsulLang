@@ -18,5 +18,5 @@
         "sstream": "cpp",
         "istream": "cpp"
     },
-    "cmake.sourceDirectory": "/wsl.localhost/Ubuntu-24.04/home/asultop/AsulLang"
+    "cmake.sourceDirectory": "/Users/asultop/AsulTop/CXXProj/AsulLang-TRAE"
 }
