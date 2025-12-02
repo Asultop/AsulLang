@@ -501,4 +501,73 @@ ALang 提供了灵活的模块化机制，支持包（Package）和文件模块�
 
 ---
 
-*文档更新日期: 2025-11-21*
+## 7. 源码架构 (Source Architecture)
+
+ALang 采用模块化架构，核心组件位于 `src/` 目录：
+
+### 7.1 核心模块
+
+| 文件 | 描述 |
+| :-- | :-- |
+| `AsulLexer.h/cpp` | 词法分析器：`TokenType` 枚举、`Token` 结构、`Lexer` 类 |
+| `AsulParser.h/cpp` | 语法分析器：递归下降解析器 |
+| `AsulAst.h` | AST 节点定义：表达式和语句抽象语法树 |
+| `AsulRuntime.h/cpp` | 运行时值系统：`Value` 变体、`Environment`、`Function`、`ClassInfo`、`Instance` |
+| `AsulInterpreter.h/cpp` | 解释器核心：执行引擎、事件循环、Promise 处理 |
+| `AsulAsync.h` | 异步接口：解耦异步操作，允许包执行异步任务而不直接依赖解释器 |
+| `AsulPackages.h` | 包注册入口：统一管理内置包的安装 |
+
+### 7.2 标准库包
+
+所有内置包位于 `src/AsulPackages/` 目录，按命名空间组织：
+
+**Std 包 (`std.*`)**
+| 包 | 路径 | 描述 |
+| :-- | :-- | :-- |
+| `std.path` | `Std/Path/` | 路径操作 |
+| `std.string` | `Std/String/` | 字符串处理 |
+| `std.math` | `Std/Math/` | 数学函数 |
+| `std.time` | `Std/Time/` | 日期时间 |
+| `std.os` | `Std/Os/` | 系统信息 |
+| `std.regex` | `Std/Regex/` | 正则表达式 |
+| `std.encoding` | `Std/Encoding/` | 编码转换 |
+| `std.network` | `Std/Network/` | 网络通信（使用 `AsulAsync` 接口） |
+
+**顶级包**
+| 包 | 路径 | 描述 |
+| :-- | :-- | :-- |
+| `json` | `Json/` | JSON 序列化/反序列化 |
+| `xml` | `Xml/` | XML 解析 |
+| `yaml` | `Yaml/` | YAML 解析 |
+| `os` | `Os/` | 操作系统交互 |
+
+### 7.3 依赖关系
+
+```
+AsulLexer.h    →   AsulRuntime.h   →   AsulAst.h   →   AsulParser.h
+     ↓                   ↓                               ↓
+AsulLexer.cpp      AsulRuntime.cpp                  AsulParser.cpp
+                                                         ↓
+                   AsulAsync.h   →   AsulInterpreter.h/cpp
+                        ↓
+              AsulPackages/* (外部包)
+```
+
+### 7.4 扩展指南
+
+添加新包的步骤：
+1. 在 `src/AsulPackages/` 下创建包目录（如 `MyPackage/`）
+2. 创建头文件和实现文件（`MyPackage.h`、`MyPackage.cpp`）
+3. 实现 `installMyPackage(asul::Interpreter& interp)` 函数
+4. 在 `AsulPackages.h` 中添加包的 include 和安装调用
+5. 在 `CMakeLists.txt` 中添加新的源文件
+
+对于需要异步操作的包，可以通过 `AsulAsync` 接口访问：
+- `createPromise()` - 创建 Promise
+- `resolve(promise, value)` - 解决 Promise
+- `reject(promise, error)` - 拒绝 Promise
+- `postTask(task)` - 投递任务到事件循环
+
+---
+
+*文档更新日期: 2025-12-02*

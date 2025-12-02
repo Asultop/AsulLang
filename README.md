@@ -18,7 +18,28 @@ ALang 是一个用 C++17 实现的轻量脚本语言解释器/运行时，目标
 
 **仓库结构（主要）**
 - `Main.cpp`：CLI 入口，初始化引擎并执行脚本
-- `ALangEngine.h` / `ALangEngine.cpp`：解释器实现、运行时与标准内置
+- `ALangEngine.h` / `ALangEngine.cpp`：引擎外观层（Facade）
+- `src/`：模块化核心组件
+  - `AsulLexer.h/cpp`：词法分析器（TokenType、Token、Lexer）
+  - `AsulParser.h/cpp`：递归下降语法分析器
+  - `AsulAst.h`：AST 表达式和语句节点定义
+  - `AsulRuntime.h/cpp`：运行时值系统（Value、Environment、Function、ClassInfo、Instance）
+  - `AsulInterpreter.h/cpp`：解释器核心
+  - `AsulAsync.h`：异步操作接口（解耦异步包）
+  - `AsulPackages.h`：包注册入口
+  - `AsulPackages/`：外部标准库包
+    - `Std/Path/`：std.path 包
+    - `Std/String/`：std.string 包
+    - `Std/Math/`：std.math 包
+    - `Std/Time/`：std.time 包
+    - `Std/Os/`：std.os 包
+    - `Std/Regex/`：std.regex 包
+    - `Std/Encoding/`：std.encoding 包
+    - `Std/Network/`：std.network 包（使用 AsulAsync 接口）
+    - `Json/`：json 包
+    - `Xml/`：xml 包
+    - `Yaml/`：yaml 包
+    - `Os/`：os 包
 - `Example/`：语言特性示例脚本
 - `AsulFormatString/`：用于格式化输出的辅助库
 
@@ -740,7 +761,14 @@ engine.registerClass(
 请查看 `Example/` 目录（含大量示例：`lambdaExample.alang`、`quoteExample.alang`、`evalExample.alang`、`interfaceExample.alang` 等）。
 
 **开发与调试**
-- 代码主要位于 `ALangEngine.cpp`，包含词法、解析、执行与运行时实现。阅读该文件可以了解语言实现细节与扩展点。
+- 代码已模块化，核心组件位于 `src/` 目录：
+  - `AsulLexer.h/cpp`：词法分析器实现
+  - `AsulParser.h/cpp`：语法分析器实现
+  - `AsulInterpreter.h/cpp`：解释器和执行引擎
+  - `AsulRuntime.h/cpp`：运行时值系统
+  - `AsulPackages/`：标准库包实现
+- `ALangEngine.cpp` 现为外观层（Facade），协调各模块
+- 新增包时可在 `AsulPackages/` 下创建独立目录并在 `AsulPackages.h` 中注册
 
 **许可**
 项目以仓库内的 `LICENSE` 文件为准。
@@ -1234,7 +1262,44 @@ if (std::holds_alternative<double>(ret)) {
 
 ## 结构
 
-- `ALangEngine.h/.cpp`：解释器实现（词法、语法、AST、解释执行、事件循环、Promise）
+### 核心架构
+
+```
+src/
+├── AsulLexer.h/cpp       # 词法分析器：TokenType、Token、Lexer
+├── AsulParser.h/cpp      # 语法分析器：递归下降解析
+├── AsulAst.h             # AST 节点：表达式和语句定义
+├── AsulRuntime.h/cpp     # 运行时：Value、Environment、Function、ClassInfo
+├── AsulInterpreter.h/cpp # 解释器：执行引擎、事件循环、Promise
+├── AsulAsync.h           # 异步接口：解耦异步操作
+├── AsulPackages.h        # 包注册入口
+└── AsulPackages/         # 标准库包
+    ├── Std/              # std.* 包
+    │   ├── Path/         # std.path
+    │   ├── String/       # std.string
+    │   ├── Math/         # std.math
+    │   ├── Time/         # std.time
+    │   ├── Os/           # std.os
+    │   ├── Regex/        # std.regex
+    │   ├── Encoding/     # std.encoding
+    │   └── Network/      # std.network
+    ├── Json/             # json
+    ├── Xml/              # xml
+    ├── Yaml/             # yaml
+    └── Os/               # os
+```
+
+### 依赖关系
+
+```
+AsulLexer → AsulRuntime → AsulAst → AsulParser
+                ↓                        ↓
+           AsulAsync → AsulInterpreter ←─┘
+                ↓
+        AsulPackages/* (外部包)
+```
+
+- `ALangEngine.h/.cpp`：外观层（Facade），协调各模块
 - `Main.cpp`：命令行入口（可执行加载脚本并在末尾调用 `runEventLoopUntilIdle()`）
 
 更多示例：见 `Example/` 与 `lambdaExample.alang`。
