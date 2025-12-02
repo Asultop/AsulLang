@@ -19,6 +19,7 @@ set(SRCS
   src/AsulLexer.cpp
   src/AsulRuntime.cpp
   src/AsulParser.cpp
+  src/AsulInterpreter.cpp
 )
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
