@@ -1,0 +1,395 @@
+{
+  "repo_notes": [
+    {
+      "content": "生成中文文档"
+    }
+  ],
+  "pages": [
+    {
+      "title": "概览",
+      "purpose": "介绍 AsulLang/ALang 解释器、其作为可嵌入脚本语言的定位与高层架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "快速开始",
+      "purpose": "指导用户完成安装、运行第一个脚本，并使用 REPL",
+      "parent": "概览",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "从源码构建",
+      "purpose": "在不同平台上编译 ALang 源码的详细步骤与依赖说明",
+      "parent": "概览",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "核心架构",
+      "purpose": "深入解释器内部架构，包括编译/解析管线与运行时系统",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "词法与语法分析",
+      "purpose": "说明分词过程与递归下降解析如何构建 AST",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "解释器与执行",
+      "purpose": "详解 AST 解释器、语句/表达式求值与执行流程",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "类型系统与值表示",
+      "purpose": "记录动态类型系统、ValueTag 枚举及内部 Value 变体结构",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "环境与作用域链",
+      "purpose": "解释变量存储、作用域解析以及闭包的环境链机制",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "事件循环与异步执行",
+      "purpose": "详解事件循环架构、任务队列以及异步操作的调度",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "错误报告与上下文",
+      "purpose": "说明带彩色输出的错误格式化、上下文抽取与源码片段显示系统",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "语言参考",
+      "purpose": "完整覆盖 ALang 的语法、语义与内置特性",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "基础语法与类型",
+      "purpose": "覆盖原始类型、变量声明、运算符与基本表达式",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "控制流",
+      "purpose": "记录 if/else、while、for、foreach、switch/case、break/continue 与三元运算",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "函数与闭包",
+      "purpose": "说明函数声明、lambda 表达式、闭包、剩余参数与默认参数",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "数组与对象",
+      "purpose": "详解数组/对象字面量、索引、计算属性与展开运算符",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "字符串插值",
+      "purpose": "解释 ${expression} 语法以及字符串字面量中支持的表达式类型",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "类与面向对象",
+      "purpose": "覆盖类定义、构造器、方法、继承与 extends 关键字",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "接口与动态分派",
+      "purpose": "记录接口声明、结构化类型以及 =~= 接口匹配运算符",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "异步编程",
+      "purpose": "解释 async/await、Promise、then/catch、go 语句与事件循环交互",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "错误处理",
+      "purpose": "记录 throw 语句、try/catch 块与异常传播",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "注释与语法约定",
+      "purpose": "列出支持的注释风格（C++/C/Python）与语法约定（如可选分号）",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "标准库",
+      "purpose": "全面记录内置函数、方法与标准包",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "内置函数",
+      "purpose": "记录全局函数如 print、println、len、sleep、eval、keys、values 等",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "数组方法",
+      "purpose": "详述数组方法：map、filter、reduce、find、some、every、includes、sort 等",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "字符串方法",
+      "purpose": "记录字符串方法：split、substring、replace、trim、toLowerCase、toUpperCase 等",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "容器类",
+      "purpose": "说明 Map、Set、Stack、Deque、PriorityQueue 的构造与方法",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "std.math 包",
+      "purpose": "记录 std.math 包中的数学常量与函数",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "std.io 与文件系统",
+      "purpose": "记录文件 I/O、FileStream、File/Dir 类以及 std.path 工具",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "std.time 与日期/时间",
+      "purpose": "解释 Date 对象、时间格式化/解析、Duration 与时区支持",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "std.network 包",
+      "purpose": "记录 HTTP 客户端（get/post）、Socket API、URL 解析与服务端功能",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "位运算与优先级",
+      "purpose": "详解按位运算符、64 位补码行为与当前运算优先级",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": "覆盖 ~、&、|、^、<<、>>，以及与相等/接口匹配的优先级关系"
+        }
+      ]
+    },
+    {
+      "title": "接口匹配 =~=",
+      "purpose": "说明 =~= 运算符的语义、结构化匹配与用例",
+      "parent": "语言参考",
+      "page_notes": [
+        {
+          "content": "结合 Example/interfaceValidationTest.alang 展示"
+        }
+      ]
+    },
+    {
+      "title": "std.io.fileSystem 扩展",
+      "purpose": "系统化记录 File、Dir、FileStream 以及 mkdir/rmdir/stat/copy/move/chmod/walk 等 API",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": "与 ALang_Technical_Reference.md 的 4.x 文件系统扩展保持一致"
+        }
+      ]
+    },
+    {
+      "title": "JSON 包",
+      "purpose": "记录 json.stringify/json.parse 的行为、支持类型、错误处理与示例",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": "引用 Example/jsonExample.alang"
+        }
+      ]
+    },
+    {
+      "title": "操作系统包 os",
+      "purpose": "记录 os.call、getEnv、setEnv、exit、platform、arch 的用法与注意事项",
+      "parent": "标准库",
+      "page_notes": [
+        {
+          "content": "示例需说明 Promise 返回与异常场景"
+        }
+      ]
+    },
+    {
+      "title": "宿主交互 API",
+      "purpose": "面向嵌入 C++ 的 Host API，包括 execute、registerFunction/class、setGlobal、callFunction、HostValue",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": "结合 ALangEngine.h/.cpp 说明典型嵌入用法"
+        }
+      ]
+    },
+    {
+      "title": "源码目录与模块",
+      "purpose": "梳理 src/ 下的模块划分与依赖关系图",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": "覆盖 AsulLexer/Parser/Runtime/Interpreter/Async/Packages 目录结构"
+        }
+      ]
+    },
+    {
+      "title": "事件循环与 Promise",
+      "purpose": "阐述 createPromise/resolve/reject/postTask 与解释器事件循环的协作",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": "面向包开发者的异步接口指南"
+        }
+      ]
+    },
+    {
+      "title": "错误格式化与彩色输出",
+      "purpose": "记录错误上下文提取、彩色输出方案与源代码片段展示",
+      "parent": "核心架构",
+      "page_notes": [
+        {
+          "content": "关联 AsulFormatString/Color256 的使用"
+        }
+      ]
+    }
+  ]
+}
