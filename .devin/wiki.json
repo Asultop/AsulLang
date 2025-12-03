@@ -1,13 +1,13 @@
 {
   "repo_notes": [
     {
-      "content": ""
+      "content": "生成中文文档"
     }
   ],
   "pages": [
     {
-      "title": "Overview",
-      "purpose": "Introduce the AsulLang/ALang interpreter, its role as an embeddable scripting language, and the high-level architecture",
+      "title": "概览",
+      "purpose": "介绍 AsulLang/ALang 解释器、其作为可嵌入脚本语言的定位与高层架构",
       "page_notes": [
         {
           "content": ""
@@ -15,9 +15,9 @@
       ]
     },
     {
-      "title": "Quick Start",
-      "purpose": "Guide users through installation, running the first script, and using the REPL",
-      "parent": "Overview",
+      "title": "快速开始",
+      "purpose": "指导用户完成安装、运行第一个脚本，并使用 REPL",
+      "parent": "概览",
       "page_notes": [
         {
           "content": ""
@@ -25,9 +25,9 @@
       ]
     },
     {
-      "title": "Building from Source",
-      "purpose": "Detailed steps and dependencies for compiling ALang from source on different platforms",
-      "parent": "Overview",
+      "title": "从源码构建",
+      "purpose": "在不同平台上编译 ALang 源码的详细步骤与依赖说明",
+      "parent": "概览",
       "page_notes": [
         {
           "content": ""
@@ -35,8 +35,8 @@
       ]
     },
     {
-      "title": "Core Architecture",
-      "purpose": "Deep dive into the interpreter's internals, including the parsing pipeline and runtime systems",
+      "title": "核心架构",
+      "purpose": "深入解释器内部架构，包括编译/解析管线与运行时系统",
       "page_notes": [
         {
           "content": ""
@@ -44,9 +44,9 @@
       ]
     },
     {
-      "title": "Lexer and Parser",
-      "purpose": "Explain tokenization and recursive-descent parsing that builds the AST",
-      "parent": "Core Architecture",
+      "title": "词法与语法分析",
+      "purpose": "说明分词过程与递归下降解析如何构建 AST",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -54,9 +54,9 @@
       ]
     },
     {
-      "title": "Interpreter and Execution",
-      "purpose": "Detail the AST interpreter, statement/expression evaluation, and execution flow",
-      "parent": "Core Architecture",
+      "title": "解释器与执行",
+      "purpose": "详解 AST 解释器、语句/表达式求值与执行流程",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -64,9 +64,9 @@
       ]
     },
     {
-      "title": "Type System and Value Representation",
-      "purpose": "Document the dynamic type system, ValueTag enum, and internal Value variant structure",
-      "parent": "Core Architecture",
+      "title": "类型系统与值表示",
+      "purpose": "记录动态类型系统、ValueTag 枚举及内部 Value 变体结构",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -74,9 +74,9 @@
       ]
     },
     {
-      "title": "Environment and Scope Chain",
-      "purpose": "Explain variable storage, scope resolution, and the environment chain for closures",
-      "parent": "Core Architecture",
+      "title": "环境与作用域链",
+      "purpose": "解释变量存储、作用域解析以及闭包的环境链机制",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -84,9 +84,9 @@
       ]
     },
     {
-      "title": "Event Loop and Asynchronous Execution",
-      "purpose": "Detail the event loop architecture, task queues, and how async operations are scheduled",
-      "parent": "Core Architecture",
+      "title": "事件循环与异步执行",
+      "purpose": "详解事件循环架构、任务队列以及异步操作的调度",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -94,9 +94,9 @@
       ]
     },
     {
-      "title": "Error Reporting and Context",
-      "purpose": "Explain colored error formatting, context extraction, and source snippet display",
-      "parent": "Core Architecture",
+      "title": "错误报告与上下文",
+      "purpose": "说明带彩色输出的错误格式化、上下文抽取与源码片段显示系统",
+      "parent": "核心架构",
       "page_notes": [
         {
           "content": ""
@@ -104,8 +104,8 @@
       ]
     },
     {
-      "title": "Language Reference",
-      "purpose": "Complete reference for ALang syntax, semantics, and built-in features",
+      "title": "语言参考",
+      "purpose": "完整覆盖 ALang 的语法、语义与内置特性",
       "page_notes": [
         {
           "content": ""
@@ -113,9 +113,9 @@
       ]
     },
     {
-      "title": "Basic Syntax and Types",
-      "purpose": "Cover primitive types, variable declarations, operators, and basic expressions",
-      "parent": "Language Reference",
+      "title": "基础语法与类型",
+      "purpose": "覆盖原始类型、变量声明、运算符与基本表达式",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -123,9 +123,9 @@
       ]
     },
     {
-      "title": "Control Flow",
-      "purpose": "Document if/else, while, for, foreach, switch/case, break/continue, and the ternary operator",
-      "parent": "Language Reference",
+      "title": "控制流",
+      "purpose": "记录 if/else、while、for、foreach、switch/case、break/continue 与三元运算",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -133,9 +133,9 @@
       ]
     },
     {
-      "title": "Functions and Closures",
-      "purpose": "Explain function declarations, lambda expressions, closures, rest parameters, and default parameters",
-      "parent": "Language Reference",
+      "title": "函数与闭包",
+      "purpose": "说明函数声明、lambda 表达式、闭包、剩余参数与默认参数",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -143,9 +143,9 @@
       ]
     },
     {
-      "title": "Arrays and Objects",
-      "purpose": "Detail array/object literals, indexing, computed properties, and spread operators",
-      "parent": "Language Reference",
+      "title": "数组与对象",
+      "purpose": "详解数组/对象字面量、索引、计算属性与展开运算符",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -153,9 +153,9 @@
       ]
     },
     {
-      "title": "String Interpolation",
-      "purpose": "Explain ${expression} syntax and supported expression types in string literals",
-      "parent": "Language Reference",
+      "title": "字符串插值",
+      "purpose": "解释 ${expression} 语法以及字符串字面量中支持的表达式类型",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -163,9 +163,9 @@
       ]
     },
     {
-      "title": "Classes and OOP",
-      "purpose": "Cover class definitions, constructors, methods, inheritance, and the extends keyword",
-      "parent": "Language Reference",
+      "title": "类与面向对象",
+      "purpose": "覆盖类定义、构造器、方法、继承与 extends 关键字",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -173,9 +173,9 @@
       ]
     },
     {
-      "title": "Interfaces and Dynamic Dispatch",
-      "purpose": "Document interface declarations, structural typing, and the =~= interface matching operator",
-      "parent": "Language Reference",
+      "title": "接口与动态分派",
+      "purpose": "记录接口声明、结构化类型以及 =~= 接口匹配运算符",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -183,9 +183,9 @@
       ]
     },
     {
-      "title": "Asynchronous Programming",
-      "purpose": "Explain async/await, Promises, then/catch, go statements, and event loop interaction",
-      "parent": "Language Reference",
+      "title": "异步编程",
+      "purpose": "解释 async/await、Promise、then/catch、go 语句与事件循环交互",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -193,9 +193,9 @@
       ]
     },
     {
-      "title": "Error Handling",
-      "purpose": "Document throw statements, try/catch blocks, and exception propagation",
-      "parent": "Language Reference",
+      "title": "错误处理",
+      "purpose": "记录 throw 语句、try/catch 块与异常传播",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -203,9 +203,9 @@
       ]
     },
     {
-      "title": "Comments and Syntax Conventions",
-      "purpose": "List supported comment styles (C++/C/Python) and syntax conventions like optional semicolons",
-      "parent": "Language Reference",
+      "title": "注释与语法约定",
+      "purpose": "列出支持的注释风格（C++/C/Python）与语法约定（如可选分号）",
+      "parent": "语言参考",
       "page_notes": [
         {
           "content": ""
@@ -213,8 +213,8 @@
       ]
     },
     {
-      "title": "Standard Library",
-      "purpose": "Comprehensive documentation of built-in functions, methods, and standard packages",
+      "title": "标准库",
+      "purpose": "全面记录内置函数、方法与标准包",
       "page_notes": [
         {
           "content": ""
@@ -222,9 +222,9 @@
       ]
     },
     {
-      "title": "Built-in Functions",
-      "purpose": "Document global functions like print, println, len, sleep, eval, keys, values, etc.",
-      "parent": "Standard Library",
+      "title": "内置函数",
+      "purpose": "记录全局函数如 print、println、len、sleep、eval、keys、values 等",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -232,9 +232,9 @@
       ]
     },
     {
-      "title": "Array Methods",
-      "purpose": "Detail array methods: map, filter, reduce, find, some, every, includes, sort, etc.",
-      "parent": "Standard Library",
+      "title": "数组方法",
+      "purpose": "详述数组方法：map、filter、reduce、find、some、every、includes、sort 等",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -242,9 +242,9 @@
       ]
     },
     {
-      "title": "String Methods",
-      "purpose": "Document string methods: split, substring, replace, trim, toLowerCase, toUpperCase, etc.",
-      "parent": "Standard Library",
+      "title": "字符串方法",
+      "purpose": "记录字符串方法：split、substring、replace、trim、toLowerCase、toUpperCase 等",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -252,9 +252,9 @@
       ]
     },
     {
-      "title": "Container Classes",
-      "purpose": "Explain Map, Set, Stack, Deque, PriorityQueue constructors and methods",
-      "parent": "Standard Library",
+      "title": "容器类",
+      "purpose": "说明 Map、Set、Stack、Deque、PriorityQueue 的构造与方法",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -262,9 +262,9 @@
       ]
     },
     {
-      "title": "std.math Package",
-      "purpose": "Document mathematical constants and functions in the std.math package",
-      "parent": "Standard Library",
+      "title": "std.math 包",
+      "purpose": "记录 std.math 包中的数学常量与函数",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -272,9 +272,9 @@
       ]
     },
     {
-      "title": "std.io and File System",
-      "purpose": "Document file I/O operations, FileStream, File/Dir classes, and std.path utilities",
-      "parent": "Standard Library",
+      "title": "std.io 与文件系统",
+      "purpose": "记录文件 I/O、FileStream、File/Dir 类以及 std.path 工具",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -282,9 +282,9 @@
       ]
     },
     {
-      "title": "std.time and Date/Time",
-      "purpose": "Explain Date objects, time formatting/parsing, Duration, and timezone support",
-      "parent": "Standard Library",
+      "title": "std.time 与日期/时间",
+      "purpose": "解释 Date 对象、时间格式化/解析、Duration 与时区支持",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -292,9 +292,9 @@
       ]
     },
     {
-      "title": "std.network Package",
-      "purpose": "Document HTTP client (get/post), Socket API, URL parsing, and Server functionality",
-      "parent": "Standard Library",
+      "title": "std.network 包",
+      "purpose": "记录 HTTP 客户端（get/post）、Socket API、URL 解析与服务端功能",
+      "parent": "标准库",
       "page_notes": [
         {
           "content": ""
@@ -302,92 +302,92 @@
       ]
     },
     {
-      "title": "Bitwise Operations and Precedence",
-      "purpose": "Explain bitwise operators, 64-bit two's complement behavior, and the current operator precedence",
-      "parent": "Language Reference",
+      "title": "位运算与优先级",
+      "purpose": "详解按位运算符、64 位补码行为与当前运算优先级",
+      "parent": "语言参考",
       "page_notes": [
         {
-          "content": "Cover ~, &, |, ^, <<, >>, and precedence relative to equality/interface matching"
+          "content": "覆盖 ~、&、|、^、<<、>>，以及与相等/接口匹配的优先级关系"
         }
       ]
     },
     {
-      "title": "Interface Matching =~=",
-      "purpose": "Explain the semantics of =~=, structural matching, and usage examples",
-      "parent": "Language Reference",
+      "title": "接口匹配 =~=",
+      "purpose": "说明 =~= 运算符的语义、结构化匹配与用例",
+      "parent": "语言参考",
       "page_notes": [
         {
-          "content": "Demonstrate with Example/interfaceValidationTest.alang"
+          "content": "结合 Example/interfaceValidationTest.alang 展示"
         }
       ]
     },
     {
-      "title": "std.io.fileSystem Extensions",
-      "purpose": "Systematically document File, Dir, FileStream and APIs like mkdir/rmdir/stat/copy/move/chmod/walk",
-      "parent": "Standard Library",
+      "title": "std.io.fileSystem 扩展",
+      "purpose": "系统化记录 File、Dir、FileStream 以及 mkdir/rmdir/stat/copy/move/chmod/walk 等 API",
+      "parent": "标准库",
       "page_notes": [
         {
-          "content": "Align with section 4.x File System Extensions in ALang_Technical_Reference.md"
+          "content": "与 ALang_Technical_Reference.md 的 4.x 文件系统扩展保持一致"
         }
       ]
     },
     {
-      "title": "JSON Package",
-      "purpose": "Document json.stringify/json.parse behavior, supported types, error handling, and examples",
-      "parent": "Standard Library",
+      "title": "JSON 包",
+      "purpose": "记录 json.stringify/json.parse 的行为、支持类型、错误处理与示例",
+      "parent": "标准库",
       "page_notes": [
         {
-          "content": "Reference Example/jsonExample.alang"
+          "content": "引用 Example/jsonExample.alang"
         }
       ]
     },
     {
-      "title": "Operating System Package (os)",
-      "purpose": "Document usage and caveats for os.call, getEnv, setEnv, exit, platform, arch",
-      "parent": "Standard Library",
+      "title": "操作系统包 os",
+      "purpose": "记录 os.call、getEnv、setEnv、exit、platform、arch 的用法与注意事项",
+      "parent": "标准库",
       "page_notes": [
         {
-          "content": "Examples should cover Promise returns and error scenarios"
+          "content": "示例需说明 Promise 返回与异常场景"
         }
       ]
     },
     {
-      "title": "Host Interaction API",
-      "purpose": "For C++ embedding: execute, registerFunction/class, setGlobal, callFunction, HostValue",
-      "parent": "Core Architecture",
+      "title": "宿主交互 API",
+      "purpose": "面向嵌入 C++ 的 Host API，包括 execute、registerFunction/class、setGlobal、callFunction、HostValue",
+      "parent": "核心架构",
       "page_notes": [
         {
-          "content": "Explain typical embedding with ALangEngine.h/.cpp"
+          "content": "结合 ALangEngine.h/.cpp 说明典型嵌入用法"
         }
       ]
     },
     {
-      "title": "Source Layout and Modules",
-      "purpose": "Outline module organization under src/ and the dependency graph",
-      "parent": "Core Architecture",
+      "title": "源码目录与模块",
+      "purpose": "梳理 src/ 下的模块划分与依赖关系图",
+      "parent": "核心架构",
       "page_notes": [
         {
-          "content": "Cover AsulLexer/Parser/Runtime/Interpreter/Async/Packages directory structure"
+          "content": "覆盖 AsulLexer/Parser/Runtime/Interpreter/Async/Packages 目录结构"
         }
       ]
     },
     {
-      "title": "Event Loop and Promises",
-      "purpose": "Describe collaboration of createPromise/resolve/reject/postTask with the interpreter's event loop",
-      "parent": "Core Architecture",
+      "title": "事件循环与 Promise",
+      "purpose": "阐述 createPromise/resolve/reject/postTask 与解释器事件循环的协作",
+      "parent": "核心架构",
       "page_notes": [
         {
-          "content": "Async interface guide for package developers"
+          "content": "面向包开发者的异步接口指南"
         }
       ]
     },
     {
-      "title": "Error Formatting and Colored Output",
-      "purpose": "Document error context extraction, colored output scheme, and source snippet display",
-      "parent": "Core Architecture",
+      "title": "错误格式化与彩色输出",
+      "purpose": "记录错误上下文提取、彩色输出方案与源代码片段展示",
+      "parent": "核心架构",
       "page_notes": [
         {
-          "content": "Relate usage of AsulFormatString/Color256"
+          "content": "关联 AsulFormatString/Color256 的使用"
         }
       ]
     }
