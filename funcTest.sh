@@ -84,6 +84,8 @@ func_files=(
     "xml_yaml_example.alang"
     "http_test.alang"
     "http_sendfail_test.alang"
+    "crypto_example.alang"
+    "crypto_hash_demo.alang"
     "csvExample.alang"
 )
 

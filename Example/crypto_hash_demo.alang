@@ -1,0 +1,10 @@
+// std.crypto hash demo
+import std.crypto;
+
+let s = "hello";
+println("md5:");
+println(std.crypto.md5(s));
+println("sha1:");
+println(std.crypto.sha1(s));
+println("sha256:");
+println(std.crypto.sha256(s));

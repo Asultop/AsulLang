@@ -16,7 +16,8 @@
         "condition_variable": "cpp",
         "optional": "cpp",
         "sstream": "cpp",
-        "istream": "cpp"
+        "istream": "cpp",
+        "iosfwd": "cpp"
     },
     "cmake.sourceDirectory": "/Users/asultop/AsulTop/CXXProj/AsulLang-TRAE"
 }

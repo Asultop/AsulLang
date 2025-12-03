@@ -28,6 +28,7 @@ set(SRCS
   src/AsulPackages/Std/Regex/StdRegex.cpp
   src/AsulPackages/Std/Encoding/StdEncoding.cpp
   src/AsulPackages/Std/Network/StdNetwork.cpp
+  src/AsulPackages/Std/Crypto/StdCrypto.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp
@@ -83,7 +84,18 @@ if(WIN32)
 endif()
 
 find_package(Threads REQUIRED)
+
+# Optional OpenSSL for std.crypto hashes
+find_package(OpenSSL)
 target_link_libraries(alang PRIVATE Threads::Threads)
+
+# Link OpenSSL if available
+if (OPENSSL_FOUND)
+  target_link_libraries(alang PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  target_compile_definitions(alang PRIVATE ASUL_HAS_OPENSSL=1)
+else()
+  message(WARNING "OpenSSL not found: std.crypto hashes will throw 'not implemented yet'.")
+endif()
 
 set_target_properties(alang PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
