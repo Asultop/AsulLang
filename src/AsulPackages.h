@@ -10,6 +10,7 @@
 #include "AsulPackages/Std/Regex/StdRegex.h"
 #include "AsulPackages/Std/Encoding/StdEncoding.h"
 #include "AsulPackages/Std/Network/StdNetwork.h"
+#include "AsulPackages/Csv/Csv.h"
 #include "AsulPackages/Json/Json.h"
 #include "AsulPackages/Xml/Xml.h"
 #include "AsulPackages/Yaml/Yaml.h"

@@ -1,0 +1,28 @@
+// CSV example: parse, stringify, read, write
+
+// Import independent csv package
+import csv;
+
+// Prepare CSV text
+let text = "name,age\nAlice,30\nBob,25\nCharlieD,40";
+
+println("Original text:");
+println(text);
+
+// Parse
+let rows = csv.parse(text);
+println("Parsed rows:");
+println(rows);
+
+// Stringify
+let out = csv.stringify(rows);
+println("Stringified:");
+println(out);
+
+// Write to file and read back
+let path = "./File/tmp_csv_example.csv";
+let ok = csv.write(path, rows);
+println("Write ok:", ok);
+let rows2 = csv.read(path);
+println("Read back:");
+println(rows2);

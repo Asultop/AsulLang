@@ -37,7 +37,7 @@
 - [x] **Fetch API**: 基础版 `std.network.fetch`（headers/method/body），后续可扩展；保留同步 `get/post` 辅助
 
 ## 6. 数据格式 (std.data)
-- [-] **CSV**: 用于读写 CSV 文件的 `std.csv`
+- [x] **CSV**: 用于读写 CSV 文件的 `std.csv`
 - [x] **XML/YAML**: 如果需要，提供基础解析器
 - [x] **JSON**: `json.parse` 和 `json.stringify` 已在 `ALangEngine.cpp` 中实现。
 

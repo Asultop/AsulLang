@@ -32,6 +32,7 @@ set(SRCS
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp
   src/AsulPackages/Os/Os.cpp
+  src/AsulPackages/Csv/Csv.cpp
 )
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
