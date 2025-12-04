@@ -1,0 +1,79 @@
+// == std.test 功能测试 ==
+import std.test.*;
+
+println("=== std.test 功能测试 ===\n");
+
+// 1. 基本断言测试
+println("== 基本断言测试 ==");
+
+try {
+    assert(true, "This should pass");
+    println("✓ assert(true) passed");
+    pass();
+} catch (e) {
+    println("✗ assert(true) failed:", e);
+    fail("assert(true) should not throw");
+};
+
+try {
+    assert(false, "This should fail");
+    println("✗ assert(false) should have thrown");
+    fail("assert(false) should throw");
+} catch (e) {
+    println("✓ assert(false) correctly threw:", e);
+    pass();
+};
+
+// 2. assertEqual 测试
+println("\n== assertEqual 测试 ==");
+
+try {
+    assertEqual(5, 5, "Numbers should be equal");
+    println("✓ assertEqual(5, 5) passed");
+    pass();
+} catch (e) {
+    println("✗ assertEqual(5, 5) failed:", e);
+    fail("assertEqual should pass for equal values");
+};
+
+try {
+    assertEqual(5, 10, "Numbers should not be equal");
+    println("✗ assertEqual(5, 10) should have thrown");
+    fail("assertEqual should fail for different values");
+} catch (e) {
+    println("✓ assertEqual(5, 10) correctly threw");
+    pass();
+};
+
+// 3. assertNotEqual 测试
+println("\n== assertNotEqual 测试 ==");
+
+try {
+    assertNotEqual(5, 10, "Numbers should be different");
+    println("✓ assertNotEqual(5, 10) passed");
+    pass();
+} catch (e) {
+    println("✗ assertNotEqual(5, 10) failed:", e);
+    fail("assertNotEqual should pass for different values");
+};
+
+try {
+    assertNotEqual(5, 5, "Numbers should be different");
+    println("✗ assertNotEqual(5, 5) should have thrown");
+    fail("assertNotEqual should fail for equal values");
+} catch (e) {
+    println("✓ assertNotEqual(5, 5) correctly threw");
+    pass();
+};
+
+// 4. 获取统计
+println("\n== 测试统计 ==");
+let stats = getStats();
+println("总测试数:", stats.total);
+println("通过数:", stats.passed);
+println("失败数:", stats.failed);
+
+// 5. 打印摘要
+printSummary();
+
+println("\n=== std.test 功能测试完成 ===");
