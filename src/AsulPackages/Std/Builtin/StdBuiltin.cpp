@@ -6,6 +6,8 @@ namespace asul {
 
 void registerStdBuiltinPackage(Interpreter& interp) {
 	auto globals = interp.globalsEnv();
+	// Get interpreter pointer for lambdas that need it
+	Interpreter* interpPtr = &interp;
 	
 	// len(x): string/array/object length
 	auto lenFn = std::make_shared<Function>();
@@ -68,8 +70,270 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	(*perfObj)["now"] = Value{nowFn};
 	globals->define("performance", Value{perfObj});
 
-	// TODO: Extract remaining builtins (quote, eval, sleep, Promise) which use [this] captures
-	// These need interpreter pointer handling and will be added in next iteration
+			auto quoteFn = std::make_shared<Function>();
+			quoteFn->isBuiltin = true;
+			quoteFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
+				if (args.size() != 1) throw std::runtime_error("quote expects 1 argument (string)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("quote expects a string");
+				std::string src = std::get<std::string>(args[0]);
+				Lexer lx(src);
+				auto toks = lx.scanTokens();
+				auto arr = std::make_shared<Array>();
+				for (auto &t : toks) {
+					if (t.type == TokenType::EndOfFile) continue;
+					auto obj = std::make_shared<Object>();
+					std::string tname;
+					switch (t.type) {
+						case TokenType::LeftParen: tname = "LeftParen"; break;
+						case TokenType::RightParen: tname = "RightParen"; break;
+						case TokenType::LeftBrace: tname = "LeftBrace"; break;
+						case TokenType::RightBrace: tname = "RightBrace"; break;
+						case TokenType::LeftBracket: tname = "LeftBracket"; break;
+						case TokenType::RightBracket: tname = "RightBracket"; break;
+						case TokenType::Comma: tname = "Comma"; break;
+						case TokenType::Semicolon: tname = "Semicolon"; break;
+						case TokenType::Colon: tname = "Colon"; break;
+						case TokenType::Dot: tname = "Dot"; break;
+						case TokenType::Ellipsis: tname = "Ellipsis"; break;
+						case TokenType::Plus: tname = "Plus"; break;
+						case TokenType::Minus: tname = "Minus"; break;
+						case TokenType::Star: tname = "Star"; break;
+						case TokenType::Slash: tname = "Slash"; break;
+						case TokenType::Percent: tname = "Percent"; break;
+						case TokenType::Ampersand: tname = "Ampersand"; break;
+						case TokenType::Pipe: tname = "Pipe"; break;
+						case TokenType::Caret: tname = "Caret"; break;
+						case TokenType::ShiftLeft: tname = "ShiftLeft"; break;
+						case TokenType::ShiftRight: tname = "ShiftRight"; break;
+						case TokenType::Tilde: tname = "Tilde"; break;
+						case TokenType::MatchInterface: tname = "MatchInterface"; break;
+						case TokenType::Bang: tname = "Bang"; break;
+						case TokenType::Equal: tname = "Equal"; break;
+						case TokenType::Less: tname = "Less"; break;
+						case TokenType::Greater: tname = "Greater"; break;
+						case TokenType::BangEqual: tname = "BangEqual"; break;
+						case TokenType::EqualEqual: tname = "EqualEqual"; break;
+						case TokenType::StrictEqual: tname = "StrictEqual"; break;
+						case TokenType::StrictNotEqual: tname = "StrictNotEqual"; break;
+						case TokenType::LessEqual: tname = "LessEqual"; break;
+						case TokenType::GreaterEqual: tname = "GreaterEqual"; break;
+						case TokenType::LeftArrow: tname = "LeftArrow"; break;
+						case TokenType::Arrow: tname = "Arrow"; break;
+						case TokenType::AndAnd: tname = "AndAnd"; break;
+						case TokenType::OrOr: tname = "OrOr"; break;
+						case TokenType::Identifier: tname = "Identifier"; break;
+						case TokenType::String: tname = "String"; break;
+						case TokenType::Number: tname = "Number"; break;
+						case TokenType::Let: tname = "Let"; break;
+						case TokenType::Var: tname = "Var"; break;
+						case TokenType::Const: tname = "Const"; break;
+						case TokenType::Function: tname = "Function"; break;
+						case TokenType::Return: tname = "Return"; break;
+						case TokenType::If: tname = "If"; break;
+						case TokenType::Else: tname = "Else"; break;
+						case TokenType::While: tname = "While"; break;
+						case TokenType::For: tname = "For"; break;
+						case TokenType::Break: tname = "Break"; break;
+						case TokenType::Continue: tname = "Continue"; break;
+						case TokenType::Class: tname = "Class"; break;
+						case TokenType::Extends: tname = "Extends"; break;
+						case TokenType::New: tname = "New"; break;
+						case TokenType::True: tname = "True"; break;
+						case TokenType::False: tname = "False"; break;
+						case TokenType::Null: tname = "Null"; break;
+						case TokenType::Await: tname = "Await"; break;
+						case TokenType::Async: tname = "Async"; break;
+						case TokenType::Go: tname = "Go"; break;
+						case TokenType::Try: tname = "Try"; break;
+						case TokenType::Catch: tname = "Catch"; break;
+						case TokenType::Throw: tname = "Throw"; break;
+						case TokenType::Interface: tname = "Interface"; break;
+						case TokenType::Import: tname = "Import"; break;
+						case TokenType::From: tname = "From"; break;
+						default: tname = "Unknown"; break;
+					}
+					(*obj)["token"] = Value{ tname };
+					(*obj)["lexeme"] = Value{ t.lexeme };
+					(*obj)["line"] = Value{ static_cast<double>(t.line) };
+					(*obj)["column"] = Value{ static_cast<double>(t.column) };
+					(*obj)["length"] = Value{ static_cast<double>(t.length) };
+					arr->push_back(Value{ obj });
+				}
+				// 构建带有 apply() 的容器对象
+				auto qobj = std::make_shared<Object>();
+				(*qobj)["tokens"] = Value{ arr };
+				(*qobj)["source"] = Value{ src };
+				// apply(): 基于当前 tokens 重新拼接代码并执行（eval），返回其值
+				{
+					auto self = qobj; // 捕获对象以读取被用户修改后的 tokens
+					auto applyFn = std::make_shared<Function>();
+					applyFn->isBuiltin = true;
+					applyFn->builtin = [interpPtr, self](const std::vector<Value>&, std::shared_ptr<Environment>) -> Value {
+						// 读取 tokens 数组
+						auto it = self->find("tokens");
+						if (it == self->end() || !std::holds_alternative<std::shared_ptr<Array>>(it->second))
+							throw std::runtime_error("quote.apply: missing tokens array");
+						auto arrPtr = std::get<std::shared_ptr<Array>>(it->second);
+						if (!arrPtr) return Value{std::monostate{}};
+						// 将 tokens 重建为源码
+						auto escapeString = [](const std::string& s){
+							std::string out; out.reserve(s.size()+2);
+							for (char c: s) {
+								switch (c) {
+									case '\\': out += "\\\\"; break;
+									case '"': out += "\\\""; break;
+									case '\n': out += "\\n"; break;
+									case '\t': out += "\\t"; break;
+									case '\r': out += "\\r"; break;
+									case '\0': out += "\\0"; break;
+									default: out.push_back(c); break;
+								}
+							}
+							return std::string("\"") + out + std::string("\"");
+						};
+						std::string code;
+						bool first = true;
+						for (const auto& v : *arrPtr) {
+							if (!std::holds_alternative<std::shared_ptr<Object>>(v)) continue;
+							auto tobj = std::get<std::shared_ptr<Object>>(v);
+							if (!tobj) continue;
+							std::string tname, lex;
+							auto itName = tobj->find("token");
+							if (itName != tobj->end() && std::holds_alternative<std::string>(itName->second)) tname = std::get<std::string>(itName->second);
+							auto itLex = tobj->find("lexeme");
+							if (itLex != tobj->end() && std::holds_alternative<std::string>(itLex->second)) lex = std::get<std::string>(itLex->second);
+							std::string piece;
+							if (tname == "String") piece = escapeString(lex);
+							else piece = lex;
+							if (!first) code.push_back(' ');
+							first = false;
+							code += piece;
+						}
+						// 通过内置 eval 处理，复用其单/多语句与返回值规则
+						return interpPtr->callFunction("eval", std::vector<Value>{ Value{code} });
+					};
+					(*qobj)["apply"] = Value{ applyFn };
+				}
+				return Value{ qobj };
+			};
+			globals->define("quote", quoteFn);
+
+
+			// eval(str): evaluate ALang source in a child environment and return last-expression value or null
+			auto evalFn = std::make_shared<Function>();
+			evalFn->isBuiltin = true;
+			evalFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.size() != 1) throw std::runtime_error("eval expects 1 argument (string)");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("eval expects a string");
+				std::string code = std::get<std::string>(args[0]);
+				// Try full parse first; on failure (e.g., missing semicolons), fallback to single-expression snippet
+				std::vector<StmtPtr> stmts;
+				{
+					Lexer lx(code);
+					auto toks = lx.scanTokens();
+					Parser ps(toks, code);
+					try {
+						stmts = ps.parse();
+					} catch (const std::exception&) {
+						// Try adding a trailing semicolon to support code ending with a bare expression
+						std::string withSemi = code;
+						withSemi.push_back(';');
+						try {
+							Lexer lxSemi(withSemi);
+							auto toksSemi = lxSemi.scanTokens();
+							Parser psSemi(toksSemi, withSemi);
+							stmts = psSemi.parse();
+						} catch (const std::exception&) {
+							// Fallback to single-expression snippet `(expr);`
+							std::string snippet = "(" + code + ")";
+							snippet.push_back(';');
+							Lexer lx2(snippet);
+							auto toks2 = lx2.scanTokens();
+							Parser ps2(toks2, snippet);
+							auto s2 = ps2.parse();
+							if (s2.size() == 1) {
+								if (auto es = std::dynamic_pointer_cast<ExprStmt>(s2[0])) {
+									auto evalEnv = std::make_shared<Environment>(interpPtr->currentEnv());
+									auto prev = interpPtr->currentEnv(); interpPtr->setCurrentEnv(evalEnv);
+									try { Value v = interpPtr->evaluate(es->expr); interpPtr->setCurrentEnv(prev); return v; } catch(...) { interpPtr->setCurrentEnv(prev); throw; }
+								}
+							}
+							throw; // not an expression either
+						}
+					}
+				}
+				// execute in a child environment so we don't pollute caller
+				auto evalEnv = std::make_shared<Environment>(interpPtr->currentEnv());
+				if (stmts.empty()) return Value{std::monostate{}};
+				if (stmts.size() == 1) {
+					if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmts[0])) {
+						auto prev = interpPtr->currentEnv(); interpPtr->setCurrentEnv(evalEnv);
+						try { Value v = interpPtr->evaluate(es->expr); interpPtr->setCurrentEnv(prev); return v; } catch(...) { interpPtr->setCurrentEnv(prev); throw; }
+					} else {
+						interpPtr->executeBlock(stmts, evalEnv);
+						return Value{std::monostate{}};
+					}
+				}
+				// multiple statements: execute all but last, then evaluate last expression if expression-stmt
+				if (stmts.size() > 1) {
+					std::vector<StmtPtr> prefix(stmts.begin(), stmts.end() - 1);
+					interpPtr->executeBlock(prefix, evalEnv);
+					if (auto lastEs = std::dynamic_pointer_cast<ExprStmt>(stmts.back())) {
+						auto prev = interpPtr->currentEnv(); interpPtr->setCurrentEnv(evalEnv);
+						try { Value v = interpPtr->evaluate(lastEs->expr); interpPtr->setCurrentEnv(prev); return v; } catch(...) { interpPtr->setCurrentEnv(prev); throw; }
+					} else {
+						interpPtr->executeBlock(std::vector<StmtPtr>{ stmts.back() }, evalEnv);
+						return Value{std::monostate{}};
+					}
+				}
+				return Value{std::monostate{}};
+			};
+			globals->define("eval", evalFn);
+
+			// sleep(ms): 返回一个 Promise，在 ms 毫秒后 resolve(null)
+			auto sleepFn = std::make_shared<Function>();
+			sleepFn->isBuiltin = true;
+			sleepFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
+				if (args.size() != 1) throw std::runtime_error("sleep expects 1 argument (ms)");
+				double ms = getNumber(args[0], "sleep ms");
+				auto p = std::make_shared<PromiseState>();
+				p->loopPtr = interpPtr; // 指向当前解释器以便派发回调
+				std::thread([p, interpPtr, ms]{
+					std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(ms)));
+					interpPtr->settlePromise(p, false, Value{std::monostate{}});
+				}).detach();
+				return Value{p};
+			};
+			globals->define("sleep", sleepFn);
+
+			// Promise 对象：resolve / reject
+			auto promiseObj = std::make_shared<Object>();
+			// Promise.resolve(value)
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					auto p = std::make_shared<PromiseState>();
+					p->loopPtr = interpPtr;
+					Value v = args.empty() ? Value{std::monostate{}} : args[0];
+					interpPtr->settlePromise(p, false, v);
+					return Value{p};
+				};
+				(*promiseObj)["resolve"] = fn;
+			}
+			// Promise.reject(reason)
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					auto p = std::make_shared<PromiseState>();
+					p->loopPtr = interpPtr;
+					Value v = args.empty() ? Value{std::string("Promise rejected")} : args[0];
+					interpPtr->settlePromise(p, true, v);
+					return Value{p};
+				};
+				(*promiseObj)["reject"] = fn;
+			}
+			globals->define("Promise", Value{promiseObj});
+
 }
 
 } // namespace asul

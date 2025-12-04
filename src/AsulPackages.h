@@ -13,6 +13,7 @@
 #include "AsulPackages/Std/Crypto/StdCrypto.h"
 #include "AsulPackages/Std/Io/StdIo.h"
 #include "AsulPackages/Std/Builtin/StdBuiltin.h"
+#include "AsulPackages/Std/Collections/StdCollections.h"
 #include "AsulPackages/Csv/Csv.h"
 #include "AsulPackages/Json/Json.h"
 #include "AsulPackages/Xml/Xml.h"

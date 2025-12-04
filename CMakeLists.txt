@@ -31,6 +31,7 @@ set(SRCS
   src/AsulPackages/Std/Crypto/StdCrypto.cpp
   src/AsulPackages/Std/Io/StdIo.cpp
   src/AsulPackages/Std/Builtin/StdBuiltin.cpp
+  src/AsulPackages/Std/Collections/StdCollections.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp
