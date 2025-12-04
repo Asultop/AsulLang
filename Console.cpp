@@ -94,15 +94,19 @@ int runConsole(int argc, char* argv[]) {
         }
     );
 
-    auto run_code = [&](const std::string& code)->bool{
+    auto run_code = [&](const std::string& code, bool showRuntimeError = true)->bool{
         try {
             engine.execute(code);
             engine.runEventLoopUntilIdle();
             return true;
         } catch (const std::exception& ex) {
-            std::cerr << "Runtime error: " << ex.what() << std::endl;
+            if (showRuntimeError) {
+                std::cerr << "Runtime error: " << ex.what() << std::endl;
+            }
         } catch (...) {
-            std::cerr << "Unknown runtime error" << std::endl;
+            if (showRuntimeError) {
+                std::cerr << "Unknown runtime error" << std::endl;
+            }
         }
         return false;
     };
@@ -173,7 +177,7 @@ int runConsole(int argc, char* argv[]) {
             engine.setImportBaseDir(base.string());
             std::filesystem::current_path(base);
         } catch (...) {}
-        if (!run_code(code)) return 1;
+        if (!run_code(code, false)) return 1;
     }
 
     // If not interactive and we already executed something, exit

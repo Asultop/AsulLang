@@ -530,6 +530,213 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			return httpRequest("POST", std::get<std::string>(args[0]), toString(args[1]));
 		};
 		(*netPkg)["post"] = Value{postFn};
+
+		// http sub-package with Server class
+		{
+			auto httpPkg = std::make_shared<Object>();
+
+			// HTTP Server class
+			auto serverClass = std::make_shared<ClassInfo>();
+			serverClass->name = "Server";
+			serverClass->isNative = true;
+
+			// constructor()
+			auto serverCtor = std::make_shared<Function>();
+			serverCtor->isBuiltin = true;
+			serverCtor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				if (ext) {
+					ext->nativeHandle = nullptr; // Will be set in listen()
+				}
+				return Value{std::monostate{}};
+			};
+			serverClass->methods["constructor"] = serverCtor;
+
+			// listen(port, callback) - starts HTTP server
+			auto listenFn = std::make_shared<Function>();
+			listenFn->isBuiltin = true;
+			listenFn->builtin = [asyncPtr, interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				if (args.size() < 2) throw std::runtime_error("Server.listen expects port and callback");
+				int port = static_cast<int>(getNumber(args[0], "port"));
+				if (!std::holds_alternative<std::shared_ptr<Function>>(args[1])) {
+					throw std::runtime_error("Server.listen callback must be a function");
+				}
+				auto callback = std::get<std::shared_ptr<Function>>(args[1]);
+
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+
+				// Create server socket
+				int serverFd = socket(AF_INET, SOCK_STREAM, 0);
+				if (serverFd < 0) throw std::runtime_error("Failed to create server socket");
+
+				int opt = 1;
+				setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+				struct sockaddr_in addr;
+				std::memset(&addr, 0, sizeof(addr));
+				addr.sin_family = AF_INET;
+				addr.sin_addr.s_addr = INADDR_ANY;
+				addr.sin_port = htons(port);
+
+				if (bind(serverFd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+					close(serverFd);
+					throw std::runtime_error("Failed to bind server socket");
+				}
+
+				if (listen(serverFd, 10) < 0) {
+					close(serverFd);
+					throw std::runtime_error("Failed to listen on server socket");
+				}
+
+				if (ext) {
+					ext->nativeHandle = new int(serverFd);
+					ext->nativeDestructor = [](void* p) {
+						int* fdp = static_cast<int*>(p);
+						close(*fdp);
+						delete fdp;
+					};
+				}
+
+				// Start accepting connections in background thread
+				std::thread([serverFd, callback, asyncPtr, interpPtr]() {
+					while (true) {
+						struct sockaddr_in clientAddr;
+						socklen_t clientLen = sizeof(clientAddr);
+						int clientFd = accept(serverFd, (struct sockaddr*)&clientAddr, &clientLen);
+						if (clientFd < 0) break; // Server closed
+
+						// Handle each connection in its own thread
+						std::thread([clientFd, callback, asyncPtr, interpPtr]() {
+							// Read HTTP request
+							std::string requestData;
+							char buf[4096];
+							ssize_t n = read(clientFd, buf, sizeof(buf) - 1);
+							if (n > 0) {
+								buf[n] = '\0';
+								requestData = std::string(buf, n);
+							}
+
+							// Parse request line
+							std::string method, url, version;
+							std::istringstream reqStream(requestData);
+							reqStream >> method >> url >> version;
+
+							// Create request object
+							auto reqObj = std::make_shared<Object>();
+							(*reqObj)["method"] = Value{method};
+							(*reqObj)["url"] = Value{url};
+							(*reqObj)["headers"] = Value{requestData};
+
+							// Create response object
+							auto resObj = std::make_shared<Object>();
+							int* clientFdPtr = new int(clientFd);
+
+							// res.writeHead(statusCode, headers)
+							auto writeHeadFn = std::make_shared<Function>();
+							writeHeadFn->isBuiltin = true;
+							auto statusCodePtr = std::make_shared<int>(200);
+							auto headersStrPtr = std::make_shared<std::string>();
+							writeHeadFn->builtin = [statusCodePtr, headersStrPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+								if (args.size() >= 1) {
+									*statusCodePtr = static_cast<int>(getNumber(args[0], "statusCode"));
+								}
+								if (args.size() >= 2 && std::holds_alternative<std::shared_ptr<Object>>(args[1])) {
+									auto hdrs = std::get<std::shared_ptr<Object>>(args[1]);
+									std::ostringstream oss;
+									for (auto& kv : *hdrs) {
+										oss << kv.first << ": " << toString(kv.second) << "\r\n";
+									}
+									*headersStrPtr = oss.str();
+								}
+								return Value{std::monostate{}};
+							};
+							(*resObj)["writeHead"] = Value{writeHeadFn};
+
+							// res.end(body) - send response
+							auto endFn = std::make_shared<Function>();
+							endFn->isBuiltin = true;
+							endFn->builtin = [clientFdPtr, statusCodePtr, headersStrPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+								std::string body;
+								if (!args.empty()) {
+									body = toString(args[0]);
+								}
+
+								std::string statusText = "OK";
+								if (*statusCodePtr == 404) statusText = "Not Found";
+								else if (*statusCodePtr == 500) statusText = "Internal Server Error";
+
+								std::ostringstream response;
+								response << "HTTP/1.1 " << *statusCodePtr << " " << statusText << "\r\n";
+								response << *headersStrPtr;
+								response << "Content-Length: " << body.size() << "\r\n";
+								response << "Connection: close\r\n";
+								response << "\r\n";
+								response << body;
+
+								std::string respStr = response.str();
+								ssize_t written = write(*clientFdPtr, respStr.c_str(), respStr.size());
+								close(*clientFdPtr);
+								delete clientFdPtr;
+
+								if (written < 0) {
+									auto errObj = std::make_shared<Object>();
+									(*errObj)["message"] = Value{std::string("Failed to send response")};
+									return Value{errObj};
+								}
+								return Value{std::monostate{}};
+							};
+							(*resObj)["end"] = Value{endFn};
+
+							// Call the callback with req, res
+							asyncPtr->postTask([callback, reqObj, resObj, interpPtr]() {
+								try {
+									std::vector<Value> callArgs = {Value{reqObj}, Value{resObj}};
+									if (callback->isBuiltin) {
+										callback->builtin(callArgs, callback->closure);
+									} else {
+										auto local = std::make_shared<Environment>(callback->closure);
+										if (callback->params.size() > 0) local->define(callback->params[0], callArgs[0]);
+										if (callback->params.size() > 1) local->define(callback->params[1], callArgs[1]);
+										try {
+											interpPtr->executeBlock(callback->body, local);
+										} catch (const ReturnSignal&) {}
+									}
+								} catch (const std::exception& ex) {
+									std::cerr << "HTTP Server callback error: " << ex.what() << std::endl;
+								}
+							});
+						}).detach();
+					}
+				}).detach();
+
+				return Value{std::monostate{}};
+			};
+			serverClass->methods["listen"] = listenFn;
+
+			// close() - stop the server
+			auto closeFn = std::make_shared<Function>();
+			closeFn->isBuiltin = true;
+			closeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				if (ext && ext->nativeHandle) {
+					int* fdp = static_cast<int*>(ext->nativeHandle);
+					close(*fdp);
+					delete fdp;
+					ext->nativeHandle = nullptr;
+				}
+				return Value{true};
+			};
+			serverClass->methods["close"] = closeFn;
+
+			(*httpPkg)["Server"] = Value{serverClass};
+			(*netPkg)["http"] = Value{httpPkg};
+		}
 	});
 }
 
