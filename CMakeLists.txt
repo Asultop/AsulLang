@@ -32,6 +32,7 @@ set(SRCS
   src/AsulPackages/Std/Io/StdIo.cpp
   src/AsulPackages/Std/Builtin/StdBuiltin.cpp
   src/AsulPackages/Std/Collections/StdCollections.cpp
+  src/AsulPackages/Std/Array/StdArray.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp
