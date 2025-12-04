@@ -1,5 +1,6 @@
 #include "StdBuiltin.h"
 #include "../../../AsulInterpreter.h"
+#include <chrono>
 
 namespace asul {
 
@@ -53,8 +54,22 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	};
 	globals->define("typeof", typeFn);
 
-	// Note: eval, quote, sleep, Promise, and performance require interpreter reference
-	// and will be added in a follow-up extraction
+	// performance.now()
+	auto perfObj = std::make_shared<Object>();
+	auto nowFn = std::make_shared<Function>(); 
+	nowFn->isBuiltin = true;
+	nowFn->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+		using namespace std::chrono;
+		static auto start = high_resolution_clock::now();
+		auto now = high_resolution_clock::now();
+		duration<double, std::milli> ms = now - start;
+		return Value{ ms.count() };
+	};
+	(*perfObj)["now"] = Value{nowFn};
+	globals->define("performance", Value{perfObj});
+
+	// TODO: Extract remaining builtins (quote, eval, sleep, Promise) which use [this] captures
+	// These need interpreter pointer handling and will be added in next iteration
 }
 
 } // namespace asul

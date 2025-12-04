@@ -2834,19 +2834,6 @@ public:
 		// 注意：不要把 json 自动注册到 `std.` 根下，保持顶层包 `json` 独立。
 		// (之前为兼容性添加的 std.json 别名已移除，以符合不将所有包放到 std. 的理念)
 
-		// performance.now()
-		auto perfObj = std::make_shared<Object>();
-		auto nowFn = std::make_shared<Function>(); nowFn->isBuiltin = true;
-		nowFn->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
-			using namespace std::chrono;
-			static auto start = high_resolution_clock::now();
-			auto now = high_resolution_clock::now();
-			duration<double, std::milli> ms = now - start;
-			return Value{ ms.count() };
-		};
-		(*perfObj)["now"] = Value{nowFn};
-		globals->define("performance", Value{perfObj});
-
 		// quote(str): 返回一个对象 { tokens: [...], source: string, apply: function() }
 		auto quoteFn = std::make_shared<Function>();
 		quoteFn->isBuiltin = true;
@@ -2996,38 +2983,6 @@ public:
 		};
 		globals->define("quote", quoteFn);
 
-		// push(arr, ...values): 追加元素，返回新长度
-		auto pushFn = std::make_shared<Function>();
-		pushFn->isBuiltin = true;
-		pushFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-			if (args.empty()) throw std::runtime_error("push expects at least 1 argument");
-			const Value& target = args[0];
-			auto parr = std::get_if<std::shared_ptr<Array>>(&target);
-			if (!parr || !(*parr)) throw std::runtime_error("push: first argument must be array");
-			auto& vec = **parr;
-			for (size_t i=1;i<args.size();++i) vec.push_back(args[i]);
-			return Value{ static_cast<double>(vec.size()) };
-		};
-		globals->define("push", pushFn);
-
-		// typeof(x): return a type-name string for x; useful in type expressions e.g. : typeof(b.type())
-		auto typeFn = std::make_shared<Function>();
-		typeFn->isBuiltin = true;
-		typeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> clos) -> Value {
-			if (args.size() != 1) throw std::runtime_error("typeof expects 1 argument");
-			const Value& v = args[0];
-			if (auto ps = std::get_if<std::string>(&v)) return Value{ *ps };
-			if (auto po = std::get_if<std::shared_ptr<Object>>(&v)) {
-				if (*po) {
-					auto it = (**po).find("declaredType");
-					if (it != (**po).end() && std::holds_alternative<std::string>(it->second)) return Value{ std::get<std::string>(it->second) };
-					it = (**po).find("runtimeType");
-					if (it != (**po).end() && std::holds_alternative<std::string>(it->second)) return Value{ std::get<std::string>(it->second) };
-				}
-			}
-			return Value{ typeOf(v) };
-		};
-		globals->define("typeof", typeFn);
 
 		// eval(str): evaluate ALang source in a child environment and return last-expression value or null
 		auto evalFn = std::make_shared<Function>();
