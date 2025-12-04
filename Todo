@@ -16,7 +16,7 @@
 
 ## 4. 标准库增强 (std.*)
 - [ ] **std.string**: `replaceAll`, `localeCompare`, `repeat`, `normalize(NFC/NFD)`
-- [ ] **std.array**: `flat`, `flatMap`, `groupBy`, `chunk`, `unique`, `zip`, `diff`
+- [x] **std.array**: `flat`, `flatMap`, `groupBy`, `chunk`, `unique`, `zip`, `diff`
 - [ ] **std.object**: `keys`, `values`, `entries`, `fromEntries`, 深/浅拷贝
 - [ ] **std.math**: `clamp`, `lerp`, 随机分布(均匀/正态), 浮点近似比较
 - [ ] **std.time**: 统一格式化/解析模板、TZDB 绑定缓存、`parseISO`

@@ -88,6 +88,7 @@ func_files=(
     "crypto_hash_demo.alang"
     "stream_example.alang"
     "csvExample.alang"
+    "array_select_methods.alang"
 )
 
 # Counter for passed/failed tests
