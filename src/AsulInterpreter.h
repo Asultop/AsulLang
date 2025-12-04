@@ -559,11 +559,43 @@ public:
 					return Value{ static_cast<double>(lv ^ rv) };
 				}
 				case TokenType::ShiftLeft: {
+					// Operator overloading: __shl__ (for stream-like operations)
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__shl__");
+							if (m) {
+								std::vector<Value> args{ r };
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size(); ++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
 					long long lv = static_cast<long long>(getNumber(l, "<< left"));
 					long long rv = static_cast<long long>(getNumber(r, "<< right"));
 					return Value{ static_cast<double>(lv << rv) };
 				}
 				case TokenType::ShiftRight: {
+					// Operator overloading: __shr__ (for stream-like operations)
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__shr__");
+							if (m) {
+								std::vector<Value> args{ r };
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size(); ++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
 					long long lv = static_cast<long long>(getNumber(l, ">> left"));
 					long long rv = static_cast<long long>(getNumber(r, ">> right"));
 					return Value{ static_cast<double>(lv >> rv) };

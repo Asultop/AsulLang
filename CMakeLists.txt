@@ -29,6 +29,7 @@ set(SRCS
   src/AsulPackages/Std/Encoding/StdEncoding.cpp
   src/AsulPackages/Std/Network/StdNetwork.cpp
   src/AsulPackages/Std/Crypto/StdCrypto.cpp
+  src/AsulPackages/Std/Io/StdIo.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp

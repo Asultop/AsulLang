@@ -86,6 +86,7 @@ func_files=(
     "http_sendfail_test.alang"
     "crypto_example.alang"
     "crypto_hash_demo.alang"
+    "stream_example.alang"
     "csvExample.alang"
 )
 

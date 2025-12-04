@@ -1,0 +1,25 @@
+// Stream example using << and >>
+import std.*;
+
+let s = new io.Stream();
+// write via method
+s.write("Hello ");
+// write via operator <<
+s << "World";
+s << " " << 123 << "!";
+
+println("Buffer:");
+println(s.toString());
+
+// read tokens via >>
+let t1 = s >> {};
+println("Read token 1:");
+println(t1);
+let t2 = s >> {};
+println("Read token 2:");
+println(t2);
+
+// read line
+let line = s.readLine();
+println("Remaining line:");
+println(line);

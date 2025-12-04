@@ -23,6 +23,7 @@ void registerExternalPackages(asul::Interpreter& interp) {
     asul::registerStdEncodingPackage(interp);
     asul::registerStdNetworkPackage(interp);
     asul::registerStdCryptoPackage(interp);
+    asul::registerStdIoPackage(interp);
     asul::registerCsvPackage(interp);
     asul::registerJsonPackage(interp);
     asul::registerXmlPackage(interp);
