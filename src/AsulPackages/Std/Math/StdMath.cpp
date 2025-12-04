@@ -90,6 +90,61 @@ void registerStdMathPackage(Interpreter& interp) {
 				};
 				(*mathPkg)["random"] = fn;
 			}
+			// clamp(value, min, max)
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.size() != 3) {
+						throw std::runtime_error("clamp expects 3 numeric arguments (value, min, max)");
+					}
+					double value = getNumber(args[0], "clamp value");
+					double minVal = getNumber(args[1], "clamp min");
+					double maxVal = getNumber(args[2], "clamp max");
+					
+					if (minVal > maxVal) {
+						throw std::runtime_error("clamp: min must be <= max");
+					}
+					
+					if (value < minVal) return Value{minVal};
+					if (value > maxVal) return Value{maxVal};
+					return Value{value};
+				};
+				(*mathPkg)["clamp"] = fn;
+			}
+			// lerp(start, end, t) - linear interpolation
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.size() != 3) {
+						throw std::runtime_error("lerp expects 3 numeric arguments (start, end, t)");
+					}
+					double start = getNumber(args[0], "lerp start");
+					double end = getNumber(args[1], "lerp end");
+					double t = getNumber(args[2], "lerp t");
+					
+					return Value{start + (end - start) * t};
+				};
+				(*mathPkg)["lerp"] = fn;
+			}
+			// approxEqual(a, b, epsilon = 1e-9) - floating point approximate equality
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.size() < 2 || args.size() > 3) {
+						throw std::runtime_error("approxEqual expects 2 or 3 numeric arguments (a, b, [epsilon])");
+					}
+					double a = getNumber(args[0], "approxEqual a");
+					double b = getNumber(args[1], "approxEqual b");
+					double epsilon = args.size() == 3 ? getNumber(args[2], "approxEqual epsilon") : 1e-9;
+					
+					if (epsilon < 0) {
+						throw std::runtime_error("approxEqual: epsilon must be non-negative");
+					}
+					
+					return Value{std::abs(a - b) <= epsilon};
+				};
+				(*mathPkg)["approxEqual"] = fn;
+			}
 		}
 	});
 }

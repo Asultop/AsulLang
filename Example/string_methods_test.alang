@@ -1,295 +1,55 @@
-// 字符串方法测试：split / substring / replace
-import std.string
-println("=== 字符串方法测试 ===");
+// == std.string 扩展方法测试 ==
+import std.string.*;
 
-// 1. split - 分割字符串
-println("\n== split 测试 ==");
+println("=== std.string 扩展方法测试 ===\n");
 
-let csv = "apple,banana,orange,grape";
-let fruits = csv.split(",");
-println("CSV字符串:", csv);
-println("分割后:", fruits);
-println("元素数量:", fruits.len());
+// 1. replaceAll 测试
+println("== replaceAll 测试 ==");
+let text = "hello world, hello universe";
+println("原文本:", text);
+let replaced = replaceAll(text, "hello", "hi");
+println("replaceAll('hello', 'hi'):", replaced);
 
-let sentence = "hello world from alang";
-let words = sentence.split(" ");
-println("句子:", sentence);
-println("单词数组:", words);
+let text2 = "a-b-c-d-e";
+println("原文本:", text2);
+let replaced2 = replaceAll(text2, "-", " ");
+println("replaceAll('-', ' '):", replaced2);
 
-// 空分隔符 - 分割成字符
-let text = "Hello";
-let chars = text.split("");
-println("字符串:", text);
-println("字符数组:", chars);
+// 测试空搜索字符串
+let empty = replaceAll("test", "", "x");
+println("replaceAll(空搜索):", empty);
 
-// 包含分隔符的复杂情况
-let path = "home/user/documents/file.txt";
-let parts = path.split("/");
-println("路径:", path);
-println("路径部分:", parts);
-
-// 2. substring - 提取子串
-println("\n== substring 测试 ==");
-
-let str = "Hello World";
-let sub1 = str.substring(0, 5);
+// 2. repeat 测试
+println("\n== repeat 测试 ==");
+let str = "abc";
 println("原字符串:", str);
-println("substring(0, 5):", sub1);
+println("repeat(3):", repeat(str, 3));
+println("repeat(0):", repeat(str, 0));
+println("repeat(1):", repeat(str, 1));
 
-let sub2 = str.substring(6);
-println("substring(6):", sub2);
+let dash = "-";
+println("repeat('-', 10):", repeat(dash, 10));
 
-let sub3 = str.substring(6, 11);
-println("substring(6, 11):", sub3);
+// 3. localeCompare 测试
+println("\n== localeCompare 测试 ==");
+println("localeCompare('a', 'b'):", localeCompare("a", "b"));  // -1
+println("localeCompare('b', 'a'):", localeCompare("b", "a"));  // 1
+println("localeCompare('a', 'a'):", localeCompare("a", "a"));  // 0
+println("localeCompare('apple', 'banana'):", localeCompare("apple", "banana"));  // -1
+println("localeCompare('zoo', 'ant'):", localeCompare("zoo", "ant"));  // 1
 
-// 索引超出范围的处理
-let sub4 = str.substring(0, 100);
-println("substring(0, 100):", sub4);
-
-let sub5 = str.substring(20);
-println("substring(20) [超范围]:", sub5);
-
-// 3. replace - 替换字符串
-println("\n== replace 测试 ==");
-
-let original = "Hello World";
-let replaced1 = original.replace("World", "ALang");
-println("原字符串:", original);
-println("替换后:", replaced1);
-
-let code = "let x = 10;";
-let replaced2 = code.replace("10", "42");
-println("代码:", code);
-println("替换后:", replaced2);
-
-// 替换不存在的内容
-let replaced3 = original.replace("xyz", "ABC");
-println("替换不存在的内容:", replaced3);
-
-// 替换为空字符串（删除效果）
-let withSpaces = "  hello  ";
-let noFirst = withSpaces.replace(" ", "");
-println("原字符串: '", withSpaces, "'");
-println("替换第一个空格: '", noFirst, "'");
-
-// 4. 组合使用示例
+// 4. 组合使用
 println("\n== 组合使用 ==");
+let template = "Hello {name}, welcome to {place}!";
+println("模板:", template);
+let step1 = replaceAll(template, "{name}", "Alice");
+let step2 = replaceAll(step1, "{place}", "ALang");
+println("替换后:", step2);
 
-let email = "user@example.com";
-let emailParts = email.split("@");
-println("邮箱:", email);
-println("用户名:", emailParts[0]);
-println("域名:", emailParts[1]);
+// 创建分隔符
+let separator = repeat("=", 40);
+println("\n" + separator);
+println("测试完成");
+println(separator);
 
-let domain = emailParts[1];
-let domainParts = domain.split(".");
-println("域名部分:", domainParts);
-
-// URL 处理示例
-let url = "https://example.com/path/to/resource";
-let protocol = url.substring(0, 5);
-let rest = url.substring(8);
-println("\nURL:", url);
-println("协议:", protocol);
-println("其余部分:", rest);
-
-// 简单的模板替换
-let template = "Hello, NAME! Welcome to PLACE.";
-let message1 = template.replace("NAME", "Alice");
-let message2 = message1.replace("PLACE", "ALang");
-println("\n模板:", template);
-println("替换后:", message2);
-
-// 文件扩展名提取
-println("\n== 文件名处理 ==");
-let filename = "document.txt";
-let nameParts = filename.split(".");
-if (nameParts.len() >= 2) {
-    let name = nameParts[0];
-    let ext = nameParts[1];
-    println("文件名:", name);
-    println("扩展名:", ext);
-}
-
-// CSV 解析示例
-println("\n== CSV 解析 ==");
-let csvLine = "Alice,25,Engineer";
-let fields = csvLine.split(",");
-println("CSV行:", csvLine);
-println("姓名:", fields[0]);
-println("年龄:", fields[1]);
-println("职业:", fields[2]);
-
-// 字符串清理
-println("\n== 字符串处理 ==");
-let messy = "  extra spaces  ";
-let cleaned = messy; // 注意: replace 只替换第一个匹配，需要循环才能全部替换
-println("原始(带空格): '", messy, "'");
-println("处理后: '", cleaned, "'");
-
-// ===== 新增字符串方法 =====
-
-// 4. trim - 移除前后空格
-println("\n== trim 测试 ==");
-
-let withSpaces = "  Hello World  ";
-let trimmed = withSpaces.trim();
-println("原字符串: '", withSpaces, "'");
-println("trim后: '", trimmed, "'");
-
-let leadingSpace = "   Start";
-let trimmed2 = leadingSpace.trim();
-println("前导空格: '", leadingSpace, "'");
-println("trim后: '", trimmed2, "'");
-
-let trailingSpace = "End   ";
-let trimmed3 = trailingSpace.trim();
-println("尾部空格: '", trailingSpace, "'");
-println("trim后: '", trimmed3, "'");
-
-let noSpace = "NoSpace";
-let trimmed4 = noSpace.trim();
-println("无空格: '", noSpace, "'");
-println("trim后: '", trimmed4, "'");
-
-let onlySpaces = "     ";
-let trimmed5 = onlySpaces.trim();
-println("仅空格: '", onlySpaces, "'");
-println("trim后: '", trimmed5, "'");
-
-// 5. toLowerCase 和 toUpperCase - 大小写转换
-println("\n== toLowerCase 和 toUpperCase 测试 ==");
-
-let mixed = "Hello World";
-println("原字符串:", mixed);
-println("toLowerCase:", mixed.toLowerCase());
-println("toUpperCase:", mixed.toUpperCase());
-
-let upperStr = "JAVASCRIPT";
-println("原字符串:", upperStr);
-println("toLowerCase:", upperStr.toLowerCase());
-
-let lowerStr = "python";
-println("原字符串:", lowerStr);
-println("toUpperCase:", lowerStr.toUpperCase());
-
-let numbers = "Test123";
-println("原字符串:", numbers);
-println("toLowerCase:", numbers.toLowerCase());
-println("toUpperCase:", numbers.toUpperCase());
-
-// 6. startsWith 和 endsWith - 前缀和后缀检查
-println("\n== startsWith 和 endsWith 测试 ==");
-
-let url = "https://example.com";
-println("URL:", url);
-println("startsWith('https'):", url.startsWith("https"));
-println("startsWith('http'):", url.startsWith("http"));
-println("endsWith('.com'):", url.endsWith(".com"));
-println("endsWith('.org'):", url.endsWith(".org"));
-
-let filename2 = "document.txt";
-println("\n文件名:", filename2);
-println("startsWith('doc'):", filename2.startsWith("doc"));
-println("endsWith('.txt'):", filename2.endsWith(".txt"));
-println("endsWith('.pdf'):", filename2.endsWith(".pdf"));
-
-let email2 = "user@example.com";
-println("\n邮箱:", email2);
-println("startsWith('user'):", email2.startsWith("user"));
-println("endsWith('.com'):", email2.endsWith(".com"));
-println("endsWith('@'):", email2.endsWith("@"));
-
-let empty = "";
-println("\n空字符串测试:");
-println("startsWith('a'):", empty.startsWith("a"));
-println("endsWith('b'):", empty.endsWith("b"));
-
-// 7. includes - 包含检查
-println("\n== includes 测试 ==");
-
-let sentence2 = "The quick brown fox jumps over the lazy dog";
-println("句子:", sentence2);
-println("includes('quick'):", sentence2.includes("quick"));
-println("includes('cat'):", sentence2.includes("cat"));
-println("includes('fox'):", sentence2.includes("fox"));
-
-let code2 = "let x = 10; let y = 20;";
-println("\n代码:", code2);
-println("includes('let'):", code2.includes("let"));
-println("includes('function'):", code2.includes("function"));
-
-let text2 = "hello";
-println("\n字符串:", text2);
-println("includes('h'):", text2.includes("h"));
-println("includes('he'):", text2.includes("he"));
-println("includes('lo'):", text2.includes("lo"));
-println("includes('xyz'):", text2.includes("xyz"));
-
-// 8. indexOf - 查找子串位置
-println("\n== indexOf 测试 ==");
-
-let text3 = "hello world hello";
-println("字符串:", text3);
-println("indexOf('world'):", text3.indexOf("world"));
-println("indexOf('hello'):", text3.indexOf("hello"));
-println("indexOf('xyz'):", text3.indexOf("xyz"));
-
-let alphabet = "abcdefghijklmnop";
-println("\n字母表:", alphabet);
-println("indexOf('a'):", alphabet.indexOf("a"));
-println("indexOf('e'):", alphabet.indexOf("e"));
-println("indexOf('p'):", alphabet.indexOf("p"));
-println("indexOf('z'):", alphabet.indexOf("z"));
-
-let data = "apple,banana,apple,cherry";
-println("\n数据:", data);
-println("indexOf('apple'):", data.indexOf("apple"));
-println("indexOf('banana'):", data.indexOf("banana"));
-println("indexOf('date'):", data.indexOf("date"));
-
-let single = "a";
-println("\n单个字符:", single);
-println("indexOf('a'):", single.indexOf("a"));
-println("indexOf('b'):", single.indexOf("b"));
-
-// 9. 组合使用新增方法
-println("\n== 组合使用新增方法 ==");
-
-let userInput = "  USER_NAME@EXAMPLE.COM  ";
-println("原始输入: '", userInput, "'");
-
-// 清理输入
-let cleaned2 = userInput.trim();
-println("trim后: '", cleaned2, "'");
-
-// 转换为小写
-let lowerInput = cleaned2.toLowerCase();
-println("转小写: '", lowerInput, "'");
-
-// 验证邮箱格式
-let isEmail = lowerInput.includes("@") && lowerInput.endsWith(".com");
-println("是否是邮箱?: ", isEmail);
-
-// 提取用户名部分
-let atIndex = lowerInput.indexOf("@");
-if (atIndex != -1) {
-    let username = lowerInput.substring(0, atIndex);
-    let domain = lowerInput.substring(atIndex + 1);
-    println("用户名:", username);
-    println("域名:", domain);
-}
-
-// 文件验证示例
-println("\n== 文件名验证 ==");
-let files = ["document.txt", "image.png", "DATA.PDF", "  script.js  "];
-
-for (let i = 0; i < files.len(); i = i + 1) {
-    let file = files[i].trim().toLowerCase();
-    println("\n原文件名:", files[i]);
-    println("处理后:", file);
-    println("是否为txt:", file.endsWith(".txt"));
-    println("是否为图片:", file.includes(".png") || file.includes(".jpg") || file.includes(".gif"));
-}
-
-println("\n=== 字符串方法测试完成 ===");
+println("\n=== std.string 扩展方法测试完成 ===");

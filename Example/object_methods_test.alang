@@ -1,0 +1,120 @@
+// == Object 扩展方法测试 ==
+
+println("=== Object 扩展方法测试 ===\n");
+
+// 1. fromEntries 测试
+println("== fromEntries 测试 ==");
+let entriesData = [["name", "Alice"], ["age", 25], ["city", "Beijing"]];
+println("entries数组:", entriesData);
+let obj = fromEntries(entriesData);
+println("fromEntries结果:", obj);
+
+// 从entries重建对象
+let original = {a: 1, b: 2, c: 3};
+println("\n原始对象:", original);
+let entriesArr = entries(original);
+println("entries数组:", entriesArr);
+let rebuilt = fromEntries(entriesArr);
+println("重建对象:", rebuilt);
+
+// 2. deepClone 测试
+println("\n== deepClone 测试 ==");
+
+// 深层嵌套对象
+let nested = {
+    name: "Alice",
+    age: 25,
+    address: {
+        city: "Beijing",
+        country: "China",
+        coords: {
+            lat: 39.9,
+            lon: 116.4
+        }
+    },
+    hobbies: ["reading", "coding", "music"]
+};
+
+println("原始嵌套对象:", nested);
+let deepCopy = deepClone(nested);
+println("深拷贝结果:", deepCopy);
+
+// 修改深拷贝的嵌套属性
+deepCopy.address.city = "Shanghai";
+deepCopy.hobbies.push("gaming");
+
+println("\n修改深拷贝后:");
+println("原始对象的city:", nested.address.city);
+println("深拷贝的city:", deepCopy.address.city);
+println("原始对象的hobbies:", nested.hobbies);
+println("深拷贝的hobbies:", deepCopy.hobbies);
+
+// 3. 对比 clone (浅拷贝) 和 deepClone
+println("\n== 浅拷贝 vs 深拷贝 ==");
+let original2 = {
+    name: "Bob",
+    data: {value: 100}
+};
+
+let shallowCopy = clone(original2);
+let deepCopy2 = deepClone(original2);
+
+println("原始对象:", original2);
+
+// 修改嵌套属性
+shallowCopy.data.value = 200;
+println("\n修改浅拷贝的嵌套属性后:");
+println("原始对象的value:", original2.data.value);  // 也被改变了
+println("浅拷贝的value:", shallowCopy.data.value);
+
+// 重置
+original2.data.value = 100;
+deepCopy2.data.value = 300;
+println("\n修改深拷贝的嵌套属性后:");
+println("原始对象的value:", original2.data.value);  // 不受影响
+println("深拷贝的value:", deepCopy2.data.value);
+
+// 4. 数组的深拷贝
+println("\n== 数组深拷贝 ==");
+let nestedArray = [
+    [1, 2, 3],
+    [4, 5, 6],
+    {name: "test", values: [7, 8, 9]}
+];
+println("原始数组:", nestedArray);
+
+let arrayDeepCopy = deepClone(nestedArray);
+arrayDeepCopy[0].push(99);
+arrayDeepCopy[2].values.push(100);
+
+println("修改深拷贝后:");
+println("原始数组:", nestedArray);
+println("深拷贝:", arrayDeepCopy);
+
+// 5. 组合使用
+println("\n== 组合使用示例 ==");
+
+// 创建配置对象
+let config = {
+    server: {host: "localhost", port: 8080},
+    database: {host: "db.example.com", port: 5432}
+};
+
+// 使用entries和fromEntries进行转换
+let configEntries = entries(config);
+println("配置entries:", configEntries);
+
+// 可以对entries进行过滤或映射
+// 然后重建对象
+let rebuiltConfig = fromEntries(configEntries);
+println("重建的配置:", rebuiltConfig);
+
+// 创建多个环境的配置
+let devConfig = deepClone(config);
+devConfig.server.port = 3000;
+devConfig.database.host = "localhost";
+
+println("\n生产配置:", config);
+println("开发配置:", devConfig);
+
+println("\n=== Object 扩展方法测试完成 ===");

@@ -1,0 +1,80 @@
+// == std.math 扩展方法测试 ==
+import std.math.*;
+
+println("=== std.math 扩展方法测试 ===\n");
+
+// 1. clamp 测试
+println("== clamp 测试 ==");
+println("clamp(5, 0, 10):", clamp(5, 0, 10));    // 5
+println("clamp(-5, 0, 10):", clamp(-5, 0, 10));  // 0
+println("clamp(15, 0, 10):", clamp(15, 0, 10));  // 10
+println("clamp(7.5, 0, 10):", clamp(7.5, 0, 10)); // 7.5
+
+// 用于限制数值范围
+let value = 150;
+let clamped = clamp(value, 0, 100);
+println("限制值", value, "到范围[0, 100]:", clamped);
+
+// 2. lerp 测试
+println("\n== lerp 测试 ==");
+println("lerp(0, 10, 0):", lerp(0, 10, 0));      // 0
+println("lerp(0, 10, 0.5):", lerp(0, 10, 0.5));  // 5
+println("lerp(0, 10, 1):", lerp(0, 10, 1));      // 10
+println("lerp(0, 10, 0.25):", lerp(0, 10, 0.25)); // 2.5
+println("lerp(0, 10, 1.5):", lerp(0, 10, 1.5));  // 15 (外推)
+
+// 颜色插值示例
+let startColor = 0;
+let endColor = 255;
+println("\n颜色渐变 (0 到 255):");
+println("  0%:", lerp(startColor, endColor, 0));
+println(" 25%:", lerp(startColor, endColor, 0.25));
+println(" 50%:", lerp(startColor, endColor, 0.5));
+println(" 75%:", lerp(startColor, endColor, 0.75));
+println("100%:", lerp(startColor, endColor, 1));
+
+// 3. approxEqual 测试
+println("\n== approxEqual 测试 ==");
+let a = 0.1 + 0.2;  // 浮点精度问题
+let b = 0.3;
+println("0.1 + 0.2 =", a);
+println("直接比较 (a == 0.3):", a == b);
+println("approxEqual(a, 0.3):", approxEqual(a, b));
+
+// 不同精度测试
+println("approxEqual(1.0, 1.0000001):", approxEqual(1.0, 1.0000001));
+println("approxEqual(1.0, 1.001):", approxEqual(1.0, 1.001));
+println("approxEqual(1.0, 1.0, 0.01):", approxEqual(1.0, 1.001, 0.01));
+
+// 4. 组合使用示例
+println("\n== 组合使用 ==");
+
+// 游戏中的平滑移动
+let startPos = 0;
+let targetPos = 100;
+let t = 0.3;  // 30% 的进度
+let currentPos = lerp(startPos, targetPos, t);
+println("从", startPos, "移动到", targetPos, "，进度", t, ":", currentPos);
+
+// 确保在边界内
+let clampedPos = clamp(currentPos, 0, 100);
+println("限制在边界内:", clampedPos);
+
+// 检查是否到达目标（使用近似相等）
+let reached = approxEqual(clampedPos, targetPos);
+println("是否到达目标:", reached);
+
+// 5. 结合现有数学函数
+println("\n== 结合现有函数 ==");
+let angle = pi / 4;  // 45度
+let sinValue = sin(angle);
+let cosValue = cos(angle);
+println("sin(π/4):", sinValue);
+println("cos(π/4):", cosValue);
+println("sin和cos是否近似相等:", approxEqual(sinValue, cosValue));
+
+// 使用clamp确保三角函数结果在[-1, 1]范围内（理论上应该在）
+let clampedSin = clamp(sinValue, -1, 1);
+println("限制后的sin值:", clampedSin);
+
+println("\n=== std.math 扩展方法测试完成 ===");

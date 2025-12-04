@@ -89,6 +89,9 @@ func_files=(
     "stream_example.alang"
     "csvExample.alang"
     "array_select_methods.alang"
+    "string_methods_test.alang"
+    "math_methods_test.alang"
+    "object_methods_test.alang"
 )
 
 # Counter for passed/failed tests
