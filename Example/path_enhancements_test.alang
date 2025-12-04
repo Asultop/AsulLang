@@ -1,0 +1,75 @@
+// == std.path 增强功能测试 ==
+import std.path.*;
+
+println("=== std.path 增强功能测试 ===\n");
+
+// 1. normalize 测试
+println("== normalize 测试 ==");
+let path1 = "/foo/bar/../baz";
+println("原路径:", path1);
+println("normalize:", normalize(path1));
+
+let path2 = "./foo/./bar";
+println("\n原路径:", path2);
+println("normalize:", normalize(path2));
+
+let path3 = "foo//bar///baz";
+println("\n原路径:", path3);
+println("normalize:", normalize(path3));
+
+let path4 = "../../parent/child";
+println("\n原路径:", path4);
+println("normalize:", normalize(path4));
+
+// 2. relative 测试
+println("\n== relative 测试 ==");
+let from1 = "/data/orandea/test/aaa";
+let to1 = "/data/orandea/impl/bbb";
+println("From:", from1);
+println("To:", to1);
+println("relative:", relative(from1, to1));
+
+let from2 = "/home/user/project";
+let to2 = "/home/user/project/src/main.js";
+println("\nFrom:", from2);
+println("To:", to2);
+println("relative:", relative(from2, to2));
+
+// 测试相同路径
+let samePath = "/home/user/file.txt";
+println("\nFrom:", samePath);
+println("To:", samePath);
+println("relative:", relative(samePath, samePath));
+
+// 3. 结合现有功能
+println("\n== 结合使用 ==");
+let basePath = "/home/user/project";
+let file = "src/components/../utils/helper.js";
+let fullPath = join(basePath, file);
+println("拼接路径:", fullPath);
+println("标准化后:", normalize(fullPath));
+
+let dir = dirname(fullPath);
+println("目录:", dir);
+let base = basename(fullPath);
+println("文件名:", base);
+
+// 4. 实际应用场景
+println("\n== 实际应用场景 ==");
+
+// 场景1: 清理用户输入的路径
+let userInput = "foo/./bar/../baz/";
+println("用户输入:", userInput);
+let cleaned = normalize(userInput);
+println("清理后:", cleaned);
+
+// 场景2: 计算相对导入路径
+let currentFile = "/project/src/components/Button.js";
+let targetFile = "/project/src/utils/helpers.js";
+println("\n当前文件:", currentFile);
+println("目标文件:", targetFile);
+let currentDir = dirname(currentFile);
+let relativePath = relative(currentDir, targetFile);
+println("相对路径:", relativePath);
+
+println("\n=== std.path 增强功能测试完成 ===");

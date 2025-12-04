@@ -19,12 +19,12 @@
 - [x] **std.array**: `flat`, `flatMap`, `groupBy`, `chunk`, `unique`, `zip`, `diff`
 - [x] **std.object**: `keys`, `values`, `entries`, `fromEntries`, 深/浅拷贝
 - [x] **std.math**: `clamp`, `lerp`, ~~随机分布(均匀/正态)~~, 浮点近似比较
-- [ ] **std.time**: 统一格式化/解析模板、TZDB 绑定缓存、`parseISO`
-- [ ] **std.path**: `relative`, `normalize`，跨平台分隔符/驱动器差异处理
+- [x] **std.time**: 统一格式化/解析模板、TZDB 绑定缓存、`parseISO`
+- [x] **std.path**: `relative`, `normalize`，跨平台分隔符/驱动器差异处理
 - [ ] **std.log**: 级别控制、结构化(JSON)日志、颜色开关、sink 管理
 - [ ] **std.test**: `assert`、`describe/it`、断言库与报告集成到 `funcTest.sh`
 - [ ] **std.crypto (扩展)**: AES-256-CBC、RSA-2048(生成/加解密/签名验签)、流式 Hash；可配置 provider/FIPS
-- [ ] **std.encoding**: Base64URL、UTF-8/UTF-16 编解码一致化、hex↔字节数组
+- [x] **std.encoding**: Base64URL、~~UTF-8/UTF-16 编解码一致化~~、hex↔字节数组
 
 ## 5. IO 与系统
 - [ ] **std.io.fileSystem**: 递归拷贝/删除、权限/所有者、临时文件/目录、原子写

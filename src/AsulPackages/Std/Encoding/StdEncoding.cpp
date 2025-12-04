@@ -58,6 +58,56 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	};
 	(*base64Obj)["decode"] = Value{b64dec};
 
+	// Base64URL (URL-safe variant)
+	auto base64urlObj = std::make_shared<Object>();
+	(*encPkg)["base64url"] = Value{base64urlObj};
+	
+	// base64url.encode(str)
+	auto b64urlenc = std::make_shared<Function>(); b64urlenc->isBuiltin = true;
+	b64urlenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+		if (args.empty()) throw std::runtime_error("base64url.encode expects string");
+		std::string in = toString(args[0]);
+		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+		std::string out;
+		int val = 0, valb = -6;
+		for (unsigned char c : in) {
+			val = (val << 8) + c;
+			valb += 8;
+			while (valb >= 0) {
+				out.push_back(chars[(val >> valb) & 0x3F]);
+				valb -= 6;
+			}
+		}
+		if (valb > -6) out.push_back(chars[((val << 8) >> (valb + 8)) & 0x3F]);
+		// Base64URL typically doesn't use padding
+		return Value{out};
+	};
+	(*base64urlObj)["encode"] = Value{b64urlenc};
+
+	// base64url.decode(str)
+	auto b64urldec = std::make_shared<Function>(); b64urldec->isBuiltin = true;
+	b64urldec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+		if (args.empty()) throw std::runtime_error("base64url.decode expects string");
+		std::string in = toString(args[0]);
+		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+		std::vector<int> T(256, -1);
+		for (int i=0; i<64; i++) T[chars[i]] = i;
+		
+		std::string out;
+		int val = 0, valb = -8;
+		for (unsigned char c : in) {
+			if (T[c] == -1) break;
+			val = (val << 6) + T[c];
+			valb += 6;
+			if (valb >= 0) {
+				out.push_back(char((val >> valb) & 0xFF));
+				valb -= 8;
+			}
+		}
+		return Value{out};
+	};
+	(*base64urlObj)["decode"] = Value{b64urldec};
+
 	// bytesToString(arr): convert array of numeric byte values to a string
 	auto bytesToStringFn = std::make_shared<Function>(); bytesToStringFn->isBuiltin = true;
 	bytesToStringFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
@@ -106,6 +156,39 @@ void registerStdEncodingPackage(Interpreter& interp) {
 		return Value{out};
 	};
 	(*hexObj)["decode"] = Value{hexdec};
+
+	// hex.toBytes(hexStr) - convert hex string to byte array
+	auto hexToBytes = std::make_shared<Function>(); hexToBytes->isBuiltin = true;
+	hexToBytes->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+		if (args.empty()) throw std::runtime_error("hex.toBytes expects string");
+		std::string in = toString(args[0]);
+		if (in.size() % 2 != 0) throw std::runtime_error("Invalid hex string length");
+		auto arr = std::make_shared<Array>();
+		for (size_t i=0; i<in.size(); i+=2) {
+			std::string byteStr = in.substr(i, 2);
+			int byte = strtol(byteStr.c_str(), nullptr, 16);
+			arr->push_back(Value{ static_cast<double>(byte) });
+		}
+		return Value{arr};
+	};
+	(*hexObj)["toBytes"] = Value{hexToBytes};
+
+	// hex.fromBytes(arr) - convert byte array to hex string
+	auto hexFromBytes = std::make_shared<Function>(); hexFromBytes->isBuiltin = true;
+	hexFromBytes->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+		if (args.size() != 1) throw std::runtime_error("hex.fromBytes expects 1 argument (array)");
+		if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("hex.fromBytes argument must be array");
+		auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+		if (!arr) return Value{std::string("")};
+		std::ostringstream oss;
+		for (auto &v : *arr) {
+			double d = getNumber(v, "hex.fromBytes element");
+			int byte = static_cast<int>(d) & 0xFF;
+			oss << std::hex << std::setw(2) << std::setfill('0') << byte;
+		}
+		return Value{oss.str()};
+	};
+	(*hexObj)["fromBytes"] = Value{hexFromBytes};
 
 	// URL
 	auto urlObj = std::make_shared<Object>();

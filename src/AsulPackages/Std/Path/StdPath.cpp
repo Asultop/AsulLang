@@ -73,6 +73,32 @@ void registerStdPathPackage(Interpreter& interp) {
 		};
 		(*pathPkg)["isAbsolute"] = Value{ isAbsFn };
 
+		// normalize(path) - normalize path by resolving . and .. segments
+		auto normalizeFn = std::make_shared<Function>(); normalizeFn->isBuiltin = true;
+		normalizeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) return Value{ std::string(".") };
+			fs::path p(toString(args[0]));
+			return Value{ p.lexically_normal().string() };
+		};
+		(*pathPkg)["normalize"] = Value{ normalizeFn };
+
+		// relative(from, to) - get relative path from 'from' to 'to'
+		auto relativeFn = std::make_shared<Function>(); relativeFn->isBuiltin = true;
+		relativeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() < 2) {
+				throw std::runtime_error("relative expects 2 arguments (from, to)");
+			}
+			fs::path from(toString(args[0]));
+			fs::path to(toString(args[1]));
+			
+			// Make both paths absolute for comparison
+			if (!from.is_absolute()) from = fs::absolute(from);
+			if (!to.is_absolute()) to = fs::absolute(to);
+			
+			return Value{ fs::relative(to, from).string() };
+		};
+		(*pathPkg)["relative"] = Value{ relativeFn };
+
 		(*pathPkg)["sep"] = Value{ std::string(1, fs::path::preferred_separator) };
 	});
 }

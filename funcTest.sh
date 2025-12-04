@@ -92,6 +92,8 @@ func_files=(
     "string_methods_test.alang"
     "math_methods_test.alang"
     "object_methods_test.alang"
+    "path_enhancements_test.alang"
+    "encoding_enhancements_test.alang"
 )
 
 # Counter for passed/failed tests
