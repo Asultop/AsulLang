@@ -2027,12 +2027,13 @@ public:
 				fn->builtin = [this,a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 					if (!a) return Value{std::monostate{}};
 					if (args.empty()) throw std::runtime_error("chunk expects size argument");
-					int size = static_cast<int>(getNumber(args[0], "chunk size"));
-					if (size <= 0) throw std::runtime_error("chunk size must be positive");
+					double sizeD = getNumber(args[0], "chunk size");
+					if (sizeD <= 0) throw std::runtime_error("chunk size must be positive");
+					size_t chunkSize = static_cast<size_t>(sizeD);
 					auto out = std::make_shared<Array>();
-					for (size_t i = 0; i < a->size(); i += size) {
+					for (size_t i = 0; i < a->size(); i += chunkSize) {
 						auto chunk = std::make_shared<Array>();
-						for (int j = 0; j < size && i + j < a->size(); ++j) {
+						for (size_t j = 0; j < chunkSize && i + j < a->size(); ++j) {
 							chunk->push_back((*a)[i + j]);
 						}
 						out->push_back(Value{chunk});
