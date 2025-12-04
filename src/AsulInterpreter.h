@@ -2820,6 +2820,10 @@ public:
 		}
 		importPackageSymbols("std.io");
 
+		// NOTE: Global builtins (len, push, typeof) are now registered via
+		// registerStdBuiltinPackage() called in registerExternalPackages()
+		// TODO: Extract remaining builtins (performance, quote, eval, sleep, Promise) to StdBuiltin.cpp
+
 		// ===== Date & Time (std.time) =====
 
 
@@ -2829,20 +2833,6 @@ public:
 
 		// 注意：不要把 json 自动注册到 `std.` 根下，保持顶层包 `json` 独立。
 		// (之前为兼容性添加的 std.json 别名已移除，以符合不将所有包放到 std. 的理念)
-
-		// len(x): string/array/object长度
-		auto lenFn = std::make_shared<Function>();
-		lenFn->isBuiltin = true;
-		lenFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-			if (args.size() != 1) throw std::runtime_error("len expects 1 argument");
-			const Value& v = args[0];
-			if (auto s = std::get_if<std::string>(&v)) return Value{ static_cast<double>(s->size()) };
-			if (auto a = std::get_if<std::shared_ptr<Array>>(&v)) return Value{ static_cast<double>((*a) ? (*a)->size() : 0) };
-			if (auto o = std::get_if<std::shared_ptr<Object>>(&v)) return Value{ static_cast<double>((*o) ? (*o)->size() : 0) };
-			if (std::holds_alternative<std::monostate>(v)) return Value{ 0.0 };
-			throw std::runtime_error("len: unsupported type: " + typeOf(v));
-		};
-		globals->define("len", lenFn);
 
 		// performance.now()
 		auto perfObj = std::make_shared<Object>();
