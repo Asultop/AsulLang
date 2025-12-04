@@ -14,7 +14,7 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 	
 	// Collections are registered in a block scope to organize the code
 	{
-					auto mapClass = std::make_shared<ClassInfo>(); mapClass->name = "Map";
+					auto mapClass = std::make_shared<ClassInfo>(); mapClass->name = "Map"; mapClass->isNative = true;
 
 					// helpers to extract InstanceExt from closure
 					auto getThisInstanceExt = [](std::shared_ptr<Environment> clos)->InstanceExt* {
@@ -25,6 +25,24 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 						if (!pins) throw std::runtime_error("internal: null 'this'");
 						return static_cast<InstanceExt*>(pins.get());
 					};
+
+					// constructor method for Map class (enables "new Map()")
+					auto mapConstructor = std::make_shared<Function>();
+					mapConstructor->isBuiltin = true;
+					mapConstructor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+						Value thisVal = clos->get("this");
+						if (!std::holds_alternative<std::shared_ptr<Instance>>(thisVal)) 
+							throw std::runtime_error("Map.constructor: 'this' is not an instance");
+						auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+						auto instExt = static_cast<InstanceExt*>(inst.get());
+						// Allocate native map handle
+						auto nm = new NativeMap();
+						instExt->nativeHandle = nm;
+						instExt->nativeDestructor = [](void* p){ delete static_cast<NativeMap*>(p); };
+						return Value{std::monostate{}};
+					};
+					mapClass->methods["constructor"] = mapConstructor;
+
 
 					// map.set(key, value)
 					auto setFn = std::make_shared<Function>(); setFn->isBuiltin = true;
@@ -128,7 +146,20 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 					globals->define("map", mapCtor);
 
 					// ---- Set (native) ----
-					auto setClass = std::make_shared<ClassInfo>(); setClass->name = "Set";
+					auto setClass = std::make_shared<ClassInfo>(); setClass->name = "Set"; setClass->isNative = true;
+					// constructor method for Set class
+					auto setConstructor = std::make_shared<Function>();
+					setConstructor->isBuiltin = true;
+					setConstructor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+						Value thisVal = clos->get("this");
+						auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+						auto instExt = static_cast<InstanceExt*>(inst.get());
+						auto ns = new NativeSet();
+						instExt->nativeHandle = ns;
+						instExt->nativeDestructor = [](void* p){ delete static_cast<NativeSet*>(p); };
+						return Value{std::monostate{}};
+					};
+					setClass->methods["constructor"] = setConstructor;
 					auto setAdd = std::make_shared<Function>(); setAdd->isBuiltin = true;
 					setAdd->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
 						if (args.size()!=1) throw std::runtime_error("set.add expects 1 argument");
@@ -220,7 +251,20 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 
 					// ---- Deque (native) ----
 					struct NativeDeque { std::deque<Value> d; };
-					auto dequeClass = std::make_shared<ClassInfo>(); dequeClass->name = "Deque";
+					auto dequeClass = std::make_shared<ClassInfo>(); dequeClass->name = "Deque"; dequeClass->isNative = true;
+					// constructor method for Deque class
+					auto dequeConstructor = std::make_shared<Function>();
+					dequeConstructor->isBuiltin = true;
+					dequeConstructor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+						Value thisVal = clos->get("this");
+						auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+						auto instExt = static_cast<InstanceExt*>(inst.get());
+						auto nd = new NativeDeque();
+						instExt->nativeHandle = nd;
+						instExt->nativeDestructor = [](void* p){ delete static_cast<NativeDeque*>(p); };
+						return Value{std::monostate{}};
+					};
+					dequeClass->methods["constructor"] = dequeConstructor;
 					auto dpush = std::make_shared<Function>(); dpush->isBuiltin = true; dpush->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto nd = static_cast<NativeDeque*>(ie->nativeHandle); for (auto &v: args) nd->d.push_back(v); return Value{ static_cast<double>(nd->d.size()) }; };
 					dequeClass->methods["push"] = dpush;
 					auto dpop = std::make_shared<Function>(); dpop->isBuiltin = true; dpop->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto nd = static_cast<NativeDeque*>(ie->nativeHandle); if (nd->d.empty()) return Value{std::monostate{}}; Value v = nd->d.back(); nd->d.pop_back(); return v; };
@@ -241,7 +285,20 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 
 					// ---- Stack (native) ----
 					struct NativeStack { std::vector<Value> v; };
-					auto stackClass = std::make_shared<ClassInfo>(); stackClass->name = "Stack";
+					auto stackClass = std::make_shared<ClassInfo>(); stackClass->name = "Stack"; stackClass->isNative = true;
+					// constructor method for Stack class
+					auto stackConstructor = std::make_shared<Function>();
+					stackConstructor->isBuiltin = true;
+					stackConstructor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+						Value thisVal = clos->get("this");
+						auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+						auto instExt = static_cast<InstanceExt*>(inst.get());
+						auto ns = new NativeStack();
+						instExt->nativeHandle = ns;
+						instExt->nativeDestructor = [](void* p){ delete static_cast<NativeStack*>(p); };
+						return Value{std::monostate{}};
+					};
+					stackClass->methods["constructor"] = stackConstructor;
 					auto spush = std::make_shared<Function>(); spush->isBuiltin = true; spush->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeStack*>(ie->nativeHandle); for (auto &x: args) ns->v.push_back(x); return Value{ static_cast<double>(ns->v.size()) }; };
 					stackClass->methods["push"] = spush;
 					auto spop = std::make_shared<Function>(); spop->isBuiltin = true; spop->builtin = [getThisInstanceExt](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value { InstanceExt* ie = getThisInstanceExt(clos); auto ns = static_cast<NativeStack*>(ie->nativeHandle); if (ns->v.empty()) return Value{std::monostate{}}; Value v = ns->v.back(); ns->v.pop_back(); return v; };
@@ -258,7 +315,20 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 
 					// ---- PriorityQueue (native) ----
 					struct NativePriorityQueue { struct Node { double priority; Value value; }; std::vector<Node> heap; };
-					auto pqClass = std::make_shared<ClassInfo>(); pqClass->name = "PriorityQueue";
+					auto pqClass = std::make_shared<ClassInfo>(); pqClass->name = "PriorityQueue"; pqClass->isNative = true;
+					// constructor method for PriorityQueue class
+					auto pqConstructor = std::make_shared<Function>();
+					pqConstructor->isBuiltin = true;
+					pqConstructor->builtin = [](const std::vector<Value>&, std::shared_ptr<Environment> clos)->Value {
+						Value thisVal = clos->get("this");
+						auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+						auto instExt = static_cast<InstanceExt*>(inst.get());
+						auto npq = new NativePriorityQueue();
+						instExt->nativeHandle = npq;
+						instExt->nativeDestructor = [](void* p){ delete static_cast<NativePriorityQueue*>(p); };
+						return Value{std::monostate{}};
+					};
+					pqClass->methods["constructor"] = pqConstructor;
 					auto pqPush = std::make_shared<Function>(); pqPush->isBuiltin = true; pqPush->builtin = [getThisInstanceExt](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
 						if (args.size()!=2) throw std::runtime_error("priorityQueue.push expects value, priority");
 						InstanceExt* ie = getThisInstanceExt(clos);
