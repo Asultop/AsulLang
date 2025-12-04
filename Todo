@@ -1,54 +1,57 @@
-# ALang 标准库 - 缺失功能与待办事项
 
-## 1. 字符串处理 (std.string)
-- [x] **大小写转换**: `toUpperCase()`, `toLowerCase()`
-- [x] **去除空白**: `trim()`, `trimLeft()`, `trimRight()`
-- [x] **分割/合并**: `split(delimiter)`, `join(separator)` (目前 Array 有 `join`，但缺失 `split`)
-- [x] **搜索**: `indexOf(substr)`, `lastIndexOf(substr)`, `startsWith(prefix)`, `endsWith(suffix)`, `includes(substr)`
-- [x] **子串**: `substring(start, end)`, `slice(start, end)`
-- [x] **填充**: `padStart(len, char)`, `padEnd(len, char)`
-- [x] **编码**: `std.encoding.base64`, `std.encoding.hex`, `std.encoding.url`
-
-## 2. 集合与算法 (std.collections)
-- [x] **排序**: 数组的 `sort(comparator)` (目前有基础排序，需要稳定排序/自定义比较器)
-- [x] **过滤/映射**: `filter`, `map`, `reduce` (作为全局/数组方法已存在，需验证完整性)
-- [x] **集合操作**: `Set` 类的 `union` (并集), `intersection` (交集), `difference` (差集)
-- [x] **优先队列**: `std.collections.PriorityQueue` (堆)
-- [x] **二分查找**: `std.collections.binarySearch`
-
-## 3. 日期与时间 (std.time)
-- [x] **格式化**: `strftime` 风格格式化 (例如 `format("YYYY-MM-DD")`)
-- [x] **解析**: `parse(dateString, formatString)`
-- [x] **时区**: 存在基础 UTC/Local 支持，但可能缺失完整的 TZDB 支持
-- [x] **时间段**: 用于时间运算的 `Duration` 类 (例如 `date + duration`)
-- [x] **高精度计时器**: 用于基准测试的 `performance.now()`
-
-## 4. 输入/输出与操作系统 (std.io / std.os)
-- [x] **路径操作**: `std.path` 模块 (`join`, `resolve`, `dirname`, `basename`, `extname`, `isAbsolute`)
-- [x] **文件流**: 缓冲读写 (行, 块) - `FileStream` 已重写为有状态缓冲流
-- [x] **标准流**: 作为流对象访问 `stdin`, `stdout`, `stderr`
-- [x] **进程控制**: `os.system`, `os.popen` (支持读取输出), `os.getenv`, `os.setenv`
-- [x] **信号**: 处理 `SIGINT`, `SIGTERM`
-
-## 5. 网络 (std.network)
-- [x] **Socket API**: 用于原始连接的 `std.network.Socket` (TCP/UDP)
-- [x] **HTTP 服务器**: 用于构建 Web 后端的 `std.network.http.Server`
-- [x] **URL 解析**: `std.network.URL` 类 (`protocol`, `host`, `path`, `query`)
-- [x] **Fetch API**: 基础版 `std.network.fetch`（headers/method/body），后续可扩展；保留同步 `get/post` 辅助
-
-## 6. 数据格式 (std.data)
-- [x] **CSV**: 用于读写 CSV 文件的 `std.csv`
-- [x] **XML/YAML**: 如果需要，提供基础解析器
-- [x] **JSON**: `json.parse` 和 `json.stringify` 已在 `ALangEngine.cpp` 中实现。
-
-## 7. 加密 (std.crypto)
-- [ ] **哈希**: `md5`, `sha1`, `sha256`
-- [ ] **随机数**: `crypto.randomUUID()`, `crypto.getRandomValues()` (安全随机数)
-
-## 8. 开发者工具
+## 1. 开发者工具
 - [ ] **单元测试**: `std.test` 模块 (`assert`, `describe`, `it`)
 - [ ] **日志**: 带有级别 (INFO, WARN, ERROR) 和输出配置的 `std.log`
 - [ ] **调试器**: 用于附加调试器或编程方式检查栈帧的钩子
 
-## 9. 系统集成
+## 2. 系统集成
 - [ ] **FFI (外部函数接口)**: 调用动态库 (`.so`/`.dll`) 中 C 函数的能力
+
+## 3. 语言与运行时
+- [ ] **类型系统增强**: 类型别名、联合类型、泛型占位、运行时类型守卫
+- [ ] **异常/错误统一**: 标准化异常对象字段、统一栈追踪格式、`finally` 支持
+- [ ] **事件循环扩展**: 任务队列监控、微/宏任务区分、`Promise.all/race/any`
+- [ ] **语法算子**: `??`, `??=`, `&&=`, `||=`, 解构赋值与默认值
+- [ ] **迭代器协议**: 对象/类的迭代器钩子，明确 `forEach`/`for..in` 语义
+
+## 4. 标准库增强 (std.*)
+- [ ] **std.string**: `replaceAll`, `localeCompare`, `repeat`, `normalize(NFC/NFD)`
+- [ ] **std.array**: `flat`, `flatMap`, `groupBy`, `chunk`, `unique`, `zip`, `diff`
+- [ ] **std.object**: `keys`, `values`, `entries`, `fromEntries`, 深/浅拷贝
+- [ ] **std.math**: `clamp`, `lerp`, 随机分布(均匀/正态), 浮点近似比较
+- [ ] **std.time**: 统一格式化/解析模板、TZDB 绑定缓存、`parseISO`
+- [ ] **std.path**: `relative`, `normalize`，跨平台分隔符/驱动器差异处理
+- [ ] **std.log**: 级别控制、结构化(JSON)日志、颜色开关、sink 管理
+- [ ] **std.test**: `assert`、`describe/it`、断言库与报告集成到 `funcTest.sh`
+- [ ] **std.crypto (扩展)**: AES-256-CBC、RSA-2048(生成/加解密/签名验签)、流式 Hash；可配置 provider/FIPS
+- [ ] **std.encoding**: Base64URL、UTF-8/UTF-16 编解码一致化、hex↔字节数组
+
+## 5. IO 与系统
+- [ ] **std.io.fileSystem**: 递归拷贝/删除、权限/所有者、临时文件/目录、原子写
+- [ ] **文件流**: 行/二进制迭代器、超时/取消令牌、背压策略
+- [ ] **进程管理**: `spawn`(env/cwd/管道)、超时/返回码、同步/异步统一
+- [ ] **OS 环境**: `homedir`, `tmpdir`，`getenv/setenv` 跨平台一致化与错误统一
+
+## 6. 网络
+- [ ] **HTTP 客户端**: 连接池、重试、超时/取消、JSON 自动序列化/解析、表单/多部分上传
+- [ ] **HTTP 服务器**: 中间件(日志/限流/CORS)、路由/参数解析、错误处理中间件
+- [ ] **Socket**: 心跳/重连、消息分帧、TLS 客户端/服务端 (OpenSSL)
+
+## 7. 数据格式
+- [ ] **CSV 增强**: RFC4180 完整支持(多行字段/BOM/空字段)、类型推断开关、`parseStream`
+- [ ] **JSON 增强**: `reviver/replacer`、bigint/精度控制、循环引用检测
+- [ ] **XML/YAML**: 命名空间/属性增强、错误定位、YAML 锚/别名；统一异常消息
+
+## 8. 模块与导入
+- [ ] **包管理**: 懒加载子包自动索引、`import pkg *` 语法与解析器支持
+- [ ] **文件导入**: 相对/绝对路径策略统一、导出规则文档化、循环导入提示与防护
+
+## 9. 安全与健壮性
+- [ ] **输入校验**: std.* 参数类型/范围统一校验，错误消息标准化
+- [ ] **资源清理**: 流/socket/HTTP 的自动关闭与错误路径清理保障
+- [ ] **沙箱模式**: 可选限制文件系统/网络访问的执行模式
+
+## 10. 工程化与构建
+- [ ] **CMake 选项**: `ASUL_ENABLE_OPENSSL` 等开关，平台特性探测，弃用 API 说明
+- [ ] **文档/示例索引**: `Example` 目录 README 索引，模块入口示例
+- [ ] **测试分层**: 将 `funcTest.sh` 拆分为快速/完整两套，输出统计或覆盖率(可选)
