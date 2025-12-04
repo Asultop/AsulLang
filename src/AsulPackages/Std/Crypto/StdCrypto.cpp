@@ -587,8 +587,12 @@ void registerStdCryptoPackage(Interpreter& interp) {
             
             auto hashObj = std::make_shared<Object>();
             
-            // Store context as a raw pointer in a special field (not ideal but works for this use case)
-            // We'll manage the lifetime through the object
+            // Store context as a raw pointer in a shared_ptr<void*> wrapper
+            // This approach allows us to:
+            // 1. Share the EVP_MD_CTX pointer between update() and digest() closures
+            // 2. Track whether digest() has been called (nullptr check)
+            // 3. Properly clean up OpenSSL resources when digest() is called
+            // Note: The context is freed in digest(), preventing reuse after finalization
             auto ctxPtr = std::make_shared<void*>(static_cast<void*>(ctx));
             
             // update(data: string) -> this
@@ -601,6 +605,9 @@ void registerStdCryptoPackage(Interpreter& interp) {
                 std::string data = std::get<std::string>(args[0]);
                 
                 EVP_MD_CTX* ctx = static_cast<EVP_MD_CTX*>(*ctxPtr);
+                if (!ctx) {
+                    throw std::runtime_error("Hash already finalized - cannot update after digest() called");
+                }
                 if (EVP_DigestUpdate(ctx, data.data(), data.size()) != 1) {
                     throw std::runtime_error("EVP_DigestUpdate failed");
                 }
@@ -613,6 +620,10 @@ void registerStdCryptoPackage(Interpreter& interp) {
             auto digestFn = std::make_shared<Function>(); digestFn->isBuiltin = true;
             digestFn->builtin = [ctxPtr, hexOut](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
                 EVP_MD_CTX* ctx = static_cast<EVP_MD_CTX*>(*ctxPtr);
+                
+                if (!ctx) {
+                    throw std::runtime_error("Hash already finalized - digest() can only be called once");
+                }
                 
                 unsigned char hash[EVP_MAX_MD_SIZE];
                 unsigned int hash_len = 0;
