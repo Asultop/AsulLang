@@ -332,6 +332,249 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 				};
 				(*promiseObj)["reject"] = fn;
 			}
+			// Promise.all(array) - resolves when all promises resolve, rejects if any reject
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
+						throw std::runtime_error("Promise.all expects an array of promises");
+					}
+					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+					auto resultPromise = std::make_shared<PromiseState>();
+					resultPromise->loopPtr = interpPtr;
+					
+					if (arr->empty()) {
+						// Empty array resolves immediately with empty array
+						interpPtr->settlePromise(resultPromise, false, Value{std::make_shared<Array>()});
+						return Value{resultPromise};
+					}
+					
+					// Shared state for tracking completion
+					struct AllState {
+						std::shared_ptr<Array> results;
+						size_t remaining;
+						bool rejected = false;
+						std::shared_ptr<PromiseState> resultPromise;
+						Interpreter* interpPtr;
+					};
+					auto state = std::make_shared<AllState>();
+					state->results = std::make_shared<Array>(arr->size());
+					state->remaining = arr->size();
+					state->resultPromise = resultPromise;
+					state->interpPtr = interpPtr;
+					
+					for (size_t i = 0; i < arr->size(); ++i) {
+						const auto& elem = (*arr)[i];
+						if (std::holds_alternative<std::shared_ptr<PromiseState>>(elem)) {
+							auto p = std::get<std::shared_ptr<PromiseState>>(elem);
+							size_t index = i;
+							
+							// Add then callback
+							auto thenCb = std::make_shared<Function>();
+							thenCb->isBuiltin = true;
+							thenCb->builtin = [state, index](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->rejected) {
+									(*state->results)[index] = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->remaining--;
+									if (state->remaining == 0) {
+										state->interpPtr->settlePromise(state->resultPromise, false, Value{state->results});
+									}
+								}
+								return Value{std::monostate{}};
+							};
+							p->thenCallbacks.push_back({thenCb, nullptr});
+							
+							// Add catch callback
+							auto catchCb = std::make_shared<Function>();
+							catchCb->isBuiltin = true;
+							catchCb->builtin = [state](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->rejected) {
+									state->rejected = true;
+									Value reason = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->interpPtr->settlePromise(state->resultPromise, true, reason);
+								}
+								return Value{std::monostate{}};
+							};
+							p->catchCallbacks.push_back({catchCb, nullptr});
+							
+							// If promise is already settled, dispatch callbacks
+							if (p->settled) {
+								interpPtr->dispatchPromiseCallbacks(p);
+							}
+						} else {
+							// Non-promise value, treat as resolved
+							(*state->results)[i] = elem;
+							state->remaining--;
+							if (state->remaining == 0) {
+								interpPtr->settlePromise(state->resultPromise, false, Value{state->results});
+							}
+						}
+					}
+					
+					return Value{resultPromise};
+				};
+				(*promiseObj)["all"] = fn;
+			}
+			// Promise.race(array) - resolves/rejects with the first settled promise
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
+						throw std::runtime_error("Promise.race expects an array of promises");
+					}
+					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+					auto resultPromise = std::make_shared<PromiseState>();
+					resultPromise->loopPtr = interpPtr;
+					
+					if (arr->empty()) {
+						// Empty array, promise stays pending forever (as per spec)
+						return Value{resultPromise};
+					}
+					
+					// Shared state for tracking settlement
+					struct RaceState {
+						bool settled = false;
+						std::shared_ptr<PromiseState> resultPromise;
+						Interpreter* interpPtr;
+					};
+					auto state = std::make_shared<RaceState>();
+					state->resultPromise = resultPromise;
+					state->interpPtr = interpPtr;
+					
+					for (size_t i = 0; i < arr->size(); ++i) {
+						const auto& elem = (*arr)[i];
+						if (std::holds_alternative<std::shared_ptr<PromiseState>>(elem)) {
+							auto p = std::get<std::shared_ptr<PromiseState>>(elem);
+							
+							// Add then callback
+							auto thenCb = std::make_shared<Function>();
+							thenCb->isBuiltin = true;
+							thenCb->builtin = [state](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->settled) {
+									state->settled = true;
+									Value value = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->interpPtr->settlePromise(state->resultPromise, false, value);
+								}
+								return Value{std::monostate{}};
+							};
+							p->thenCallbacks.push_back({thenCb, nullptr});
+							
+							// Add catch callback
+							auto catchCb = std::make_shared<Function>();
+							catchCb->isBuiltin = true;
+							catchCb->builtin = [state](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->settled) {
+									state->settled = true;
+									Value reason = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->interpPtr->settlePromise(state->resultPromise, true, reason);
+								}
+								return Value{std::monostate{}};
+							};
+							p->catchCallbacks.push_back({catchCb, nullptr});
+							
+							// If promise is already settled, dispatch callbacks
+							if (p->settled) {
+								interpPtr->dispatchPromiseCallbacks(p);
+							}
+						} else {
+							// Non-promise value, settle immediately
+							if (!state->settled) {
+								state->settled = true;
+								interpPtr->settlePromise(state->resultPromise, false, elem);
+							}
+							break;
+						}
+					}
+					
+					return Value{resultPromise};
+				};
+				(*promiseObj)["race"] = fn;
+			}
+			// Promise.any(array) - resolves with the first resolved promise, rejects if all reject
+			{
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
+						throw std::runtime_error("Promise.any expects an array of promises");
+					}
+					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
+					auto resultPromise = std::make_shared<PromiseState>();
+					resultPromise->loopPtr = interpPtr;
+					
+					if (arr->empty()) {
+						// Empty array rejects with AggregateError
+						interpPtr->settlePromise(resultPromise, true, Value{std::string("AggregateError: No promises to resolve")});
+						return Value{resultPromise};
+					}
+					
+					// Shared state for tracking completion
+					struct AnyState {
+						std::shared_ptr<Array> errors;
+						size_t remaining;
+						bool resolved = false;
+						std::shared_ptr<PromiseState> resultPromise;
+						Interpreter* interpPtr;
+					};
+					auto state = std::make_shared<AnyState>();
+					state->errors = std::make_shared<Array>(arr->size());
+					state->remaining = arr->size();
+					state->resultPromise = resultPromise;
+					state->interpPtr = interpPtr;
+					
+					for (size_t i = 0; i < arr->size(); ++i) {
+						const auto& elem = (*arr)[i];
+						if (std::holds_alternative<std::shared_ptr<PromiseState>>(elem)) {
+							auto p = std::get<std::shared_ptr<PromiseState>>(elem);
+							size_t index = i;
+							
+							// Add then callback
+							auto thenCb = std::make_shared<Function>();
+							thenCb->isBuiltin = true;
+							thenCb->builtin = [state](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->resolved) {
+									state->resolved = true;
+									Value value = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->interpPtr->settlePromise(state->resultPromise, false, value);
+								}
+								return Value{std::monostate{}};
+							};
+							p->thenCallbacks.push_back({thenCb, nullptr});
+							
+							// Add catch callback
+							auto catchCb = std::make_shared<Function>();
+							catchCb->isBuiltin = true;
+							catchCb->builtin = [state, index](const std::vector<Value>& cbArgs, std::shared_ptr<Environment>) -> Value {
+								if (!state->resolved) {
+									(*state->errors)[index] = cbArgs.empty() ? Value{std::monostate{}} : cbArgs[0];
+									state->remaining--;
+									if (state->remaining == 0) {
+										// All promises rejected
+										state->interpPtr->settlePromise(state->resultPromise, true, 
+											Value{std::string("AggregateError: All promises were rejected")});
+									}
+								}
+								return Value{std::monostate{}};
+							};
+							p->catchCallbacks.push_back({catchCb, nullptr});
+							
+							// If promise is already settled, dispatch callbacks
+							if (p->settled) {
+								interpPtr->dispatchPromiseCallbacks(p);
+							}
+						} else {
+							// Non-promise value, resolve immediately
+							if (!state->resolved) {
+								state->resolved = true;
+								interpPtr->settlePromise(state->resultPromise, false, elem);
+							}
+							break;
+						}
+					}
+					
+					return Value{resultPromise};
+				};
+				(*promiseObj)["any"] = fn;
+			}
 			globals->define("Promise", Value{promiseObj});
 
 }

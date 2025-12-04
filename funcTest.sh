@@ -94,6 +94,7 @@ func_files=(
     "object_methods_test.alang"
     "path_enhancements_test.alang"
     "encoding_enhancements_test.alang"
+    "promise_utilities_test.alang"
 )
 
 # Counter for passed/failed tests
