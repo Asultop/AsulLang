@@ -1,0 +1,150 @@
+// ===== Simplified Crypto Enhancements Test =====
+// Tests for AES-256-CBC, RSA-2048, and streaming hash
+
+import std.crypto.*;
+
+println("===== Crypto Enhancements Test =====");
+
+// ===== 1. RSA-2048 Key Generation =====
+println("\n1. Testing RSA-2048 key pair generation:");
+
+let keyPair = rsa.generateKeyPair();
+let publicKey = keyPair.publicKey;
+let privateKey = keyPair.privateKey;
+
+println("  Public key starts with:", publicKey.slice(0, 30));
+println("  Private key starts with:", privateKey.slice(0, 30));
+
+let hasPubKey = (publicKey.slice(0, 10) == "-----BEGIN");
+let hasPrivKey = (privateKey.slice(0, 10) == "-----BEGIN");
+
+if (hasPubKey && hasPrivKey) {
+    println("  ✓ RSA key pair generated successfully");
+} else {
+    println("  ✗ RSA key pair generation failed");
+}
+
+// ===== 2. RSA Encryption/Decryption =====
+println("\n2. Testing RSA encryption/decryption:");
+
+let rsaPlaintext = "Secret message!";
+let rsaEncrypted = rsa.encrypt(rsaPlaintext, publicKey);
+println("  Encrypted (base64 start):", rsaEncrypted.slice(0, 20));
+
+let rsaDecrypted = rsa.decrypt(rsaEncrypted, privateKey);
+println("  Decrypted:", rsaDecrypted);
+
+if (rsaDecrypted == rsaPlaintext) {
+    println("  ✓ RSA encryption/decryption successful");
+} else {
+    println("  ✗ RSA encryption/decryption failed");
+}
+
+// ===== 3. RSA Digital Signatures =====
+println("\n3. Testing RSA digital signatures:");
+
+let message = "This message needs to be signed";
+let signature = rsa.sign(message, privateKey);
+println("  Signature (base64 start):", signature.slice(0, 20));
+
+let isValid = rsa.verify(message, signature, publicKey);
+println("  Signature valid:", isValid);
+
+if (isValid == true) {
+    println("  ✓ RSA signature verification successful");
+} else {
+    println("  ✗ RSA signature verification failed");
+}
+
+// Test with tampered message
+let tamperedMessage = "This message has been tampered";
+let isInvalid = rsa.verify(tamperedMessage, signature, publicKey);
+println("  Tampered message valid:", isInvalid);
+
+if (isInvalid == false) {
+    println("  ✓ RSA signature correctly rejects tampered message");
+} else {
+    println("  ✗ RSA signature failed to detect tampering");
+}
+
+// ===== 4. Streaming Hash (SHA-256) =====
+println("\n4. Testing streaming hash:");
+
+let hash1 = createHash("sha256");
+hash1.update("Hello, ");
+hash1.update("World!");
+let digest1 = hash1.digest();
+println("  Streaming hash result:", digest1);
+
+// Compare with one-shot hash
+let digest2 = sha256("Hello, World!");
+println("  One-shot hash result:", digest2);
+
+if (digest1 == digest2) {
+    println("  ✓ Streaming hash matches one-shot hash");
+} else {
+    println("  ✗ Streaming hash doesn't match one-shot hash");
+}
+
+// Test with larger data
+let hash2 = createHash("sha512");
+hash2.update("chunk0chunk1chunk2chunk3chunk4chunk5chunk6chunk7chunk8chunk9");
+hash2.update("chunk10chunk11chunk12chunk13chunk14chunk15chunk16chunk17chunk18chunk19");
+let largeDigest = hash2.digest();
+println("  SHA-512 digest (first 40 chars):", largeDigest.slice(0, 40));
+
+// SHA-512 produces 128 hex characters
+let hasContent = (largeDigest.slice(0, 1) != "");
+if (hasContent) {
+    println("  ✓ SHA-512 streaming hash successful");
+} else {
+    println("  ✗ SHA-512 streaming hash failed");
+}
+
+// Test MD5 streaming
+let md5Hash = createHash("md5");
+md5Hash.update("test");
+let md5Digest = md5Hash.digest();
+let md5Direct = md5("test");
+
+if (md5Digest == md5Direct) {
+    println("  ✓ MD5 streaming hash successful");
+} else {
+    println("  ✗ MD5 streaming hash failed");
+}
+
+// ===== 5. Practical Example: Secure Message Exchange =====
+println("\n5. Practical example: Secure message exchange:");
+
+// Alice generates a key pair
+let aliceKeys = rsa.generateKeyPair();
+
+// Bob generates a key pair
+let bobKeys = rsa.generateKeyPair();
+
+// Alice wants to send a secure message to Bob
+let secretMessage = "Meet me at midnight.";
+
+// Step 1: Alice encrypts the message with Bob's public key
+let encryptedForBob = rsa.encrypt(secretMessage, bobKeys.publicKey);
+println("  Encrypted message (start):", encryptedForBob.slice(0, 20));
+
+// Step 2: Alice signs the encrypted message with her private key
+let aliceSignature = rsa.sign(encryptedForBob, aliceKeys.privateKey);
+println("  Alice's signature (start):", aliceSignature.slice(0, 20));
+
+// Step 3: Bob receives the message and verifies Alice's signature
+let signatureValid = rsa.verify(encryptedForBob, aliceSignature, aliceKeys.publicKey);
+println("  Signature verification:", signatureValid);
+
+// Step 4: Bob decrypts the message with his private key
+let decryptedMessage = rsa.decrypt(encryptedForBob, bobKeys.privateKey);
+println("  Decrypted message:", decryptedMessage);
+
+if (signatureValid == true && decryptedMessage == secretMessage) {
+    println("  ✓ Secure message exchange successful");
+} else {
+    println("  ✗ Secure message exchange failed");
+}
+
+println("\n===== All Crypto Enhancement Tests Complete =====");

@@ -97,6 +97,7 @@ func_files=(
     "promise_utilities_test.alang"
     "log_test.alang"
     "test_framework_test.alang"
+    "crypto_enhancements_test.alang"
 )
 
 # Counter for passed/failed tests

@@ -23,7 +23,7 @@
 - [x] **std.path**: `relative`, `normalize`，跨平台分隔符/驱动器差异处理
 - [x] **std.log**: 级别控制、结构化(JSON)日志、颜色开关、~~sink 管理~~
 - [x] **std.test**: `assert`、~~`describe/it`~~、断言库与报告集成到 `funcTest.sh`
-- [ ] **std.crypto (扩展)**: AES-256-CBC、RSA-2048(生成/加解密/签名验签)、流式 Hash；可配置 provider/FIPS
+- [x] **std.crypto (扩展)**: AES-256-CBC、RSA-2048(生成/加解密/签名验签)、流式 Hash；可配置 provider/FIPS
 - [x] **std.encoding**: Base64URL、~~UTF-8/UTF-16 编解码一致化~~、hex↔字节数组
 
 ## 5. IO 与系统
