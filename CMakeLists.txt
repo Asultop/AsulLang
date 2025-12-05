@@ -45,10 +45,13 @@ set(SRCS
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
 
-if(USE_READLINE)
+# Readline is only available on Unix-like systems
+if(USE_READLINE AND NOT WIN32)
   # 首先尝试pkg-config
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(READLINE readline)
+  find_package(PkgConfig QUIET)
+  if(PKG_CONFIG_FOUND)
+    pkg_check_modules(READLINE readline)
+  endif()
 
   if(READLINE_FOUND)
     message(STATUS "readline found via pkg-config")
@@ -73,6 +76,8 @@ if(USE_READLINE)
       message(STATUS "readline not found; REPL will fall back to getline")
     endif()
   endif()
+elseif(WIN32)
+  message(STATUS "Windows platform detected; REPL will use standard input (readline not supported on Windows)")
 endif()
 
 add_executable(alang ${SRCS})
