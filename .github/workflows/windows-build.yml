@@ -1,0 +1,64 @@
+name: Windows Build and Test
+
+on:
+  push:
+    branches: [ main, develop, copilot/** ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Setup Visual Studio environment
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: Install OpenSSL
+      run: |
+        choco install openssl -y
+        echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64" >> $env:GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=C:/Program Files/OpenSSL-Win64/include" >> $env:GITHUB_ENV
+        echo "OPENSSL_CRYPTO_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libcrypto.lib" >> $env:GITHUB_ENV
+        echo "OPENSSL_SSL_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libssl.lib" >> $env:GITHUB_ENV
+    
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -G "Visual Studio 17 2022" -A x64 `
+          -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64" `
+          -DOPENSSL_INCLUDE_DIR="C:/Program Files/OpenSSL-Win64/include" `
+          -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release
+    
+    - name: Test basic execution
+      run: |
+        cd build/Release
+        echo "println('Hello from Windows!');" > test.alang
+        ./alang.exe test.alang
+    
+    - name: Run example tests
+      run: |
+        cd build/Release
+        # Test array methods
+        ./alang.exe ../../Example/array_select_methods.alang
+        # Test string methods  
+        ./alang.exe ../../Example/string_methods_test.alang
+        # Test math methods
+        ./alang.exe ../../Example/math_methods_test.alang
+      continue-on-error: true
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-build
+        path: build/Release/alang.exe

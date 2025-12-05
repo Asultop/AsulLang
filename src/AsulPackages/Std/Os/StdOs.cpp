@@ -2,8 +2,21 @@
 #include "../../../AsulInterpreter.h"
 #include <cstdlib>
 #include <csignal>
-#include <unistd.h>
 #include <filesystem>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <process.h>
+    #define getpid _getpid
+    #define popen _popen
+    #define pclose _pclose
+    // Windows doesn't have setenv, use _putenv_s
+    inline int setenv(const char* name, const char* value, int overwrite) {
+        return _putenv_s(name, value);
+    }
+#else
+    #include <unistd.h>
+#endif
 
 namespace asul {
 

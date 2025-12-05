@@ -1,11 +1,17 @@
 #include "StdFfi.h"
 #include "../../../AsulInterpreter.h"
-#include <dlfcn.h>
 #include <cstring>
 #include <unordered_map>
 
 #ifdef _WIN32
-#include <windows.h>
+    #include <windows.h>
+    // Define Unix-like constants for Windows
+    #define RTLD_LAZY    0x00001
+    #define RTLD_NOW     0x00002
+    #define RTLD_GLOBAL  0x00100
+    #define RTLD_LOCAL   0x00000
+#else
+    #include <dlfcn.h>
 #endif
 
 namespace asul {
