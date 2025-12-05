@@ -5,26 +5,46 @@ on:
     branches: [ main, develop, copilot/** ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
         submodules: recursive
     
     - name: Setup Visual Studio environment
-      uses: microsoft/setup-msbuild@v1.1
+      uses: microsoft/setup-msbuild@v2
     
-    - name: Install OpenSSL
+    - name: Install OpenSSL via Chocolatey
       run: |
-        choco install openssl -y
-        echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64" >> $env:GITHUB_ENV
-        echo "OPENSSL_INCLUDE_DIR=C:/Program Files/OpenSSL-Win64/include" >> $env:GITHUB_ENV
-        echo "OPENSSL_CRYPTO_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libcrypto.lib" >> $env:GITHUB_ENV
-        echo "OPENSSL_SSL_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libssl.lib" >> $env:GITHUB_ENV
+        choco install openssl -y --force
+        refreshenv
+      shell: powershell
+    
+    - name: Set OpenSSL environment variables
+      run: |
+        echo "OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENSSL_INCLUDE_DIR=C:/Program Files/OpenSSL-Win64/include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENSSL_CRYPTO_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libcrypto.lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENSSL_SSL_LIBRARY=C:/Program Files/OpenSSL-Win64/lib/libssl.lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      shell: powershell
+    
+    - name: Verify OpenSSL installation
+      run: |
+        if (Test-Path "C:/Program Files/OpenSSL-Win64") {
+          Write-Host "✓ OpenSSL found at C:/Program Files/OpenSSL-Win64"
+          Get-ChildItem "C:/Program Files/OpenSSL-Win64" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 10
+        } else {
+          Write-Host "✗ OpenSSL not found at expected location"
+          Write-Host "Searching for OpenSSL..."
+          Get-ChildItem "C:/Program Files" -Filter "*ssl*" -Directory -ErrorAction SilentlyContinue
+        }
+      shell: powershell
     
     - name: Configure CMake
       run: |
@@ -33,32 +53,107 @@ jobs:
         cmake .. -G "Visual Studio 17 2022" -A x64 `
           -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64" `
           -DOPENSSL_INCLUDE_DIR="C:/Program Files/OpenSSL-Win64/include" `
-          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_VERBOSE_MAKEFILE=ON
+      shell: powershell
     
-    - name: Build
+    - name: Build ALang
       run: |
         cd build
-        cmake --build . --config Release
+        cmake --build . --config Release --verbose
+      shell: powershell
+    
+    - name: Verify build output
+      run: |
+        Write-Host "Checking for alang.exe..."
+        if (Test-Path "build/Release/alang.exe") {
+          Write-Host "✓ alang.exe found!"
+          Get-Item "build/Release/alang.exe" | Format-List
+        } else {
+          Write-Host "✗ alang.exe not found in build/Release/"
+          Write-Host "Contents of build directory:"
+          Get-ChildItem build -Recurse | Where-Object {$_.Name -like "*.exe"} | Format-Table
+        }
+      shell: powershell
     
     - name: Test basic execution
       run: |
-        cd build/Release
-        echo "println('Hello from Windows!');" > test.alang
-        ./alang.exe test.alang
+        Set-Location build/Release
+        if (Test-Path "./alang.exe") {
+          Write-Host "Testing basic ALang execution..."
+          "println('Hello from Windows!');" | Out-File -FilePath test.alang -Encoding utf8
+          ./alang.exe test.alang
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Basic test passed"
+          } else {
+            Write-Host "✗ Basic test failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+        } else {
+          Write-Host "✗ alang.exe not found, skipping execution test"
+          exit 1
+        }
+      shell: powershell
     
-    - name: Run example tests
+    - name: Run comprehensive example tests
       run: |
-        cd build/Release
-        # Test array methods
-        ./alang.exe ../../Example/array_select_methods.alang
-        # Test string methods  
-        ./alang.exe ../../Example/string_methods_test.alang
-        # Test math methods
-        ./alang.exe ../../Example/math_methods_test.alang
+        Set-Location build/Release
+        $testFiles = @(
+          "../../Example/array_select_methods.alang",
+          "../../Example/string_methods_test.alang",
+          "../../Example/math_methods_test.alang",
+          "../../Example/object_methods_test.alang",
+          "../../Example/path_enhancements_test.alang",
+          "../../Example/encoding_enhancements_test.alang",
+          "../../Example/promise_utilities_test.alang",
+          "../../Example/log_test.alang",
+          "../../Example/test_framework_test.alang",
+          "../../Example/language_runtime_test.alang",
+          "../../Example/type_system_iterator_test.alang",
+          "../../Example/operator_overload_test.alang"
+        )
+        
+        $passed = 0
+        $failed = 0
+        
+        foreach ($test in $testFiles) {
+          if (Test-Path $test) {
+            Write-Host "`nRunning: $test"
+            ./alang.exe $test
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "✓ PASSED: $test"
+              $passed++
+            } else {
+              Write-Host "✗ FAILED: $test (exit code: $LASTEXITCODE)"
+              $failed++
+            }
+          } else {
+            Write-Host "⚠ SKIPPED: $test (file not found)"
+          }
+        }
+        
+        Write-Host "`n=========================================="
+        Write-Host "Test Results: $passed passed, $failed failed"
+        Write-Host "=========================================="
+      shell: powershell
       continue-on-error: true
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
+      if: always()
       with:
-        name: windows-build
-        path: build/Release/alang.exe
+        name: windows-alang-executable
+        path: |
+          build/Release/alang.exe
+          build/Release/*.dll
+        retention-days: 7
+    
+    - name: Upload test logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: windows-test-logs
+        path: |
+          build/Release/*.log
+          build/CMakeFiles/*.log
+        retention-days: 7
