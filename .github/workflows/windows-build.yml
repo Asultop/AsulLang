@@ -36,13 +36,13 @@ jobs:
     
     - name: Verify OpenSSL installation
       run: |
-        if (Test-Path "C:/Program Files/OpenSSL-Win64") {
-          Write-Host "✓ OpenSSL found at C:/Program Files/OpenSSL-Win64"
-          Get-ChildItem "C:/Program Files/OpenSSL-Win64" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 10
+        if (Test-Path 'C:/Program Files/OpenSSL-Win64') {
+          Write-Host '✓ OpenSSL found at C:/Program Files/OpenSSL-Win64'
+          Get-ChildItem 'C:/Program Files/OpenSSL-Win64' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 10
         } else {
-          Write-Host "✗ OpenSSL not found at expected location"
-          Write-Host "Searching for OpenSSL..."
-          Get-ChildItem "C:/Program Files" -Filter "*ssl*" -Directory -ErrorAction SilentlyContinue
+          Write-Host '✗ OpenSSL not found at expected location'
+          Write-Host 'Searching for OpenSSL...'
+          Get-ChildItem 'C:/Program Files' -Filter '*ssl*' -Directory -ErrorAction SilentlyContinue
         }
       shell: powershell
     
