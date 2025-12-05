@@ -1,0 +1,351 @@
+// Comprehensive C++ style operator overloading test
+// Tests all overloadable operators: +, -, *, /, %, <, >, <=, >=, ==, !=, <<, >>, &, |, ^
+
+import std.math.*;
+
+println("=== Operator Overloading Test ===");
+
+// Example 1: Complex number class with arithmetic operators
+class Complex {
+    fn constructor(real, imag) {
+        this.real = real;
+        this.imag = imag;
+    }
+    
+    // operator+(other) - Addition
+    fn __add__(other) {
+        return new Complex(this.real + other.real, this.imag + other.imag);
+    }
+    
+    // operator-(other) - Subtraction
+    fn __sub__(other) {
+        return new Complex(this.real - other.real, this.imag - other.imag);
+    }
+    
+    // operator*(other) - Multiplication
+    fn __mul__(other) {
+        let r = this.real * other.real - this.imag * other.imag;
+        let i = this.real * other.imag + this.imag * other.real;
+        return new Complex(r, i);
+    }
+    
+    // operator/(other) - Division
+    fn __div__(other) {
+        let denom = other.real * other.real + other.imag * other.imag;
+        let r = (this.real * other.real + this.imag * other.imag) / denom;
+        let i = (this.imag * other.real - this.real * other.imag) / denom;
+        return new Complex(r, i);
+    }
+    
+    // operator==(other) - Equality
+    fn __eq__(other) {
+        return this.real == other.real && this.imag == other.imag;
+    }
+    
+    // operator!=(other) - Inequality
+    fn __ne__(other) {
+        return this.real != other.real || this.imag != other.imag;
+    }
+    
+    fn toString() {
+        if (this.imag >= 0) {
+            return this.real + "+" + this.imag + "i";
+        } else {
+            return this.real + "" + this.imag + "i";
+        }
+    }
+}
+
+println("\n1. Complex Number Arithmetic:");
+let c1 = new Complex(3, 4);
+let c2 = new Complex(1, 2);
+println("c1 = " + c1.toString());
+println("c2 = " + c2.toString());
+
+let c_add = c1 + c2;
+println("c1 + c2 = " + c_add.toString());
+
+let c_sub = c1 - c2;
+println("c1 - c2 = " + c_sub.toString());
+
+let c_mul = c1 * c2;
+println("c1 * c2 = " + c_mul.toString());
+
+let c_div = c1 / c2;
+println("c1 / c2 = " + c_div.toString());
+
+if (c1 == c1) {
+    println("c1 == c1: true");
+}
+if (c1 != c2) {
+    println("c1 != c2: true");
+}
+
+// Example 2: Vector class with comparison operators
+class Vector {
+    fn constructor(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    
+    // operator+(other)
+    fn __add__(other) {
+        return new Vector(this.x + other.x, this.y + other.y, this.z + other.z);
+    }
+    
+    // operator-(other)
+    fn __sub__(other) {
+        return new Vector(this.x - other.x, this.y - other.y, this.z - other.z);
+    }
+    
+    // operator*(scalar) - Scalar multiplication
+    fn __mul__(scalar) {
+        return new Vector(this.x * scalar, this.y * scalar, this.z * scalar);
+    }
+    
+    // Magnitude
+    fn magnitude() {
+        return sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }
+    
+    // operator<(other) - Compare by magnitude
+    fn __lt__(other) {
+        return this.magnitude() < other.magnitude();
+    }
+    
+    // operator>(other)
+    fn __gt__(other) {
+        return this.magnitude() > other.magnitude();
+    }
+    
+    // operator<=(other)
+    fn __le__(other) {
+        return this.magnitude() <= other.magnitude();
+    }
+    
+    // operator>=(other)
+    fn __ge__(other) {
+        return this.magnitude() >= other.magnitude();
+    }
+    
+    fn toString() {
+        return "(" + this.x + ", " + this.y + ", " + this.z + ")";
+    }
+}
+
+println("\n2. Vector Operations:");
+let v1 = new Vector(1, 2, 3);
+let v2 = new Vector(4, 5, 6);
+println("v1 = " + v1.toString());
+println("v2 = " + v2.toString());
+
+let v_add = v1 + v2;
+println("v1 + v2 = " + v_add.toString());
+
+let v_sub = v2 - v1;
+println("v2 - v1 = " + v_sub.toString());
+
+let v_scaled = v1 * 2;
+println("v1 * 2 = " + v_scaled.toString());
+
+println("v1 < v2: " + (v1 < v2));
+println("v2 > v1: " + (v2 > v1));
+println("v1 <= v1: " + (v1 <= v1));
+println("v2 >= v1: " + (v2 >= v1));
+
+// Example 3: Stream/Logger class with << operator
+class Logger {
+    fn constructor() {
+        this.buffer = "";
+    }
+    
+    // operator<<(value) - Stream insertion
+    fn __shl__(value) {
+        this.buffer = this.buffer + value;
+        return this; // Return this for chaining
+    }
+    
+    fn flush() {
+        println(this.buffer);
+        this.buffer = "";
+    }
+}
+
+println("\n3. Stream Operator (<<):");
+let log = new Logger();
+log << "Hello" << " " << "World" << "!";
+log.flush();
+
+log << "Number: " << 42 << ", Boolean: " << true;
+log.flush();
+
+// Example 4: BitSet class with bitwise operators
+class BitSet {
+    fn constructor(value) {
+        this.value = value;
+    }
+    
+    // operator&(other) - Bitwise AND
+    fn __and__(other) {
+        return new BitSet(this.value & other.value);
+    }
+    
+    // operator|(other) - Bitwise OR
+    fn __or__(other) {
+        return new BitSet(this.value | other.value);
+    }
+    
+    // operator^(other) - Bitwise XOR
+    fn __xor__(other) {
+        return new BitSet(this.value ^ other.value);
+    }
+    
+    // operator<<(shift) - Left shift
+    fn __shl__(shift) {
+        return new BitSet(this.value << shift);
+    }
+    
+    // operator>>(shift) - Right shift
+    fn __shr__(shift) {
+        return new BitSet(this.value >> shift);
+    }
+    
+    fn toString() {
+        return "BitSet(" + this.value + ")";
+    }
+}
+
+println("\n4. Bitwise Operations:");
+let b1 = new BitSet(12);  // 1100 in binary
+let b2 = new BitSet(10);  // 1010 in binary
+println("b1 = " + b1.toString() + " (binary: 1100)");
+println("b2 = " + b2.toString() + " (binary: 1010)");
+
+let b_and = b1 & b2;
+println("b1 & b2 = " + b_and.toString() + " (binary: 1000, decimal: 8)");
+
+let b_or = b1 | b2;
+println("b1 | b2 = " + b_or.toString() + " (binary: 1110, decimal: 14)");
+
+let b_xor = b1 ^ b2;
+println("b1 ^ b2 = " + b_xor.toString() + " (binary: 0110, decimal: 6)");
+
+let b_shl = b1 << 1;
+println("b1 << 1 = " + b_shl.toString() + " (binary: 11000, decimal: 24)");
+
+let b_shr = b1 >> 1;
+println("b1 >> 1 = " + b_shr.toString() + " (binary: 110, decimal: 6)");
+
+// Example 5: Fraction class with all arithmetic operators
+class Fraction {
+    fn constructor(num, denom) {
+        this.numerator = num;
+        this.denominator = denom;
+        this.simplify();
+    }
+    
+    fn gcd(a, b) {
+        a = abs(a);
+        b = abs(b);
+        while (b != 0) {
+            let temp = b;
+            b = a % b;
+            a = temp;
+        }
+        return a;
+    }
+    
+    fn simplify() {
+        let g = this.gcd(this.numerator, this.denominator);
+        this.numerator = this.numerator / g;
+        this.denominator = this.denominator / g;
+        if (this.denominator < 0) {
+            this.numerator = -this.numerator;
+            this.denominator = -this.denominator;
+        }
+    }
+    
+    fn __add__(other) {
+        let num = this.numerator * other.denominator + other.numerator * this.denominator;
+        let denom = this.denominator * other.denominator;
+        return new Fraction(num, denom);
+    }
+    
+    fn __sub__(other) {
+        let num = this.numerator * other.denominator - other.numerator * this.denominator;
+        let denom = this.denominator * other.denominator;
+        return new Fraction(num, denom);
+    }
+    
+    fn __mul__(other) {
+        return new Fraction(this.numerator * other.numerator, this.denominator * other.denominator);
+    }
+    
+    fn __div__(other) {
+        return new Fraction(this.numerator * other.denominator, this.denominator * other.numerator);
+    }
+    
+    fn __mod__(other) {
+        let div = (this.numerator * other.denominator) / (this.denominator * other.numerator);
+        let whole = floor(div);
+        let remainder_num = this.numerator * other.denominator - whole * this.denominator * other.numerator;
+        return new Fraction(remainder_num, this.denominator * other.denominator);
+    }
+    
+    fn __eq__(other) {
+        return this.numerator == other.numerator && this.denominator == other.denominator;
+    }
+    
+    fn __ne__(other) {
+        return this.numerator != other.numerator || this.denominator != other.denominator;
+    }
+    
+    fn __lt__(other) {
+        return this.numerator * other.denominator < other.numerator * this.denominator;
+    }
+    
+    fn __gt__(other) {
+        return this.numerator * other.denominator > other.numerator * this.denominator;
+    }
+    
+    fn __le__(other) {
+        return this.numerator * other.denominator <= other.numerator * this.denominator;
+    }
+    
+    fn __ge__(other) {
+        return this.numerator * other.denominator >= other.numerator * this.denominator;
+    }
+    
+    fn toString() {
+        if (this.denominator == 1) {
+            return "" + this.numerator;
+        }
+        return this.numerator + "/" + this.denominator;
+    }
+}
+
+println("\n5. Fraction Arithmetic:");
+let f1 = new Fraction(3, 4);  // 3/4
+let f2 = new Fraction(1, 2);  // 1/2
+println("f1 = " + f1.toString());
+println("f2 = " + f2.toString());
+
+let f_add = f1 + f2;
+println("f1 + f2 = " + f_add.toString());
+
+let f_sub = f1 - f2;
+println("f1 - f2 = " + f_sub.toString());
+
+let f_mul = f1 * f2;
+println("f1 * f2 = " + f_mul.toString());
+
+let f_div = f1 / f2;
+println("f1 / f2 = " + f_div.toString());
+
+println("f1 < f2: " + (f1 < f2));
+println("f1 > f2: " + (f1 > f2));
+println("f1 == f1: " + (f1 == f1));
+println("f1 != f2: " + (f1 != f2));
+
+println("\n=== All Operator Overloading Tests Passed! ===");

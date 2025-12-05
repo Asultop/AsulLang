@@ -526,38 +526,241 @@ public:
 					}
 					return Value{getNumber(l, "left of '-' ") - getNumber(r, "right of '-' ")};
 				case TokenType::Star:
+					// Operator overloading: __mul__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__mul__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
 					return Value{getNumber(l, "left of '*' ") * getNumber(r, "right of '*' ")};
-				case TokenType::Slash: {
-					double denom = getNumber(r, "right of '/' ");
-					return Value{getNumber(l, "left of '/' ") / denom};
-				}
-				case TokenType::Percent: {
-					double rv = getNumber(r, "right of '%' ");
-					return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
-				}
-				case TokenType::Greater: return Value{getNumber(l, ">") > getNumber(r, ">")};
-				case TokenType::GreaterEqual: return Value{getNumber(l, ">=") >= getNumber(r, ">=")};
-				case TokenType::Less: return Value{getNumber(l, "<") < getNumber(r, "<")};
-				case TokenType::LessEqual: return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
-				case TokenType::EqualEqual: return Value{isJSEqual(l, r)};
-				case TokenType::BangEqual: return Value{!isJSEqual(l, r)};
+				case TokenType::Slash:
+					// Operator overloading: __div__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__div__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					{
+						double denom = getNumber(r, "right of '/' ");
+						return Value{getNumber(l, "left of '/' ") / denom};
+					}
+				case TokenType::Percent:
+					// Operator overloading: __mod__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__mod__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					{
+						double rv = getNumber(r, "right of '%' ");
+						return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
+					}
+				case TokenType::Greater:
+					// Operator overloading: __gt__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__gt__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{getNumber(l, ">") > getNumber(r, ">")};
+				case TokenType::GreaterEqual:
+					// Operator overloading: __ge__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__ge__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{getNumber(l, ">=") >= getNumber(r, ">=")};
+				case TokenType::Less:
+					// Operator overloading: __lt__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__lt__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{getNumber(l, "<") < getNumber(r, "<")};
+				case TokenType::LessEqual:
+					// Operator overloading: __le__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__le__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
+				case TokenType::EqualEqual:
+					// Operator overloading: __eq__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__eq__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{isJSEqual(l, r)};
+				case TokenType::BangEqual:
+					// Operator overloading: __ne__ (or use negation of __eq__)
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__ne__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					return Value{!isJSEqual(l, r)};
 				case TokenType::StrictEqual: return Value{isStrictEqual(l, r)};
 				case TokenType::StrictNotEqual: return Value{!isStrictEqual(l, r)};
-				case TokenType::Ampersand: {
-					long long lv = static_cast<long long>(getNumber(l, "& left"));
-					long long rv = static_cast<long long>(getNumber(r, "& right"));
-					return Value{ static_cast<double>(lv & rv) };
-				}
-				case TokenType::Pipe: {
-					long long lv = static_cast<long long>(getNumber(l, "| left"));
-					long long rv = static_cast<long long>(getNumber(r, "| right"));
-					return Value{ static_cast<double>(lv | rv) };
-				}
-				case TokenType::Caret: {
-					long long lv = static_cast<long long>(getNumber(l, "^ left"));
-					long long rv = static_cast<long long>(getNumber(r, "^ right"));
-					return Value{ static_cast<double>(lv ^ rv) };
-				}
+				case TokenType::Ampersand:
+					// Operator overloading: __and__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__and__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					{
+						long long lv = static_cast<long long>(getNumber(l, "& left"));
+						long long rv = static_cast<long long>(getNumber(r, "& right"));
+						return Value{ static_cast<double>(lv & rv) };
+					}
+				case TokenType::Pipe:
+					// Operator overloading: __or__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__or__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					{
+						long long lv = static_cast<long long>(getNumber(l, "| left"));
+						long long rv = static_cast<long long>(getNumber(r, "| right"));
+						return Value{ static_cast<double>(lv | rv) };
+					}
+				case TokenType::Caret:
+					// Operator overloading: __xor__
+					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+						if (*lInst && (*lInst)->klass) {
+							auto m = findMethod((*lInst)->klass, "__xor__");
+							if (m) {
+								std::vector<Value> args{r};
+								auto boundEnv = std::make_shared<Environment>(m->closure);
+								boundEnv->define("this", l);
+								if (m->isBuiltin) return m->builtin(args, boundEnv);
+								auto local = std::make_shared<Environment>(boundEnv);
+								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
+								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
+								return Value{std::monostate{}};
+							}
+						}
+					}
+					{
+						long long lv = static_cast<long long>(getNumber(l, "^ left"));
+						long long rv = static_cast<long long>(getNumber(r, "^ right"));
+						return Value{ static_cast<double>(lv ^ rv) };
+					}
 				case TokenType::ShiftLeft: {
 					// Operator overloading: __shl__ (for stream-like operations)
 					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {

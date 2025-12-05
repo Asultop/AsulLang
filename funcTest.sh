@@ -100,6 +100,7 @@ func_files=(
     "crypto_enhancements_test.alang"
     "language_runtime_test.alang"
     "type_system_iterator_test.alang"
+    "operator_overload_test.alang"
 )
 
 # Counter for passed/failed tests
