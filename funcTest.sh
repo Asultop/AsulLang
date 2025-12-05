@@ -99,6 +99,7 @@ func_files=(
     "test_framework_test.alang"
     "crypto_enhancements_test.alang"
     "language_runtime_test.alang"
+    "type_system_iterator_test.alang"
 )
 
 # Counter for passed/failed tests

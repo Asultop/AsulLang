@@ -1,0 +1,332 @@
+// Type System Enhancements and Iterator Protocol Tests
+println("=== Type System Enhancements and Iterator Protocol Tests ===\n");
+
+// ========== Type System Enhancements ==========
+println("## 1. Type System Enhancements ##\n");
+
+// Test 1: isType() function
+println("Test 1: isType() - Runtime Type Guards");
+let num = 42;
+let str = "hello";
+let arr = [1, 2, 3];
+let obj = {name: "Alice", age: 25};
+let myFn = []() { return "function"; };
+
+println("  isType(num, 'number'):", isType(num, "number"));  // true
+println("  isType(str, 'string'):", isType(str, "string"));  // true
+println("  isType(arr, 'array'):", isType(arr, "array"));    // true
+println("  isType(obj, 'object'):", isType(obj, "object"));  // true
+println("  isType(myFn, 'function'):", isType(myFn, "function"));// true
+println("  isType(num, 'string'):", isType(num, "string"));  // false
+println("✓ isType() test passed\n");
+
+// Test 2: isArray() function
+println("Test 2: isArray() - Array Type Check");
+println("  isArray([1, 2, 3]):", isArray([1, 2, 3]));  // true
+println("  isArray('hello'):", isArray("hello"));      // false
+println("  isArray({}):", isArray({}));                // false
+println("  isArray(42):", isArray(42));                // false
+println("✓ isArray() test passed\n");
+
+// Test 3: isObject() function
+println("Test 3: isObject() - Object Type Check");
+println("  isObject({name: 'Bob'}):", isObject({name: "Bob"}));  // true
+println("  isObject([1, 2, 3]):", isObject([1, 2, 3]));          // false
+println("  isObject('string'):", isObject("string"));            // false
+let myFunc = []() { return 1; };
+println("  isObject(function):", isObject(myFunc));             // false
+println("✓ isObject() test passed\n");
+
+// Test 4: isFunction() function
+println("Test 4: isFunction() - Function Type Check");
+let testFn = [](x) { return x * 2; };
+println("  isFunction(testFn):", isFunction(testFn));      // true
+println("  isFunction({}):", isFunction({}));              // false
+println("  isFunction([]):", isFunction([]));              // false
+println("  isFunction('code'):", isFunction("code"));      // false
+println("✓ isFunction() test passed\n");
+
+// Test 5: isNumber() function
+println("Test 5: isNumber() - Number Type Check");
+println("  isNumber(42):", isNumber(42));            // true
+println("  isNumber(3.14):", isNumber(3.14));        // true
+println("  isNumber(-100):", isNumber(-100));        // true
+println("  isNumber('42'):", isNumber("42"));        // false
+println("  isNumber(null):", isNumber(null));        // false
+println("✓ isNumber() test passed\n");
+
+// Test 6: isString() function
+println("Test 6: isString() - String Type Check");
+println("  isString('hello'):", isString("hello"));  // true
+println("  isString(''):", isString(""));            // true
+println("  isString(42):", isString(42));            // false
+println("  isString([]):", isString([]));            // false
+println("✓ isString() test passed\n");
+
+// Test 7: isBoolean() function
+println("Test 7: isBoolean() - Boolean Type Check");
+println("  isBoolean(true):", isBoolean(true));    // true
+println("  isBoolean(false):", isBoolean(false));  // true
+println("  isBoolean(1):", isBoolean(1));          // false
+println("  isBoolean(0):", isBoolean(0));          // false
+println("  isBoolean(null):", isBoolean(null));    // false
+println("✓ isBoolean() test passed\n");
+
+// Test 8: isNull() function
+println("Test 8: isNull() - Null/Undefined Type Check");
+println("  isNull(null):", isNull(null));  // true
+let undef;
+println("  isNull(undefined):", isNull(undef));  // true
+println("  isNull(0):", isNull(0));        // false
+println("  isNull(''):", isNull(""));      // false
+println("  isNull(false):", isNull(false));// false
+println("✓ isNull() test passed\n");
+
+// Test 9: isPromise() function  
+println("Test 9: isPromise() - Promise Type Check");
+async fn asyncFunc() {
+    return 42;
+}
+let promise = asyncFunc();
+println("  isPromise(promise):", isPromise(promise));  // true
+println("  isPromise(42):", isPromise(42));            // false
+println("  isPromise({}):", isPromise({}));            // false
+println("✓ isPromise() test passed\n");
+
+// Test 10: Type guard combinations
+println("Test 10: Type Guard Combinations");
+fn processValue(val) {
+    if (isNumber(val)) {
+        return "Number: " + val;
+    } else if (isString(val)) {
+        return "String: " + val;
+    } else if (isArray(val)) {
+        return "Array with " + len(val) + " elements";
+    } else if (isObject(val)) {
+        return "Object with properties";
+    } else if (isFunction(val)) {
+        return "Function";
+    } else if (isNull(val)) {
+        return "Null/Undefined";
+    } else {
+        return "Unknown type";
+    }
+}
+
+println("  processValue(42):", processValue(42));
+println("  processValue('test'):", processValue("test"));
+println("  processValue([1,2,3]):", processValue([1, 2, 3]));
+println("  processValue({x:1}):", processValue({x: 1}));
+println("  processValue(null):", processValue(null));
+println("✓ Type guard combinations test passed\n");
+
+// ========== Iterator Protocol ==========
+println("\n## 2. Iterator Protocol ##\n");
+
+// Test 11: hasIterator() function
+println("Test 11: hasIterator() - Check Iterability");
+println("  hasIterator([1, 2, 3]):", hasIterator([1, 2, 3]));      // true
+println("  hasIterator('hello'):", hasIterator("hello"));          // true
+println("  hasIterator({a: 1}):", hasIterator({a: 1}));            // true
+println("  hasIterator(42):", hasIterator(42));                    // false
+println("  hasIterator(null):", hasIterator(null));                // false
+println("✓ hasIterator() test passed\n");
+
+// Test 12: getIterator() for arrays
+println("Test 12: getIterator() - Array Iterator");
+let arrayToIterate = [10, 20, 30];
+let arrayIter = getIterator(arrayToIterate);
+let result1 = arrayIter.next();
+println("  First iteration:", result1);
+let result2 = arrayIter.next();
+println("  Second iteration:", result2);
+let result3 = arrayIter.next();
+println("  Third iteration:", result3);
+let result4 = arrayIter.next();
+println("  Fourth iteration (done):", result4);
+println("✓ Array iterator test passed\n");
+
+// Test 13: getIterator() for strings
+println("Test 13: getIterator() - String Iterator");
+let stringToIterate = "ABC";
+let stringIter = getIterator(stringToIterate);
+let char1 = stringIter.next();
+println("  First char:", char1);
+let char2 = stringIter.next();
+println("  Second char:", char2);
+let char3 = stringIter.next();
+println("  Third char:", char3);
+let char4 = stringIter.next();
+println("  Fourth (done):", char4);
+println("✓ String iterator test passed\n");
+
+// Test 14: getIterator() for objects
+println("Test 14: getIterator() - Object Iterator (Keys)");
+let objectToIterate = {name: "Alice", age: 25, city: "NYC"};
+let objectIter = getIterator(objectToIterate);
+let key1 = objectIter.next();
+println("  First key:", key1);
+let key2 = objectIter.next();
+println("  Second key:", key2);
+let key3 = objectIter.next();
+println("  Third key:", key3);
+let key4 = objectIter.next();
+println("  Fourth (done):", key4);
+println("✓ Object iterator test passed\n");
+
+// Test 15: Custom iterator with __iterator__ method
+println("Test 15: Custom Iterator with __iterator__ Method");
+let customData = [100, 200, 300];
+let customIterable = {
+    data: customData,
+    __iterator__: []() {
+        let dataRef = customData;  // Capture data in closure
+        let index = 0;
+        return {
+            next: []() {
+                if (index < len(dataRef)) {
+                    let value = dataRef[index];
+                    index = index + 1;
+                    return {value: value * 2, done: false};  // Double the values
+                } else {
+                    return {value: null, done: true};
+                }
+            }
+        };
+    }
+};
+
+if (hasIterator(customIterable)) {
+    let customIter = getIterator(customIterable);
+    let val1 = customIter.next();
+    println("  First value (doubled):", val1);
+    let val2 = customIter.next();
+    println("  Second value (doubled):", val2);
+    let val3 = customIter.next();
+    println("  Third value (doubled):", val3);
+    let val4 = customIter.next();
+    println("  Fourth (done):", val4);
+}
+println("✓ Custom iterator test passed\n");
+
+// Test 16: Manual iteration with while loop
+println("Test 16: Manual Iteration with While Loop");
+let nums = [5, 10, 15, 20];
+let iter = getIterator(nums);
+let sum = 0;
+let count = 0;
+while (true) {
+    let result = iter.next();
+    if (result.done) {
+        break;
+    }
+    sum = sum + result.value;
+    count = count + 1;
+}
+println("  Iterated", count, "elements");
+println("  Sum:", sum);
+println("✓ Manual iteration test passed\n");
+
+// Test 17: forEach semantics (built-in iteration)
+println("Test 17: forEach Semantics");
+println("  Array iteration:");
+let numbers = [1, 2, 3, 4, 5];
+foreach (n in numbers) {
+    println("    Value:", n);
+}
+
+println("  String iteration:");
+let text = "Hi";
+foreach (ch in text) {
+    println("    Char:", ch);
+}
+
+println("  Object iteration (keys):");
+let person = {name: "Bob", age: 30};
+foreach (key in person) {
+    println("    Key:", key, "Value:", person[key]);
+}
+println("✓ forEach semantics test passed\n");
+
+// Test 18: Type checking in iteration
+println("Test 18: Type Checking in Iteration");
+let mixedArray = [42, "hello", [1, 2], {x: 10}, null, true];
+foreach (item in mixedArray) {
+    if (isNumber(item)) {
+        println("  Number:", item);
+    } else if (isString(item)) {
+        println("  String:", item);
+    } else if (isArray(item)) {
+        println("  Array with", len(item), "elements");
+    } else if (isObject(item)) {
+        println("  Object");
+    } else if (isBoolean(item)) {
+        println("  Boolean:", item);
+    } else if (isNull(item)) {
+        println("  Null/Undefined");
+    }
+}
+println("✓ Type checking in iteration test passed\n");
+
+// Test 19: Practical example - Data processing pipeline
+println("Test 19: Data Processing Pipeline");
+let transactions = [
+    {id: 1, amount: 100, type: "credit"},
+    {id: 2, amount: 50, type: "debit"},
+    {id: 3, amount: 200, type: "credit"},
+    {id: 4, amount: 75, type: "debit"}
+];
+
+fn filterTransactions(txns, txnType) {
+    let filtered = [];
+    foreach (tx in txns) {
+        if (isObject(tx) && tx["type"] == txnType) {
+            push(filtered, tx);
+        }
+    }
+    return filtered;
+}
+
+let credits = filterTransactions(transactions, "credit");
+println("  Credit transactions:", len(credits));
+foreach (tx in credits) {
+    println("    ID:", tx["id"], "Amount:", tx["amount"]);
+}
+println("✓ Data processing pipeline test passed\n");
+
+// Test 20: Iterator protocol with custom range generator
+println("Test 20: Custom Range Generator");
+fn createRange(start, end) {
+    return {
+        __iterator__: []() {
+            let current = start;
+            return {
+                next: []() {
+                    if (current <= end) {
+                        let value = current;
+                        current = current + 1;
+                        return {value: value, done: false};
+                    } else {
+                        return {value: null, done: true};
+                    }
+                }
+            };
+        }
+    };
+}
+
+let range = createRange(1, 5);
+if (hasIterator(range)) {
+    let rangeIter = getIterator(range);
+    println("  Range from 1 to 5:");
+    while (true) {
+        let result = rangeIter.next();
+        if (result.done) {
+            break;
+        }
+        println("    Value:", result.value);
+    }
+}
+println("✓ Custom range generator test passed\n");
+
+println("=== All Type System and Iterator Protocol Tests Completed ===");

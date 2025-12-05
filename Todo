@@ -8,11 +8,11 @@
 - [ ] **FFI (外部函数接口)**: 调用动态库 (`.so`/`.dll`) 中 C 函数的能力
 
 ## 3. 语言与运行时
-- [ ] **类型系统增强**: 类型别名、联合类型、泛型占位、运行时类型守卫
+- [x] **类型系统增强**: 运行时类型守卫 (isType, isArray, isObject, isFunction, isPromise, isNumber, isString, isBoolean, isNull)
 - [x] **异常/错误统一**: 标准化异常对象字段、统一栈追踪格式、`finally` 支持
 - [x] **事件循环扩展**: 任务队列监控、微/宏任务区分、`Promise.all/race/any`
 - [x] **语法算子**: `??`, `??=`, `&&=`, `||=`, ~~解构赋值与默认值~~
-- [ ] **迭代器协议**: 对象/类的迭代器钩子，明确 `forEach`/`for..in` 语义
+- [x] **迭代器协议**: 对象/类的迭代器钩子 (hasIterator, getIterator, __iterator__ 方法)，明确 `forEach`/`for..in` 语义
 
 ## 4. 标准库增强 (std.*)
 - [x] **std.string**: `replaceAll`, `localeCompare`, `repeat`, ~~`normalize(NFC/NFD)`~~

@@ -576,6 +576,277 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 				(*promiseObj)["any"] = fn;
 			}
 			globals->define("Promise", Value{promiseObj});
+	
+	// ========== Type System Enhancements ==========
+	
+	// isType(value, type) - Runtime type guard that checks if a value matches a type string
+	auto isTypeFn = std::make_shared<Function>();
+	isTypeFn->isBuiltin = true;
+	isTypeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 2) throw std::runtime_error("isType expects 2 arguments (value, type)");
+		if (!std::holds_alternative<std::string>(args[1])) {
+			throw std::runtime_error("isType: second argument must be a type string");
+		}
+		
+		const Value& val = args[0];
+		std::string expectedType = std::get<std::string>(args[1]);
+		std::string actualType = typeOf(val);
+		
+		// Check for custom type on objects
+		if (auto po = std::get_if<std::shared_ptr<Object>>(&val)) {
+			if (*po) {
+				auto it = (**po).find("declaredType");
+				if (it != (**po).end() && std::holds_alternative<std::string>(it->second)) {
+					actualType = std::get<std::string>(it->second);
+				} else {
+					it = (**po).find("runtimeType");
+					if (it != (**po).end() && std::holds_alternative<std::string>(it->second)) {
+						actualType = std::get<std::string>(it->second);
+					}
+				}
+			}
+		}
+		
+		return Value{actualType == expectedType};
+	};
+	globals->define("isType", isTypeFn);
+	
+	// isArray(value) - Check if value is an array
+	auto isArrayFn = std::make_shared<Function>();
+	isArrayFn->isBuiltin = true;
+	isArrayFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isArray expects 1 argument");
+		return Value{std::holds_alternative<std::shared_ptr<Array>>(args[0])};
+	};
+	globals->define("isArray", isArrayFn);
+	
+	// isObject(value) - Check if value is an object (not array, function, or promise)
+	auto isObjectFn = std::make_shared<Function>();
+	isObjectFn->isBuiltin = true;
+	isObjectFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isObject expects 1 argument");
+		if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) return Value{false};
+		// Make sure it's not a special object type
+		auto obj = std::get<std::shared_ptr<Object>>(args[0]);
+		if (!obj) return Value{false};
+		// Check if it has special type markers
+		auto it = obj->find("runtimeType");
+		if (it != obj->end() && std::holds_alternative<std::string>(it->second)) {
+			std::string rt = std::get<std::string>(it->second);
+			if (rt == "Function" || rt == "Promise") return Value{false};
+		}
+		return Value{true};
+	};
+	globals->define("isObject", isObjectFn);
+	
+	// isFunction(value) - Check if value is a function
+	auto isFunctionFn = std::make_shared<Function>();
+	isFunctionFn->isBuiltin = true;
+	isFunctionFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isFunction expects 1 argument");
+		return Value{std::holds_alternative<std::shared_ptr<Function>>(args[0])};
+	};
+	globals->define("isFunction", isFunctionFn);
+	
+	// isPromise(value) - Check if value is a Promise
+	auto isPromiseFn = std::make_shared<Function>();
+	isPromiseFn->isBuiltin = true;
+	isPromiseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isPromise expects 1 argument");
+		return Value{std::holds_alternative<std::shared_ptr<PromiseState>>(args[0])};
+	};
+	globals->define("isPromise", isPromiseFn);
+	
+	// isNumber(value) - Check if value is a number
+	auto isNumberFn = std::make_shared<Function>();
+	isNumberFn->isBuiltin = true;
+	isNumberFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isNumber expects 1 argument");
+		return Value{std::holds_alternative<double>(args[0])};
+	};
+	globals->define("isNumber", isNumberFn);
+	
+	// isString(value) - Check if value is a string
+	auto isStringFn = std::make_shared<Function>();
+	isStringFn->isBuiltin = true;
+	isStringFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isString expects 1 argument");
+		return Value{std::holds_alternative<std::string>(args[0])};
+	};
+	globals->define("isString", isStringFn);
+	
+	// isBoolean(value) - Check if value is a boolean
+	auto isBooleanFn = std::make_shared<Function>();
+	isBooleanFn->isBuiltin = true;
+	isBooleanFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isBoolean expects 1 argument");
+		return Value{std::holds_alternative<bool>(args[0])};
+	};
+	globals->define("isBoolean", isBooleanFn);
+	
+	// isNull(value) - Check if value is null/undefined
+	auto isNullFn = std::make_shared<Function>();
+	isNullFn->isBuiltin = true;
+	isNullFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("isNull expects 1 argument");
+		return Value{std::holds_alternative<std::monostate>(args[0])};
+	};
+	globals->define("isNull", isNullFn);
+	
+	// ========== Iterator Protocol ==========
+	
+	// hasIterator(obj) - Check if object has an iterator method
+	auto hasIteratorFn = std::make_shared<Function>();
+	hasIteratorFn->isBuiltin = true;
+	hasIteratorFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("hasIterator expects 1 argument");
+		
+		// Arrays, strings, and objects are all iterable by default
+		if (std::holds_alternative<std::shared_ptr<Array>>(args[0])) return Value{true};
+		if (std::holds_alternative<std::string>(args[0])) return Value{true};
+		
+		// For objects, check if they have an __iterator__ method
+		if (auto po = std::get_if<std::shared_ptr<Object>>(&args[0])) {
+			if (*po) {
+				auto it = (**po).find("__iterator__");
+				if (it != (**po).end() && std::holds_alternative<std::shared_ptr<Function>>(it->second)) {
+					return Value{true};
+				}
+			}
+			// Objects are iterable by default (iterate over keys)
+			return Value{true};
+		}
+		
+		return Value{false};
+	};
+	globals->define("hasIterator", hasIteratorFn);
+	
+	// getIterator(obj) - Get an iterator for an object
+	// Returns an object with {next: function() -> {value, done}}
+	auto getIteratorFn = std::make_shared<Function>();
+	getIteratorFn->isBuiltin = true;
+	getIteratorFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("getIterator expects 1 argument");
+		
+		const Value& target = args[0];
+		
+		// Check if object has custom __iterator__ method
+		if (auto po = std::get_if<std::shared_ptr<Object>>(&target)) {
+			if (*po) {
+				auto it = (**po).find("__iterator__");
+				if (it != (**po).end() && std::holds_alternative<std::shared_ptr<Function>>(it->second)) {
+					// Call the custom iterator method
+					auto iterFn = std::get<std::shared_ptr<Function>>(it->second);
+					std::vector<Value> callArgs;
+					
+					if (iterFn->isBuiltin) {
+						return iterFn->builtin(callArgs, iterFn->closure);
+					} else {
+						// Manually execute the function
+						auto local = std::make_shared<Environment>(iterFn->closure);
+						try {
+							interpPtr->executeBlock(iterFn->body, local);
+						} catch (const ReturnSignal& rs) {
+							return rs.value;
+						}
+						return Value{std::monostate{}};
+					}
+				}
+			}
+		}
+		
+		// Default iterators for built-in types
+		if (auto parr = std::get_if<std::shared_ptr<Array>>(&target)) {
+			// Array iterator
+			struct ArrayIterState {
+				std::shared_ptr<Array> arr;
+				size_t index = 0;
+			};
+			auto state = std::make_shared<ArrayIterState>();
+			state->arr = *parr;
+			
+			auto iterObj = std::make_shared<Object>();
+			auto nextFn = std::make_shared<Function>();
+			nextFn->isBuiltin = true;
+			nextFn->builtin = [state](const std::vector<Value>&, std::shared_ptr<Environment>) -> Value {
+				auto result = std::make_shared<Object>();
+				if (state->index < state->arr->size()) {
+					(*result)["value"] = (*state->arr)[state->index];
+					(*result)["done"] = Value{false};
+					state->index++;
+				} else {
+					(*result)["value"] = Value{std::monostate{}};
+					(*result)["done"] = Value{true};
+				}
+				return Value{result};
+			};
+			(*iterObj)["next"] = Value{nextFn};
+			return Value{iterObj};
+		}
+		
+		if (auto pstr = std::get_if<std::string>(&target)) {
+			// String iterator
+			struct StringIterState {
+				std::string str;
+				size_t index = 0;
+			};
+			auto state = std::make_shared<StringIterState>();
+			state->str = *pstr;
+			
+			auto iterObj = std::make_shared<Object>();
+			auto nextFn = std::make_shared<Function>();
+			nextFn->isBuiltin = true;
+			nextFn->builtin = [state](const std::vector<Value>&, std::shared_ptr<Environment>) -> Value {
+				auto result = std::make_shared<Object>();
+				if (state->index < state->str.size()) {
+					(*result)["value"] = Value{std::string(1, state->str[state->index])};
+					(*result)["done"] = Value{false};
+					state->index++;
+				} else {
+					(*result)["value"] = Value{std::monostate{}};
+					(*result)["done"] = Value{true};
+				}
+				return Value{result};
+			};
+			(*iterObj)["next"] = Value{nextFn};
+			return Value{iterObj};
+		}
+		
+		if (auto pobj = std::get_if<std::shared_ptr<Object>>(&target)) {
+			// Object iterator (over keys)
+			struct ObjectIterState {
+				std::vector<std::string> keys;
+				size_t index = 0;
+			};
+			auto state = std::make_shared<ObjectIterState>();
+			if (*pobj) {
+				for (const auto& [key, val] : **pobj) {
+					state->keys.push_back(key);
+				}
+			}
+			
+			auto iterObj = std::make_shared<Object>();
+			auto nextFn = std::make_shared<Function>();
+			nextFn->isBuiltin = true;
+			nextFn->builtin = [state](const std::vector<Value>&, std::shared_ptr<Environment>) -> Value {
+				auto result = std::make_shared<Object>();
+				if (state->index < state->keys.size()) {
+					(*result)["value"] = Value{state->keys[state->index]};
+					(*result)["done"] = Value{false};
+					state->index++;
+				} else {
+					(*result)["value"] = Value{std::monostate{}};
+					(*result)["done"] = Value{true};
+				}
+				return Value{result};
+			};
+			(*iterObj)["next"] = Value{nextFn};
+			return Value{iterObj};
+		}
+		
+		throw std::runtime_error("getIterator: value is not iterable");
+	};
+	globals->define("getIterator", getIteratorFn);
 
 }
 
