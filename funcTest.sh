@@ -101,6 +101,7 @@ func_files=(
     "language_runtime_test.alang"
     "type_system_iterator_test.alang"
     "operator_overload_test.alang"
+    "ffi_test.alang"
 )
 
 # Counter for passed/failed tests

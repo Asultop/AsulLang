@@ -5,7 +5,16 @@
 - [ ] **调试器**: 用于附加调试器或编程方式检查栈帧的钩子
 
 ## 2. 系统集成
-- [ ] **FFI (外部函数接口)**: 调用动态库 (`.so`/`.dll`) 中 C 函数的能力
+- [x] **FFI (外部函数接口)**: 调用动态库 (`.so`/`.dll`) 中 C 函数的能力
+  - 通过 `std.ffi` 包实现
+  - `dlopen(path, mode)` - 加载动态库
+  - `dlsym(handle, symbol)` - 获取函数指针
+  - `dlclose(handle)` - 关闭库
+  - `call(funcPtr, returnType, ...args)` - 调用 C 函数
+  - 支持返回类型：void, int, double, pointer, string
+  - 最多 6 个参数
+  - 引用计数管理
+  - 跨平台支持 (Linux/macOS/Windows)
 
 ## 3. 语言与运行时
 - [x] **类型系统增强**: 运行时类型守卫 (isType, isArray, isObject, isFunction, isPromise, isNumber, isString, isBoolean, isNull)

@@ -35,6 +35,7 @@ set(SRCS
   src/AsulPackages/Std/Array/StdArray.cpp
   src/AsulPackages/Std/Log/StdLog.cpp
   src/AsulPackages/Std/Test/StdTest.cpp
+  src/AsulPackages/Std/Ffi/StdFfi.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp
@@ -87,6 +88,9 @@ if(WIN32)
   # Link Winsock for Windows networking support
   target_link_libraries(alang PRIVATE ws2_32)
   target_compile_definitions(alang PRIVATE _WIN32_WINNT=0x0600)
+else()
+  # Link dl library for FFI on Unix systems
+  target_link_libraries(alang PRIVATE dl)
 endif()
 
 find_package(Threads REQUIRED)

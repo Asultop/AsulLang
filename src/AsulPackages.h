@@ -17,6 +17,7 @@
 #include "AsulPackages/Std/Array/StdArray.h"
 #include "AsulPackages/Std/Log/StdLog.h"
 #include "AsulPackages/Std/Test/StdTest.h"
+#include "AsulPackages/Std/Ffi/StdFfi.h"
 #include "AsulPackages/Csv/Csv.h"
 #include "AsulPackages/Json/Json.h"
 #include "AsulPackages/Xml/Xml.h"

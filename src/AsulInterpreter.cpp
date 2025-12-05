@@ -33,6 +33,7 @@ void registerExternalPackages(asul::Interpreter &interp)
     asul::registerStdArrayPackage(interp);
     asul::registerStdLogPackage(interp);
     asul::registerStdTestPackage(interp);
+    asul::registerStdFfiPackage(interp);
     asul::registerCsvPackage(interp);
     asul::registerJsonPackage(interp);
     asul::registerXmlPackage(interp);
