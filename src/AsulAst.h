@@ -84,7 +84,14 @@ struct SwitchStmt : Stmt {
 };
 struct GoStmt : Stmt { ExprPtr call; explicit GoStmt(ExprPtr c): call(std::move(c)){} };
 struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(std::move(v)){} };
-struct TryCatchStmt : Stmt { StmtPtr tryBlock; std::string catchName; StmtPtr catchBlock; TryCatchStmt(StmtPtr t, std::string n, StmtPtr c): tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)){} };
+struct TryCatchStmt : Stmt {
+	StmtPtr tryBlock;
+	std::string catchName;
+	StmtPtr catchBlock;
+	StmtPtr finallyBlock; // optional finally block
+	TryCatchStmt(StmtPtr t, std::string n, StmtPtr c, StmtPtr f = nullptr)
+		: tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)), finallyBlock(std::move(f)) {}
+};
 struct EmptyStmt : Stmt {};
 struct ImportStmt : Stmt {
 	struct Entry {

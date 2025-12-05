@@ -635,8 +635,18 @@ public:
 		}
 		if (auto lg = std::dynamic_pointer_cast<LogicalExpr>(expr)) {
 			Value l = evaluate(lg->left);
-			if (lg->op.type == TokenType::OrOr) return isTruthy(l) ? l : evaluate(lg->right);
-			else return !isTruthy(l) ? l : evaluate(lg->right);
+			if (lg->op.type == TokenType::OrOr) {
+				return isTruthy(l) ? l : evaluate(lg->right);
+			} else if (lg->op.type == TokenType::AndAnd) {
+				return !isTruthy(l) ? l : evaluate(lg->right);
+			} else if (lg->op.type == TokenType::QuestionQuestion) {
+				// Nullish coalescing: only use right if left is null/undefined
+				if (std::holds_alternative<std::monostate>(l)) {
+					return evaluate(lg->right);
+				}
+				return l;
+			}
+			return l;
 		}
 		if (auto cond = std::dynamic_pointer_cast<ConditionalExpr>(expr)) {
 			// 三元运算符：condition ? thenBranch : elseBranch
@@ -1214,9 +1224,11 @@ public:
 			throw ex;
 		}
 		if (auto tc = std::dynamic_pointer_cast<TryCatchStmt>(stmt)) {
+			bool exceptionCaught = false;
 			try {
 				execute(tc->tryBlock);
 			} catch (const ExceptionSignal& ex) {
+				exceptionCaught = true;
 				auto local = std::make_shared<Environment>(env);
 				local->define(tc->catchName, ex.value);
 				// 在新的局部环境中执行 catch 块
@@ -1226,6 +1238,7 @@ public:
 					executeBlock(std::vector<StmtPtr>{ tc->catchBlock }, local);
 				}
 			} catch (const std::exception& ex) {
+				exceptionCaught = true;
 				// Catch C++ runtime errors and expose them as ALang exceptions
 				auto local = std::make_shared<Environment>(env);
 				Value errVal = buildExceptionValue(ex.what());
@@ -1235,6 +1248,10 @@ public:
 				} else {
 					executeBlock(std::vector<StmtPtr>{ tc->catchBlock }, local);
 				}
+			}
+			// Execute finally block if present (always runs)
+			if (tc->finallyBlock) {
+				execute(tc->finallyBlock);
 			}
 			return;
 		}

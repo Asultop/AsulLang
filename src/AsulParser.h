@@ -54,6 +54,7 @@ private:
 	ExprPtr expression();
 	ExprPtr assignment();
 	ExprPtr conditional();
+	ExprPtr nullishCoalescing();
 	ExprPtr logicalOr();
 	ExprPtr logicalAnd();
 	ExprPtr bitwiseOr();

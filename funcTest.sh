@@ -98,6 +98,7 @@ func_files=(
     "log_test.alang"
     "test_framework_test.alang"
     "crypto_enhancements_test.alang"
+    "language_runtime_test.alang"
 )
 
 # Counter for passed/failed tests

@@ -112,7 +112,7 @@ void Lexer::identifier() {
 		{"await", TokenType::Await},
 		{"async", TokenType::Async},
 		{"go", TokenType::Go},
-		{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"throw", TokenType::Throw},
+		{"try", TokenType::Try}, {"catch", TokenType::Catch}, {"finally", TokenType::Finally}, {"throw", TokenType::Throw},
 		{"interface", TokenType::Interface},
 		{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
 		{"static", TokenType::Static},
@@ -215,7 +215,13 @@ void Lexer::scanToken() {
 	case ',': add(TokenType::Comma); break;
 	case ';': add(TokenType::Semicolon); break;
 	case ':': add(TokenType::Colon); break;
-	case '?': add(TokenType::Question); break;
+	case '?':
+		// Support ?? and ??=
+		if (match('?')) {
+			if (match('=')) add(TokenType::QuestionQuestionEqual);
+			else add(TokenType::QuestionQuestion);
+		} else add(TokenType::Question);
+		break;
 	case '.':
 		// support spread '...'
 		if (match('.') && match('.')) add(TokenType::Ellipsis);
@@ -272,8 +278,22 @@ void Lexer::scanToken() {
 		else add(TokenType::Greater);
 		break;
 	}
-	case '&': if (match('&')) add(TokenType::AndAnd); else { add(TokenType::Ampersand); } break;
-	case '|': if (match('|')) add(TokenType::OrOr); else { add(TokenType::Pipe); } break;
+	case '&':
+		if (match('&')) {
+			if (match('=')) add(TokenType::AndAndEqual);
+			else add(TokenType::AndAnd);
+		} else {
+			add(TokenType::Ampersand);
+		}
+		break;
+	case '|':
+		if (match('|')) {
+			if (match('=')) add(TokenType::OrOrEqual);
+			else add(TokenType::OrOr);
+		} else {
+			add(TokenType::Pipe);
+		}
+		break;
 	case '^': add(TokenType::Caret); break;
 	case '/':
 		if (match('=')) add(TokenType::SlashEqual);

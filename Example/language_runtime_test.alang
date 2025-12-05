@@ -1,0 +1,220 @@
+"""
+Language and Runtime Feature Tests
+Tests for:
+- Nullish coalescing operator (??)
+- Logical assignment operators (??=, &&=, ||=)
+- Finally block in try-catch
+- Enhanced error handling
+"""
+
+println("=== Language and Runtime Feature Tests ===");
+println("");
+
+# Test 1: Nullish Coalescing Operator (??)
+println("Test 1: Nullish Coalescing Operator (??)");
+let nullValue = null;
+let zeroValue = 0;
+let falseValue = false;
+let emptyString = "";
+let validValue = "valid";
+
+# ?? only returns right side if left is null/undefined
+let result1 = nullValue ?? "default";
+println("  null ?? 'default' =", result1);  # Should be 'default'
+
+let result2 = zeroValue ?? "default";
+println("  0 ?? 'default' =", result2);  # Should be 0 (not default!)
+
+let result3 = falseValue ?? "default";
+println("  false ?? 'default' =", result3);  # Should be false (not default!)
+
+let result4 = emptyString ?? "default";
+println("  '' ?? 'default' =", result4);  # Should be '' (not default!)
+
+let result5 = validValue ?? "default";
+println("  'valid' ?? 'default' =", result5);  # Should be 'valid'
+
+# Chaining
+let chain = null ?? null ?? "fallback";
+println("  null ?? null ?? 'fallback' =", chain);  # Should be 'fallback'
+
+println("");
+
+# Test 2: Nullish Coalescing Assignment (??=)
+println("Test 2: Nullish Coalescing Assignment (??=)");
+let config = {
+    name: null,
+    count: 0,
+    enabled: false
+};
+
+config.name ??= "default_name";
+println("  config.name after ??= 'default_name':", config.name);  # Should be 'default_name'
+
+config.count ??= 10;
+println("  config.count after ??= 10:", config.count);  # Should be 0 (not 10!)
+
+config.enabled ??= true;
+println("  config.enabled after ??= true:", config.enabled);  # Should be false (not true!)
+
+let value = null;
+value ??= "assigned";
+println("  value after null ??= 'assigned':", value);  # Should be 'assigned'
+
+println("");
+
+# Test 3: Logical AND Assignment (&&=)
+println("Test 3: Logical AND Assignment (&&=)");
+let x = 5;
+x &&= 10;  # x is truthy, so assign 10
+println("  5 &&= 10 => ", x);  # Should be 10
+
+let y = 0;
+y &&= 20;  # y is falsy, so keep 0
+println("  0 &&= 20 => ", y);  # Should be 0
+
+let obj = { value: 42 };
+obj.value &&= 100;  # obj.value is truthy, so assign 100
+println("  obj.value (42) &&= 100 => ", obj.value);  # Should be 100
+
+println("");
+
+# Test 4: Logical OR Assignment (||=)
+println("Test 4: Logical OR Assignment (||=)");
+let a = 0;
+a ||= 5;  # a is falsy, so assign 5
+println("  0 ||= 5 => ", a);  # Should be 5
+
+let b = 10;
+b ||= 20;  # b is truthy, so keep 10
+println("  10 ||= 20 => ", b);  # Should be 10
+
+let settings = { timeout: 0 };
+settings.timeout ||= 3000;  # 0 is falsy, so assign 3000
+println("  settings.timeout (0) ||= 3000 => ", settings.timeout);  # Should be 3000
+
+println("");
+
+# Test 5: Try-Catch-Finally Basic
+println("Test 5: Try-Catch-Finally Basic");
+let executionOrder = [];
+
+try {
+    executionOrder.push("try");
+    println("  In try block");
+} catch (e) {
+    executionOrder.push("catch");
+    println("  In catch block");
+} finally {
+    executionOrder.push("finally");
+    println("  In finally block");
+}
+
+println("  Execution order:", executionOrder.join(" -> "));  # Should be: try -> finally
+
+println("");
+
+# Test 6: Try-Catch-Finally with Exception
+println("Test 6: Try-Catch-Finally with Exception");
+let order2 = [];
+
+try {
+    order2.push("try");
+    println("  Throwing error...");
+    throw "Test error";
+} catch (e) {
+    order2.push("catch");
+    println("  Caught error:", e);
+} finally {
+    order2.push("finally");
+    println("  Finally block executed");
+}
+
+println("  Execution order:", order2.join(" -> "));  # Should be: try -> catch -> finally
+
+println("");
+
+# Test 7: Finally Ensures Cleanup
+println("Test 7: Finally Ensures Cleanup");
+let resource = { open: true, closed: false };
+
+fn useResource() {
+    try {
+        println("  Using resource...");
+        if (resource.open) {
+            throw "Resource error";
+        }
+    } catch (e) {
+        println("  Error occurred:", e);
+    } finally {
+        resource.closed = true;
+        println("  Cleanup: Resource closed");
+    }
+};
+
+useResource();
+println("  Resource was closed:", resource.closed);  # Should be true
+
+println("");
+
+# Test 8: Combined Features - Practical Example
+println("Test 8: Combined Features - Config Loading");
+let appConfig = {
+    database: null,
+    cache: null,
+    timeout: 0
+};
+
+# Use nullish coalescing to set defaults
+appConfig.database ??= "localhost:5432";
+appConfig.cache ??= "redis://localhost";
+appConfig.timeout ||= 5000;  # 0 is falsy, use ||=
+
+println("  Config loaded:");
+println("    database:", appConfig.database);
+println("    cache:", appConfig.cache);
+println("    timeout:", appConfig.timeout);
+
+println("");
+
+# Test 9: Error Handling with Finally
+println("Test 9: Error Handling with Resource Management");
+let fileHandle = { path: "/tmp/test.txt", isOpen: false };
+
+fn processFile() {
+    try {
+        fileHandle.isOpen = true;
+        println("  File opened");
+        # Simulate processing
+        throw "Processing failed";
+    } catch (e) {
+        println("  Error:", e);
+        return "error";
+    } finally {
+        if (fileHandle.isOpen) {
+            fileHandle.isOpen = false;
+            println("  File closed in finally");
+        }
+    }
+};
+
+let result = processFile();
+println("  Result:", result);
+println("  File is open:", fileHandle.isOpen);  # Should be false
+
+println("");
+
+# Test 10: Nested Nullish Coalescing
+println("Test 10: Nested Nullish Coalescing");
+let user = {
+    profile: {
+        settings: null
+    }
+};
+
+# Safe property access with nullish coalescing
+let theme = user.profile.settings ?? { theme: "dark" };
+println("  Default theme object:", theme.theme);
+
+println("");
+println("=== All Language and Runtime Tests Completed ===");
