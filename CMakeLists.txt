@@ -112,8 +112,17 @@ else()
   message(WARNING "OpenSSL not found: std.crypto hashes will throw 'not implemented yet'.")
 endif()
 
-set_target_properties(alang PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+if(WIN32)
+  # On Windows with multi-config generators (Visual Studio), executables go to build/Release/
+  set_target_properties(alang PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
+  )
+else()
+  # On Unix, executables go to build/
+  set_target_properties(alang PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+endif()
 
 install(TARGETS alang RUNTIME DESTINATION bin)
