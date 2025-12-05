@@ -1,13 +1,40 @@
 #include "StdNetwork.h"
 #include "../../../AsulInterpreter.h"
 #include "../../../AsulAsync.h"
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <cstring>
+
+#ifdef _WIN32
+    // Windows networking
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+    
+    // Windows compatibility typedefs
+    typedef int socklen_t;
+    #define close closesocket
+    
+    // Initialize Winsock once
+    struct WinsockInit {
+        WinsockInit() {
+            WSADATA wsaData;
+            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+                throw std::runtime_error("WSAStartup failed");
+            }
+        }
+        ~WinsockInit() {
+            WSACleanup();
+        }
+    };
+    static WinsockInit g_winsockInit;
+#else
+    // Unix/Linux/macOS networking
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <netdb.h>
+#endif
 #include <thread>
 #include <sstream>
 #include <iostream>
@@ -45,10 +72,17 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			}
 			
 			int fd = socket(domain, type, 0);
+#ifdef _WIN32
+			if (fd == INVALID_SOCKET) throw std::runtime_error("socket creation failed");
+			
+			char opt = 1;
+			setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#else
 			if (fd < 0) throw std::runtime_error("socket creation failed");
 			
 			int opt = 1;
 			setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
 			Value thisVal = closure->get("this");
 			auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
@@ -571,10 +605,17 @@ void registerStdNetworkPackage(Interpreter& interp) {
 
 				// Create server socket
 				int serverFd = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef _WIN32
+				if (serverFd == INVALID_SOCKET) throw std::runtime_error("Failed to create server socket");
+				
+				char opt = 1;
+				setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#else
 				if (serverFd < 0) throw std::runtime_error("Failed to create server socket");
-
+				
 				int opt = 1;
 				setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
 				struct sockaddr_in addr;
 				std::memset(&addr, 0, sizeof(addr));

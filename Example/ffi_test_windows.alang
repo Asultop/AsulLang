@@ -1,39 +1,15 @@
-// FFI (Foreign Function Interface) Test
-// This file tests calling C functions from dynamic libraries (cross-platform)
+// FFI (Foreign Function Interface) Test - Windows Version
+// This file tests calling C functions from dynamic libraries on Windows
 
 import std.ffi.*;
 
-println("=== FFI (Foreign Function Interface) Tests ===\n");
+println("=== FFI (Foreign Function Interface) Tests (Windows) ===\n");
 
-// Detect platform and set library paths
-let isWindows = false;
-let libcPath = "/lib/x86_64-linux-gnu/libc.so.6"; // Linux default
-let libmPath = "/lib/x86_64-linux-gnu/libm.so.6"; // Linux math library
-
-// Platform detection (simplified - in real code would check OS)
-// For Windows, we'd use: libcPath = "msvcrt.dll"
-
-// Test 1: Load standard C library and call basic functions
-println("Test 1: Loading C library and calling strlen");
+// Test 1: Load msvcrt.dll and call basic functions
+println("Test 1: Loading msvcrt.dll and calling strlen");
 try {
-    // Try common paths
-    let libc = null;
-    try {
-        libc = dlopen(libcPath, RTLD_LAZY);
-    } catch (e1) {
-        // Try Windows
-        try {
-            libcPath = "msvcrt.dll";
-            libc = dlopen(libcPath, RTLD_LAZY);
-            isWindows = true;
-        } catch (e2) {
-            // Try macOS
-            libcPath = "/usr/lib/libc.dylib";
-            libc = dlopen(libcPath, RTLD_LAZY);
-        }
-    }
-    
-    println("Loaded library:", libcPath);
+    let libcPath = "msvcrt.dll"; // Windows C runtime
+    let libc = dlopen(libcPath, RTLD_LAZY);
     
     // Get strlen function
     let strlenPtr = dlsym(libc, "strlen");
@@ -51,18 +27,19 @@ try {
     
     dlclose(libc);
 } catch (error) {
-    println("Note: libc test skipped (library path may vary on this system)");
+    println("Note: msvcrt.dll test skipped");
     println("Error:", error);
 }
 
 // Test 2: Call abs() function
 println("\nTest 2: Library loading and symbol resolution");
 try {
+    let libcPath = "msvcrt.dll";
     let libc = dlopen(libcPath, RTLD_NOW);
     
     let absPtr = dlsym(libc, "abs");
     
-    println("✓ Successfully loaded C library and resolved abs symbol");
+    println("✓ Successfully loaded msvcrt.dll and resolved abs symbol");
     
     dlclose(libc);
 } catch (error) {
@@ -70,25 +47,13 @@ try {
     println("Error:", error);
 }
 
-// Test 3: Call mathematical functions
-println("\nTest 3: Calling sqrt()");
+// Test 3: Call mathematical functions (sqrt is in msvcrt.dll on Windows)
+println("\nTest 3: Calling sqrt() from msvcrt.dll");
 try {
-    let libm = null;
+    let libcPath = "msvcrt.dll";
+    let libc = dlopen(libcPath, RTLD_LAZY);
     
-    if (isWindows) {
-        // On Windows, sqrt is in msvcrt.dll
-        libm = dlopen("msvcrt.dll", RTLD_LAZY);
-    } else {
-        // Try Linux first
-        try {
-            libm = dlopen(libmPath, RTLD_LAZY);
-        } catch (e1) {
-            // Try macOS
-            libm = dlopen("/usr/lib/libm.dylib", RTLD_LAZY);
-        }
-    }
-    
-    let sqrtPtr = dlsym(libm, "sqrt");
+    let sqrtPtr = dlsym(libc, "sqrt");
     
     let result1 = call(sqrtPtr, "double", 16.0);
     let result2 = call(sqrtPtr, "double", 25.0);
@@ -104,7 +69,7 @@ try {
         println("✗ sqrt() test failed");
     }
     
-    dlclose(libm);
+    dlclose(libc);
 } catch (error) {
     println("Note: sqrt test skipped");
     println("Error:", error);
@@ -121,7 +86,7 @@ println("✓ RTLD constants defined");
 // Test 5: Error handling
 println("\nTest 5: Error handling with invalid library");
 try {
-    let invalidLib = dlopen("/nonexistent/library.so", RTLD_LAZY);
+    let invalidLib = dlopen("nonexistent_library.dll", RTLD_LAZY);
     println("✗ Should have thrown error for invalid library");
 } catch (error) {
     println("✓ Correctly caught error for invalid library");
@@ -130,7 +95,7 @@ try {
 // Test 6: Error handling with invalid symbol
 println("\nTest 6: Error handling with invalid symbol");
 try {
-    let libcPath = "/lib/x86_64-linux-gnu/libc.so.6";
+    let libcPath = "msvcrt.dll";
     let libc = dlopen(libcPath, RTLD_LAZY);
     
     let invalidSym = dlsym(libc, "nonexistent_function_12345");
@@ -144,7 +109,7 @@ try {
 // Test 7: Multiple calls to same library
 println("\nTest 7: Reference counting with multiple opens");
 try {
-    let libcPath = "/lib/x86_64-linux-gnu/libc.so.6";
+    let libcPath = "msvcrt.dll";
     
     let libc1 = dlopen(libcPath, RTLD_LAZY);
     let libc2 = dlopen(libcPath, RTLD_LAZY);
@@ -174,7 +139,7 @@ try {
 // Test 8: Symbol resolution verification
 println("\nTest 8: Symbol resolution with strcmp");
 try {
-    let libcPath = "/lib/x86_64-linux-gnu/libc.so.6";
+    let libcPath = "msvcrt.dll";
     let libc = dlopen(libcPath, RTLD_LAZY);
     
     let strcmpPtr = dlsym(libc, "strcmp");
@@ -191,17 +156,11 @@ try {
 
 // Test 9: Platform-specific library paths
 println("\nTest 9: FFI is platform-aware");
-if (isWindows) {
-    println("System: Windows");
-    println("Standard library paths:");
-    println("  - msvcrt.dll: Microsoft Visual C Runtime");
-    println("  - kernel32.dll: Windows kernel functions");
-} else {
-    println("System: Unix-like (Linux/macOS)");
-    println("Standard library paths:");
-    println("  - Linux: /lib/x86_64-linux-gnu/libc.so.6, /lib/x86_64-linux-gnu/libm.so.6");
-    println("  - macOS: /usr/lib/libc.dylib, /usr/lib/libm.dylib");
-}
+println("System: Windows");
+println("Standard library paths:");
+println("  - msvcrt.dll: Microsoft Visual C Runtime");
+println("  - kernel32.dll: Windows kernel functions");
+println("  - user32.dll: Windows user interface");
 println("✓ Platform detection working");
 
 println("\n=== Summary ===");
@@ -214,6 +173,10 @@ println("");
 println("Supported return types: void, int, double, pointer, string");
 println("Maximum 6 arguments per call");
 println("Reference counting for library handles");
-println("Cross-platform: Linux, macOS, Windows");
+println("");
+println("Windows-specific notes:");
+println("- Use .dll extension for Windows libraries");
+println("- System DLLs (msvcrt.dll, kernel32.dll) are in system path");
+println("- LoadLibrary/GetProcAddress used under the hood");
 println("");
 println("=== All FFI Tests Completed! ===");

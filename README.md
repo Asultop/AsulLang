@@ -156,6 +156,22 @@ cmake --install .
 ```
 
 ### 平台注意事项
+#### Windows
+```powershell
+# 使用 CMake GUI 或命令行配置
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+
+# 运行
+.\Release\alang.exe
+```
+- **编译器**: 需要 Visual Studio 2017 或更高版本（支持 C++17）
+- **网络功能**: 自动链接 Winsock2 (ws2_32.lib)
+- **FFI**: 使用 LoadLibrary/GetProcAddress，支持 .dll 动态库
+- **OpenSSL**: 可选，用于加密功能（crypto 包）
+
 #### macOS
 ```bash
 # 推荐安装依赖（提升 REPL 体验与构建速度）
@@ -163,6 +179,33 @@ brew install readline ccache
 ```
 - `readline`：提供 REPL 行编辑、历史记录功能（未安装则回退简单输入）
 - `ccache`：加速增量构建（可选）
+
+#### Linux
+```bash
+# 确保安装必要的开发工具
+sudo apt-get update
+sudo apt-get install build-essential cmake libssl-dev libreadline-dev
+
+# 编译和运行
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+./alang
+```
+- **依赖**: GCC 7+ 或 Clang 5+（支持 C++17）
+- **网络功能**: 使用标准 POSIX socket API
+- **FFI**: 使用 dlopen/dlsym，支持 .so 动态库
+
+#### 跨平台特性支持
+| 特性 | Linux | macOS | Windows |
+|------|-------|-------|---------|
+| 核心语言 | ✅ | ✅ | ✅ |
+| 异步/Promise | ✅ | ✅ | ✅ |
+| 文件 I/O | ✅ | ✅ | ✅ |
+| 网络 Socket | ✅ | ✅ | ✅ (Winsock2) |
+| FFI (动态库) | ✅ (.so) | ✅ (.dylib) | ✅ (.dll) |
+| OpenSSL 加密 | ✅ | ✅ | ✅ |
+| Readline REPL | ✅ | ✅ | ⚠️ (fallback) |
 
 #### 异步脚本注意事项
 若脚本使用 `then/catch`、`go` 等异步特性，宿主程序需在脚本执行后调用 `runEventLoopUntilIdle()` 处理事件循环任务（CLI 已在 `Main.cpp` 中内置该逻辑）。
