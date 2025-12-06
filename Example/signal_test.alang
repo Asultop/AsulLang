@@ -11,8 +11,9 @@ std.os.signal("SIGINT", [](sig) {
 println("Sending SIGINT to self...");
 let pid = std.os.getpid();
 println("PID: " + pid);
-// Use popen to avoid system() blocking signals
-std.os.popen("kill -2 " + pid, "r");
+
+// Use os.raise() to send signal to self (cross-platform)
+std.os.raise("SIGINT");
 
 // Busy wait a bit for signal to be processed
 let i = 0;

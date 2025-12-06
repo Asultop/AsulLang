@@ -442,7 +442,12 @@ StmtPtr Parser::statement() {
 		auto name = consume(TokenType::Identifier, "Expect identifier in catch").lexeme;
 		consume(TokenType::RightParen, "Expect ')' after catch param");
 		auto catchB = statement();
-		return std::make_shared<TryCatchStmt>(tryB, name, catchB);
+		// Optional finally block
+		StmtPtr finallyB = nullptr;
+		if (match({TokenType::Finally})) {
+			finallyB = statement();
+		}
+		return std::make_shared<TryCatchStmt>(tryB, name, catchB, finallyB);
 	}
 	if (match({TokenType::Go})) { auto expr = expression(); consume(TokenType::Semicolon, "Expect ';' after go call"); return std::make_shared<GoStmt>(expr); }
 	if (match({TokenType::Break})) { consume(TokenType::Semicolon, "Expect ';' after break"); return std::make_shared<BreakStmt>(); }
@@ -593,6 +598,45 @@ ExprPtr Parser::expression() { return assignment(); }
 ExprPtr Parser::assignment() {
 	auto expr = conditional();
 	
+	// Logical assignment operators: ??=, &&=, ||= (short-circuiting)
+	if (match({TokenType::QuestionQuestionEqual, TokenType::AndAndEqual, TokenType::OrOrEqual})) {
+		Token op = previous();
+		auto value = assignment();
+		
+		// These operators only assign if the condition is met:
+		// x ??= y  =>  x ?? (x = y)   (assigns only if x is null/undefined)
+		// x &&= y  =>  x && (x = y)   (assigns only if x is truthy)
+		// x ||= y  =>  x || (x = y)   (assigns only if x is falsy)
+		
+		// Convert to logical expression with assignment in right operand
+		TokenType logicalOp;
+		switch (op.type) {
+			case TokenType::QuestionQuestionEqual: logicalOp = TokenType::QuestionQuestion; break;
+			case TokenType::AndAndEqual: logicalOp = TokenType::AndAnd; break;
+			case TokenType::OrOrEqual: logicalOp = TokenType::OrOr; break;
+			default: logicalOp = TokenType::QuestionQuestion; break;
+		}
+		
+		// Create assignment expression for right side
+		ExprPtr assignExpr;
+		if (auto var = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+			assignExpr = std::make_shared<AssignExpr>(var->name, value, var->line);
+		} else if (auto getp = std::dynamic_pointer_cast<GetPropExpr>(expr)) {
+			assignExpr = std::make_shared<SetPropExpr>(getp->object, getp->name, value, getp->line, getp->column, getp->length);
+		} else if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+			assignExpr = std::make_shared<SetIndexExpr>(idx->object, idx->index, value, idx->line, idx->column, idx->length);
+		} else {
+			const Token& tok = op;
+			std::ostringstream oss;
+			oss << "Invalid assignment target for logical assignment at line " << tok.line << ", column " << tok.column << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+		
+		Token logicalToken{logicalOp, op.lexeme, op.line};
+		return std::make_shared<LogicalExpr>(expr, logicalToken, assignExpr);
+	}
+	
 	// 复合赋值运算符：+=, -=, *=, /=, %=
 	if (match({TokenType::PlusEqual, TokenType::MinusEqual, TokenType::StarEqual, TokenType::SlashEqual, TokenType::PercentEqual})) {
 		Token op = previous();
@@ -653,7 +697,7 @@ ExprPtr Parser::assignment() {
 
 ExprPtr Parser::conditional() {
 	// 三元运算符：condition ? thenExpr : elseExpr
-	auto expr = logicalOr();
+	auto expr = nullishCoalescing();
 	
 	if (match({TokenType::Question})) {
 		Token questionToken = previous();
@@ -671,6 +715,17 @@ ExprPtr Parser::conditional() {
 		return std::make_shared<ConditionalExpr>(expr, thenBranch, elseBranch, questionToken.line, questionToken.column, std::max(1, questionToken.length));
 	}
 	
+	return expr;
+}
+
+ExprPtr Parser::nullishCoalescing() {
+	// Nullish coalescing: expr ?? defaultExpr
+	auto expr = logicalOr();
+	while (match({TokenType::QuestionQuestion})) {
+		Token op = previous();
+		auto right = logicalOr();
+		expr = std::make_shared<LogicalExpr>(expr, op, right);
+	}
 	return expr;
 }
 

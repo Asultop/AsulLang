@@ -26,10 +26,12 @@ enum class TokenType {
 	// Increment/Decrement and Compound Assignment
 	PlusPlus, MinusMinus,
 	PlusEqual, MinusEqual, StarEqual, SlashEqual, PercentEqual,
+	// Logical Assignment and Nullish Coalescing
+	QuestionQuestion, QuestionQuestionEqual, AndAndEqual, OrOrEqual,
 	// Literals
 	Identifier, String, Number,
 	// Keywords
-	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Throw, Interface, Import, From, As, Export, Static,
+	Let, Var, Const, Function, Return, If, Else, While, Do, For, ForEach, In, Break, Continue, Switch, Case, Default, Class, Extends, New, True, False, Null, Await, Async, Go, Try, Catch, Finally, Throw, Interface, Import, From, As, Export, Static,
 	EndOfFile
 };
 

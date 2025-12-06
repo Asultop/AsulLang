@@ -409,10 +409,59 @@ void registerStdCollectionsPackage(Interpreter& interp) {
 					entriesFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if (args.size()!=1) throw std::runtime_error("entries expects 1 object argument"); if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) throw std::runtime_error("entries expects an object"); auto po = std::get<std::shared_ptr<Object>>(args[0]); auto arr = std::make_shared<Array>(); for(auto &kv:*po){ auto p = std::make_shared<Array>(); p->push_back(Value{kv.first}); p->push_back(kv.second); arr->push_back(Value{p}); } return Value{arr}; };
 					globals->define("entries", entriesFn);
 
+					// fromEntries(entries): convert array of [key, value] pairs to object
+					auto fromEntriesFn = std::make_shared<Function>(); fromEntriesFn->isBuiltin = true;
+					fromEntriesFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ 
+						if(args.size()!=1) throw std::runtime_error("fromEntries expects 1 argument"); 
+						if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("fromEntries expects an array"); 
+						auto arr = std::get<std::shared_ptr<Array>>(args[0]); 
+						auto obj = std::make_shared<Object>(); 
+						for(auto &entry : *arr) { 
+							if (!std::holds_alternative<std::shared_ptr<Array>>(entry)) throw std::runtime_error("fromEntries: each entry must be an array"); 
+							auto pair = std::get<std::shared_ptr<Array>>(entry); 
+							if (pair->size() < 2) throw std::runtime_error("fromEntries: each entry must have at least 2 elements"); 
+							std::string key = toString((*pair)[0]); 
+							(*obj)[key] = (*pair)[1]; 
+						} 
+						return Value{obj}; 
+					};
+					globals->define("fromEntries", fromEntriesFn);
+
 					// clone(obj): shallow clone object or array
 					auto cloneFn = std::make_shared<Function>(); cloneFn->isBuiltin = true;
 					cloneFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>){ if(args.size()!=1) throw std::runtime_error("clone expects 1 argument"); if (std::holds_alternative<std::shared_ptr<Object>>(args[0])){ auto src = std::get<std::shared_ptr<Object>>(args[0]); auto dst = std::make_shared<Object>(); for(auto &kv:*src) (*dst)[kv.first]=kv.second; return Value{dst}; } if (std::holds_alternative<std::shared_ptr<Array>>(args[0])){ auto src = std::get<std::shared_ptr<Array>>(args[0]); auto dst = std::make_shared<Array>(*src); return Value{dst}; } throw std::runtime_error("clone expects object or array"); };
 					globals->define("clone", cloneFn);
+
+					// deepClone(obj): deep clone object or array
+					auto deepCloneFn = std::make_shared<Function>(); deepCloneFn->isBuiltin = true;
+					deepCloneFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+						if(args.size()!=1) throw std::runtime_error("deepClone expects 1 argument");
+						
+						std::function<Value(const Value&)> cloneRecursive;
+						cloneRecursive = [&cloneRecursive](const Value& val) -> Value {
+							if (std::holds_alternative<std::shared_ptr<Object>>(val)) {
+								auto src = std::get<std::shared_ptr<Object>>(val);
+								auto dst = std::make_shared<Object>();
+								for(auto &kv : *src) {
+									(*dst)[kv.first] = cloneRecursive(kv.second);
+								}
+								return Value{dst};
+							}
+							if (std::holds_alternative<std::shared_ptr<Array>>(val)) {
+								auto src = std::get<std::shared_ptr<Array>>(val);
+								auto dst = std::make_shared<Array>();
+								for(auto &item : *src) {
+									dst->push_back(cloneRecursive(item));
+								}
+								return Value{dst};
+							}
+							// For primitives and other types, return as-is
+							return val;
+						};
+						
+						return cloneRecursive(args[0]);
+					};
+					globals->define("deepClone", deepCloneFn);
 
 					// merge(a,b): shallow merge objects into new object
 					auto mergeFn = std::make_shared<Function>(); mergeFn->isBuiltin = true;

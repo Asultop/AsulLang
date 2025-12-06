@@ -35,14 +35,21 @@
 #include <optional>
 #include <cstring>
 #include <random>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <sys/wait.h>
 #include <csignal>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <process.h>
+#else
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <netdb.h>
+    #include <sys/wait.h>
+#endif
 #include <atomic>
 #include "AsulFormatString/AsulFormatString.h"
 

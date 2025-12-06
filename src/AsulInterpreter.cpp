@@ -1,5 +1,6 @@
 #include "AsulInterpreter.h"
 #include "AsulPackages.h"
+#include <csignal>
 
 namespace asul
 {
@@ -11,6 +12,8 @@ namespace asul
     {
         if (sig > 0 && sig < 32)
             g_pendingSignals[sig] = 1;
+        // Re-register the handler (some platforms reset to default after signal)
+        std::signal(sig, globalSignalHandler);
     }
 
 } // namespace asul
@@ -30,6 +33,10 @@ void registerExternalPackages(asul::Interpreter &interp)
     asul::registerStdIoPackage(interp);
     asul::registerStdBuiltinPackage(interp);
     asul::registerStdCollectionsPackage(interp);
+    asul::registerStdArrayPackage(interp);
+    asul::registerStdLogPackage(interp);
+    asul::registerStdTestPackage(interp);
+    asul::registerStdFfiPackage(interp);
     asul::registerCsvPackage(interp);
     asul::registerJsonPackage(interp);
     asul::registerXmlPackage(interp);

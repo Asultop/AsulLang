@@ -1,0 +1,159 @@
+// == 数组选中方法示例 (flat, flatMap, unique, chunk, groupBy, zip, diff) ==
+// 演示新增的数组操作方法
+
+import std.array.*;
+
+println("=== 数组选中方法测试 ===");
+
+// 1. flat - 扁平化嵌套数组
+println("\n== flat 测试 ==");
+let nested1 = [1, [2, 3], [4, [5, 6]]];
+println("原嵌套数组:", nested1);
+let flat1 = flat(nested1);
+println("flat(默认深度1):", flat1);
+
+let nested2 = [1, [2, [3, [4, 5]]]];
+println("深层嵌套数组:", nested2);
+let flat2 = flat(nested2, 2);
+println("flat(深度2):", flat2);
+let flatAll = flat(nested2, 10);
+println("flat(深度10,完全扁平):", flatAll);
+
+// 2. flatMap - 映射并扁平化
+println("\n== flatMap 测试 ==");
+let numbers = [1, 2, 3, 4];
+println("原数组:", numbers);
+let flatMapped = flatMap(numbers, [](x) { 
+    return [x, x * 2]; 
+});
+println("flatMap(每个元素映射为[x, x*2]):", flatMapped);
+
+let words = ["hello", "world"];
+println("单词数组:", words);
+let chars = flatMap(words, [](w) {
+    let result = [];
+    let i = 0;
+    while (i < w.len()) {
+        result.push(w.substring(i, i + 1));
+        i = i + 1;
+    };
+    return result;
+});
+println("flatMap(拆分为字符):", chars);
+
+// 3. unique - 去重
+println("\n== unique 测试 ==");
+let withDups = [1, 2, 3, 2, 1, 4, 3, 5];
+println("含重复元素数组:", withDups);
+let uniqueNums = unique(withDups);
+println("去重后:", uniqueNums);
+
+let strDups = ["apple", "banana", "apple", "cherry", "banana"];
+println("字符串数组:", strDups);
+let uniqueStrs = unique(strDups);
+println("去重后:", uniqueStrs);
+
+// 4. chunk - 分块
+println("\n== chunk 测试 ==");
+let range = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+println("原数组:", range);
+let chunks3 = chunk(range, 3);
+println("chunk(3):", chunks3);
+
+let chunks4 = chunk(range, 4);
+println("chunk(4):", chunks4);
+
+// 5. groupBy - 分组
+println("\n== groupBy 测试 ==");
+let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+println("原数组:", nums);
+let grouped = groupBy(nums, [](x) { 
+    if (x % 2 == 0) {
+        return "even";
+    } else {
+        return "odd";
+    };
+});
+println("按奇偶分组:", grouped);
+
+let people = [
+    {name: "Alice", age: 25},
+    {name: "Bob", age: 30},
+    {name: "Charlie", age: 25},
+    {name: "David", age: 30}
+];
+println("\n对象数组:", people);
+let byAge = groupBy(people, [](p) { return p.age; });
+println("按年龄分组:", byAge);
+
+// 6. zip - 合并数组
+println("\n== zip 测试 ==");
+let arr1 = [1, 2, 3];
+let arr2 = ["a", "b", "c"];
+let arr3 = [true, false, true];
+println("数组1:", arr1);
+println("数组2:", arr2);
+println("数组3:", arr3);
+let zipped = zip(arr1, arr2, arr3);
+println("zip结果:", zipped);
+
+let shortArr = [10, 20];
+let zippedShort = zip(arr1, shortArr);
+println("zip不等长数组(取最短):", zippedShort);
+
+// 7. diff - 差集
+println("\n== diff 测试 ==");
+let setA = [1, 2, 3, 4, 5];
+let setB = [3, 4, 5, 6, 7];
+println("集合A:", setA);
+println("集合B:", setB);
+let diffAB = diff(setA, setB);
+println("A diff B (A中不在B中的元素):", diffAB);
+
+let diffBA = diff(setB, setA);
+println("B diff A (B中不在A中的元素):", diffBA);
+
+// 8. 链式调用组合 - 使用临时变量模拟链式
+println("\n== 组合调用 ==");
+let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+println("原始数据:", data);
+let step1 = chunk(data, 2);
+let step2 = flatMap(step1, [](pair) { return pair; });
+let step3 = step2.filter([](x) { return x % 2 == 0; });
+let result = unique(step3);
+println("chunk(2) -> flatMap -> filter(偶数) -> unique:", result);
+
+// 9. 实际应用场景示例
+println("\n== 实际应用场景 ==");
+
+// 场景1: 数据去重并分组
+let transactions = [
+    {user: "Alice", amount: 100},
+    {user: "Bob", amount: 50},
+    {user: "Alice", amount: 150},
+    {user: "Charlie", amount: 200},
+    {user: "Bob", amount: 75}
+];
+println("交易记录:", transactions);
+let userGroups = groupBy(transactions, [](t) { return t.user; });
+println("按用户分组:", userGroups);
+
+// 场景2: 嵌套数据扁平化
+let nestedData = [[1, 2], [3, 4], [5, 6]];
+println("\n嵌套数据:", nestedData);
+let flatData = flat(nestedData);
+println("扁平化后:", flatData);
+let sumAll = flatData.reduce([](acc, x) { return acc + x; }, 0);
+println("求和:", sumAll);
+
+// 场景3: 数组对比找差异
+let oldList = ["item1", "item2", "item3", "item4"];
+let newList = ["item2", "item3", "item5", "item6"];
+println("\n旧列表:", oldList);
+println("新列表:", newList);
+let removed = diff(oldList, newList);
+let added = diff(newList, oldList);
+println("删除的项:", removed);
+println("新增的项:", added);
+
+println("\n=== 数组选中方法测试完成 ===");

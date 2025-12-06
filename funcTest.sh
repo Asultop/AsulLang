@@ -88,6 +88,20 @@ func_files=(
     "crypto_hash_demo.alang"
     "stream_example.alang"
     "csvExample.alang"
+    "array_select_methods.alang"
+    "string_methods_test.alang"
+    "math_methods_test.alang"
+    "object_methods_test.alang"
+    "path_enhancements_test.alang"
+    "encoding_enhancements_test.alang"
+    "promise_utilities_test.alang"
+    "log_test.alang"
+    "test_framework_test.alang"
+    "crypto_enhancements_test.alang"
+    "language_runtime_test.alang"
+    "type_system_iterator_test.alang"
+    "operator_overload_test.alang"
+    "ffi_test.alang"
 )
 
 # Counter for passed/failed tests

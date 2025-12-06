@@ -2,10 +2,32 @@
 #include "../../AsulInterpreter.h"
 #include <cstdlib>
 #include <thread>
-#include <unistd.h>
-#include <sys/wait.h>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <process.h>
+#else
+    #include <unistd.h>
+    #include <sys/wait.h>
+#endif
 
 namespace asul {
+
+#ifdef _WIN32
+// Windows implementation of setenv/unsetenv
+inline int win_setenv(const char* name, const char* value, int overwrite) {
+    if (!overwrite) {
+        size_t envsize = 0;
+        int errcode = getenv_s(&envsize, NULL, 0, name);
+        if (!errcode && envsize) return 0;
+    }
+    return _putenv_s(name, value);
+}
+
+inline int win_unsetenv(const char* name) {
+    return _putenv_s(name, "");
+}
+#endif
 
 void registerOsPackage(Interpreter& interp) {
 	interp.registerLazyPackage("os", [&interp](std::shared_ptr<Object> osPkg) {
@@ -28,6 +50,100 @@ void registerOsPackage(Interpreter& interp) {
 			if (args.size() >= 3 && std::holds_alternative<std::string>(args[2])) cwd = std::get<std::string>(args[2]);
 			auto p = std::make_shared<PromiseState>(); p->loopPtr = &interp;
 			// spawn thread to run the process and settle the promise when done
+#ifdef _WIN32
+			std::thread([p, &interp, prog, argv, cwd]() {
+				// Build command line
+				std::string cmdLine = prog;
+				for (const auto& arg : argv) {
+					cmdLine += " \"" + arg + "\"";
+				}
+				
+				SECURITY_ATTRIBUTES saAttr;
+				saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+				saAttr.bInheritHandle = TRUE;
+				saAttr.lpSecurityDescriptor = NULL;
+				
+				HANDLE hStdOutRead, hStdOutWrite;
+				HANDLE hStdErrRead, hStdErrWrite;
+				
+				if (!CreatePipe(&hStdOutRead, &hStdOutWrite, &saAttr, 0) ||
+					!CreatePipe(&hStdErrRead, &hStdErrWrite, &saAttr, 0)) {
+					interp.settlePromise(p, true, Value{ std::string("os.call: CreatePipe failed") });
+					return;
+				}
+				
+				SetHandleInformation(hStdOutRead, HANDLE_FLAG_INHERIT, 0);
+				SetHandleInformation(hStdErrRead, HANDLE_FLAG_INHERIT, 0);
+				
+				STARTUPINFOA si;
+				PROCESS_INFORMATION pi;
+				ZeroMemory(&si, sizeof(si));
+				si.cb = sizeof(si);
+				si.hStdOutput = hStdOutWrite;
+				si.hStdError = hStdErrWrite;
+				si.dwFlags |= STARTF_USESTDHANDLES;
+				ZeroMemory(&pi, sizeof(pi));
+				
+				BOOL success = CreateProcessA(
+					NULL,
+					const_cast<char*>(cmdLine.c_str()),
+					NULL,
+					NULL,
+					TRUE,
+					0,
+					NULL,
+					cwd.empty() ? NULL : cwd.c_str(),
+					&si,
+					&pi
+				);
+				
+				CloseHandle(hStdOutWrite);
+				CloseHandle(hStdErrWrite);
+				
+				if (!success) {
+					CloseHandle(hStdOutRead);
+					CloseHandle(hStdErrRead);
+					interp.settlePromise(p, true, Value{ std::string("os.call: CreateProcess failed") });
+					return;
+				}
+				
+				// Read stdout and stderr
+				std::string out, err;
+				char buffer[4096];
+				DWORD bytesRead;
+				
+				std::thread readOut([&]() {
+					while (ReadFile(hStdOutRead, buffer, sizeof(buffer), &bytesRead, NULL) && bytesRead > 0) {
+						out.append(buffer, bytesRead);
+					}
+				});
+				
+				std::thread readErr([&]() {
+					while (ReadFile(hStdErrRead, buffer, sizeof(buffer), &bytesRead, NULL) && bytesRead > 0) {
+						err.append(buffer, bytesRead);
+					}
+				});
+				
+				WaitForSingleObject(pi.hProcess, INFINITE);
+				
+				DWORD exitCode;
+				GetExitCodeProcess(pi.hProcess, &exitCode);
+				
+				readOut.join();
+				readErr.join();
+				
+				CloseHandle(hStdOutRead);
+				CloseHandle(hStdErrRead);
+				CloseHandle(pi.hProcess);
+				CloseHandle(pi.hThread);
+				
+				auto res = std::make_shared<Object>();
+				(*res)["exitCode"] = Value{ static_cast<double>(exitCode) };
+				(*res)["stdout"] = Value{ out };
+				(*res)["stderr"] = Value{ err };
+				interp.settlePromise(p, false, Value{ res });
+			}).detach();
+#else
 			std::thread([p, &interp, prog, argv, cwd]() {
 				int outpipe[2]; int errpipe[2];
 				if (pipe(outpipe) != 0 || pipe(errpipe) != 0) {
@@ -72,6 +188,7 @@ void registerOsPackage(Interpreter& interp) {
 					interp.settlePromise(p, true, Value{ std::string("os.call: fork failed") });
 				}
 			}).detach();
+#endif
 			return Value{ p };
 		};
 		(*osPkg)["call"] = Value{ callFn };
@@ -90,7 +207,11 @@ void registerOsPackage(Interpreter& interp) {
 		auto setEnvFn = std::make_shared<Function>(); setEnvFn->isBuiltin=true; setEnvFn->builtin=[](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 			if(args.size()!=2) throw std::runtime_error("setEnv expects name, value");
 			std::string name = toString(args[0]); std::string val = toString(args[1]);
+#ifdef _WIN32
+			win_setenv(name.c_str(), val.c_str(), 1);
+#else
 			setenv(name.c_str(), val.c_str(), 1);
+#endif
 			return Value{true};
 		};
 		(*osPkg)["setEnv"] = Value{setEnvFn};

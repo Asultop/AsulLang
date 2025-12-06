@@ -2,8 +2,22 @@
 #include "../../../AsulInterpreter.h"
 #include <cstdlib>
 #include <csignal>
-#include <unistd.h>
 #include <filesystem>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <process.h>
+    #define getpid _getpid
+    #define popen _popen
+    #define pclose _pclose
+    // Windows doesn't have setenv, use _putenv_s
+    inline int setenv(const char* name, const char* value, int overwrite) {
+        return _putenv_s(name, value);
+    }
+#else
+    #include <unistd.h>
+    #include <signal.h>
+#endif
 
 namespace asul {
 
@@ -52,6 +66,11 @@ void registerStdOsPackage(Interpreter& interp) {
 			int sig = 0;
 			if (signame == "SIGINT") sig = SIGINT;
 			else if (signame == "SIGTERM") sig = SIGTERM;
+#ifndef _WIN32
+			else if (signame == "SIGKILL") sig = SIGKILL;
+			else if (signame == "SIGUSR1") sig = SIGUSR1;
+			else if (signame == "SIGUSR2") sig = SIGUSR2;
+#endif
 			else throw std::runtime_error("os.signal unsupported signal: " + signame);
 			
 			interp.setSignalHandler(sig, callback);
@@ -59,6 +78,74 @@ void registerStdOsPackage(Interpreter& interp) {
 			return Value{true};
 		};
 		(*osPkg)["signal"] = Value{signalFn};
+
+		// kill(pid, signame) - send signal to process
+		auto killFn = std::make_shared<Function>(); killFn->isBuiltin = true;
+		killFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.size() < 2) throw std::runtime_error("os.kill expects pid and signame");
+			int pid = static_cast<int>(Interpreter::getNumber(args[0], "os.kill pid"));
+			std::string signame = toString(args[1]);
+			
+			int sig = 0;
+			if (signame == "SIGINT") sig = SIGINT;
+			else if (signame == "SIGTERM") sig = SIGTERM;
+#ifndef _WIN32
+			else if (signame == "SIGKILL") sig = SIGKILL;
+			else if (signame == "SIGUSR1") sig = SIGUSR1;
+			else if (signame == "SIGUSR2") sig = SIGUSR2;
+#endif
+			else throw std::runtime_error("os.kill unsupported signal: " + signame);
+			
+#ifdef _WIN32
+			// On Windows, use raise() for self, or GenerateConsoleCtrlEvent for SIGINT
+			if (pid == _getpid()) {
+				// Sending to self
+				raise(sig);
+				return Value{true};
+			} else {
+				// For other processes, we can only send CTRL_C_EVENT or CTRL_BREAK_EVENT
+				// This only works for console processes in the same console group
+				if (sig == SIGINT) {
+					// Try GenerateConsoleCtrlEvent - requires process to be in same console
+					BOOL result = GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+					return Value{result != 0};
+				} else {
+					// For SIGTERM, try to terminate the process
+					HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+					if (hProcess) {
+						BOOL result = TerminateProcess(hProcess, 1);
+						CloseHandle(hProcess);
+						return Value{result != 0};
+					}
+					return Value{false};
+				}
+			}
+#else
+			int result = kill(pid, sig);
+			return Value{result == 0};
+#endif
+		};
+		(*osPkg)["kill"] = Value{killFn};
+
+		// raise(signame) - send signal to self
+		auto raiseFn = std::make_shared<Function>(); raiseFn->isBuiltin = true;
+		raiseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+			if (args.empty()) throw std::runtime_error("os.raise expects signame");
+			std::string signame = toString(args[0]);
+			
+			int sig = 0;
+			if (signame == "SIGINT") sig = SIGINT;
+			else if (signame == "SIGTERM") sig = SIGTERM;
+#ifndef _WIN32
+			else if (signame == "SIGUSR1") sig = SIGUSR1;
+			else if (signame == "SIGUSR2") sig = SIGUSR2;
+#endif
+			else throw std::runtime_error("os.raise unsupported signal: " + signame);
+			
+			int result = raise(sig);
+			return Value{result == 0};
+		};
+		(*osPkg)["raise"] = Value{raiseFn};
 
 		// getpid()
 		auto getpidFn = std::make_shared<Function>(); getpidFn->isBuiltin = true;

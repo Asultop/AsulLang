@@ -3,6 +3,38 @@
 #include <chrono>
 #include <ctime>
 #include <mutex>
+#include <iomanip>
+#include <sstream>
+
+#ifdef _WIN32
+// Windows implementation of setenv/unsetenv
+inline int win_setenv(const char* name, const char* value, int overwrite) {
+    if (!overwrite) {
+        size_t envsize = 0;
+        int errcode = getenv_s(&envsize, NULL, 0, name);
+        if (!errcode && envsize) return 0;
+    }
+    return _putenv_s(name, value);
+}
+
+inline int win_unsetenv(const char* name) {
+    return _putenv_s(name, "");
+}
+
+// Windows implementation of timegm (converts UTC tm to time_t)
+inline time_t win_timegm(struct tm* tm) {
+    return _mkgmtime(tm);
+}
+
+// Simple strptime implementation for Windows
+inline char* win_strptime(const char* s, const char* format, struct tm* tm) {
+    std::istringstream input(s);
+    input.imbue(std::locale(setlocale(LC_ALL, nullptr)));
+    input >> std::get_time(tm, format);
+    if (input.fail()) return nullptr;
+    return const_cast<char*>(s + input.tellg());
+}
+#endif
 
 // External mutex for timezone operations
 extern std::mutex tzMutex;
@@ -99,14 +131,21 @@ void registerStdTimePackage(Interpreter& interp) {
 					char* oldTz = getenv("TZ");
 					std::string oldTzStr = oldTz ? oldTz : "";
 					
+#ifdef _WIN32
+					win_setenv("TZ", tzName.c_str(), 1);
+					_tzset();
+					localtime_s(&tmVal, &tt);
+					if (oldTz) win_setenv("TZ", oldTzStr.c_str(), 1);
+					else win_unsetenv("TZ");
+					_tzset();
+#else
 					setenv("TZ", tzName.c_str(), 1);
 					tzset();
-					
 					localtime_r(&tt, &tmVal);
-					
 					if (oldTz) setenv("TZ", oldTzStr.c_str(), 1);
 					else unsetenv("TZ");
 					tzset();
+#endif
 				}
 
 				char buf[128];
@@ -259,14 +298,22 @@ void registerStdTimePackage(Interpreter& interp) {
 			std::tm tmVal{};
 			tmVal.tm_isdst = -1;
 			
+#ifdef _WIN32
+			char* res = win_strptime(dateStr.c_str(), fmt.c_str(), &tmVal);
+#else
 			char* res = strptime(dateStr.c_str(), fmt.c_str(), &tmVal);
+#endif
 			if (res == nullptr) throw std::runtime_error("Date parse failed");
 			
 			double ms = 0;
 			
 			if (tzName.empty() || tzName == "UTC" || tzName == "Z") {
 				// Use timegm to interpret as UTC (GNU extension, usually available on Linux)
+#ifdef _WIN32
+				time_t tt = win_timegm(&tmVal);
+#else
 				time_t tt = timegm(&tmVal);
+#endif
 				if (tt == -1) throw std::runtime_error("Date parse failed (timegm)");
 				ms = (double)tt * 1000.0;
 			} else {
@@ -274,14 +321,21 @@ void registerStdTimePackage(Interpreter& interp) {
 				char* oldTz = getenv("TZ");
 				std::string oldTzStr = oldTz ? oldTz : "";
 				
+#ifdef _WIN32
+				win_setenv("TZ", tzName.c_str(), 1);
+				_tzset();
+				time_t tt = mktime(&tmVal); // mktime interprets tm as local time in current TZ
+				if (oldTz) win_setenv("TZ", oldTzStr.c_str(), 1);
+				else win_unsetenv("TZ");
+				_tzset();
+#else
 				setenv("TZ", tzName.c_str(), 1);
 				tzset();
-				
 				time_t tt = mktime(&tmVal); // mktime interprets tm as local time in current TZ
-				
 				if (oldTz) setenv("TZ", oldTzStr.c_str(), 1);
 				else unsetenv("TZ");
 				tzset();
+#endif
 				
 				if (tt == -1) throw std::runtime_error("Date parse failed (mktime)");
 				ms = (double)tt * 1000.0;

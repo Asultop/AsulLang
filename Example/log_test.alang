@@ -1,0 +1,54 @@
+// == std.log 测试 ==
+import std.log.*;
+
+println("=== std.log 功能测试 ===\n");
+
+// 1. 基本日志级别测试
+println("== 基本日志级别测试 ==");
+debug("This is a debug message");
+info("This is an info message");
+warn("This is a warning message");
+error("This is an error message");
+
+// 2. 日志级别控制
+println("\n== 日志级别控制 ==");
+println("设置级别为WARN (2)...");
+setLevel(WARN);
+debug("Debug - 不应显示");
+info("Info - 不应显示");
+warn("Warn - 应该显示");
+error("Error - 应该显示");
+
+// 3. 重置为INFO级别
+println("\n== 重置为INFO级别 ==");
+setLevel(INFO);
+debug("Debug - 不应显示");
+info("Info - 应该显示");
+warn("Warn - 应该显示");
+
+// 4. 颜色控制
+println("\n== 颜色控制 ==");
+println("禁用颜色...");
+setColors(false);
+info("无颜色的info消息");
+warn("无颜色的warn消息");
+
+println("\n启用颜色...");
+setColors(true);
+info("有颜色的info消息");
+warn("有颜色的warn消息");
+
+// 5. 结构化日志
+println("\n== 结构化JSON日志 ==");
+let data = {user: "Alice", action: "login", timestamp: 1638360000};
+json(INFO, data);
+
+let errorData = {error: "Connection timeout", code: 500};
+json(ERROR, errorData);
+
+// 6. 获取当前级别
+println("\n== 获取日志级别 ==");
+let currentLevel = getLevel();
+println("当前日志级别:", currentLevel);
+
+println("\n=== std.log 功能测试完成 ===");
