@@ -5,20 +5,22 @@ import std.path;
 println("Testing std.path...");
 let p = std.path.join("a", "b", "c");
 println("join: " + p);
-if (p != "a/b/c") throw "join failed";
+if (p != "a/b/c" && p != "a\\b\\c") throw "join failed";
 
 let abs = std.path.resolve("test");
 println("resolve: " + abs);
 
-let dir = std.path.dirname("/a/b/c.txt");
-println("dirname: " + dir);
-if (dir != "/a/b") throw "dirname failed";
+let isWindows = (std.os.platform === "windows");
 
-let base = std.path.basename("/a/b/c.txt");
+let dir = std.path.dirname(isWindows ? "\\a\\b\\c.txt" : "/a/b/c.txt");
+println("dirname: " + dir);
+if (dir != (isWindows ? "\\a\\b" : "/a/b") && dir != "\\a\\b" && dir != "/a/b") throw "dirname failed";
+
+let base = std.path.basename(isWindows ? "\\a\\b\\c.txt" : "/a/b/c.txt");
 println("basename: " + base);
 if (base != "c.txt") throw "basename failed";
 
-let ext = std.path.extname("/a/b/c.txt");
+let ext = std.path.extname(isWindows ? "\\a\\b\\c.txt" : "/a/b/c.txt");
 println("extname: " + ext);
 if (ext != ".txt") throw "extname failed";
 
@@ -57,7 +59,8 @@ println("Env var: " + val);
 if (val != "123") throw "getenv failed";
 
 println("Testing popen...");
-let pstream = std.os.popen("echo Hello Popen", "r");
+let popenCmd = "echo Hello Popen";
+let pstream = std.os.popen(popenCmd, "r");
 let outBytes = pstream.read(100);
 println("Popen output bytes: " + outBytes);
 pstream.close();

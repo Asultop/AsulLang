@@ -52,8 +52,23 @@ void registerOsPackage(Interpreter& interp) {
 			// spawn thread to run the process and settle the promise when done
 #ifdef _WIN32
 			std::thread([p, &interp, prog, argv, cwd]() {
-				// Build command line
-				std::string cmdLine = prog;
+				// On Windows, check if prog is a shell command or an executable
+				// Shell commands: echo, dir, type, etc. need cmd /c
+				// Actual executables: g++, gcc, etc. can be called directly
+				bool isShellCmd = (prog == "echo" || prog == "dir" || prog == "type" || 
+								   prog == "del" || prog == "copy" || prog == "move" || 
+								   prog == "ver" || prog == "whoami" || prog == "set" ||
+								   prog == "cmd");
+				
+				std::string cmdLine;
+				if (isShellCmd) {
+					// Use cmd /c for built-in shell commands
+					cmdLine = "cmd /c " + prog;
+				} else {
+					// For actual executables, use program directly
+					cmdLine = prog;
+				}
+				
 				for (const auto& arg : argv) {
 					cmdLine += " \"" + arg + "\"";
 				}
@@ -85,7 +100,7 @@ void registerOsPackage(Interpreter& interp) {
 				ZeroMemory(&pi, sizeof(pi));
 				
 				BOOL success = CreateProcessA(
-					NULL,
+					NULL,  // lpApplicationName: NULL lets Windows search PATH
 					const_cast<char*>(cmdLine.c_str()),
 					NULL,
 					NULL,

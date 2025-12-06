@@ -6,8 +6,11 @@
 
 import os;
 
+// Determine platform
+let isWindows = (os.platform === "windows");
+
 // 回调风格：then / catch
-let p1 = os.call("echo", ["hello from os.call "], ".");
+let p1 = os.call("echo", ["hello from os.call"], ".");
 p1.then([](res) {
     println("echo exit:", res.exitCode);
     println("echo out:", res.stdout);
@@ -17,20 +20,34 @@ p1.then([](res) {
 
 
 // await 风格：等待结果并打印
-let p2 = os.call("/bin/echo", ["async echo", "and more"], ".");
+let echoCmd = "echo";
+let echoArgs = ["async echo and more"];
+let p2 = os.call(echoCmd, echoArgs, ".");
 let r = await p2;
 println("await exit:", r.exitCode);
 println("await out:", r.stdout);
 
-// 示例：列出当前目录（显示前 80 字符）
-let lsPromise = os.call("ls", ["-1"], ".");
-lsPromise.then([](res) {
-    println("ls exit:", res.exitCode);
-    println("ls stdout first 80 chars:\n", res.stdout.substring(0, 80));
+// 示例：获取用户信息（跨平台）
+let userCmd;
+if (isWindows) {
+    // Windows: use whoami command
+    userCmd = "whoami";
+} else {
+    // Unix: use whoami
+    userCmd = "whoami";
+}
+let userPromise = os.call(userCmd, [], ".");
+userPromise.then([](res) {
+    println("user info exit:", res.exitCode);
+    if (res.exitCode === 0) {
+        println("user info output:", res.stdout);
+    } else {
+        println("user info failed with code:", res.exitCode);
+    }
 }).catch([](err) {
-    println("ls failed:", err);
+    println("user info failed:", err);
 });
-await lsPromise;
+await userPromise;
 
 
 // 结束
