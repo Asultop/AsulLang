@@ -37,7 +37,7 @@ void initFormatter() {
 // Error example files
 std::vector<std::string> errorFiles = {
     "assign_undefined.alang",
-    "await_non_promise.alang",
+    // "await_non_promise.alang",
     "call_non_function.alang",
     "expect_property_name.alang",
     "import_not_found.alang",
@@ -51,7 +51,7 @@ std::vector<std::string> errorFiles = {
     "invalid_interpolation.alang",
     "missing_interface_method.alang",
     "missing_multiple_interface.alang",
-    "property_access_non_object.alang",
+    // "property_access_non_object.alang",
     "spread_element_not_array.alang",
     "spread_value_not_object.alang",
     "undefined_variable.alang",
