@@ -1,0 +1,61 @@
+// Example/http_client_enhanced_test.alang
+// Test client for enhanced HTTP server
+
+import std.network;
+
+println("Testing enhanced HTTP server features...\n");
+
+// Wait a bit for server to start
+await sleep(100);
+
+// Test 1: GET /hello
+println("1. Testing GET /hello:");
+try {
+    let res1 = std.network.get("http://127.0.0.1:18082/hello");
+    println("   Status: " + res1.status + " (" + std.network.http.getStatusText(res1.status) + ")");
+    println("   Body: " + res1.body);
+} catch (e) {
+    println("   Error: " + e.message);
+}
+
+// Test 2: GET /created
+println("\n2. Testing GET /created:");
+try {
+    let res2 = std.network.get("http://127.0.0.1:18082/created");
+    println("   Status: " + res2.status + " (" + std.network.http.getStatusText(res2.status) + ")");
+    println("   Body: " + res2.body);
+} catch (e) {
+    println("   Error: " + e.message);
+}
+
+// Test 3: GET /error
+println("\n3. Testing GET /error:");
+try {
+    let res3 = std.network.get("http://127.0.0.1:18082/error");
+    println("   Status: " + res3.status + " (" + std.network.http.getStatusText(res3.status) + ")");
+    println("   Body: " + res3.body);
+} catch (e) {
+    println("   Error: " + e.message);
+}
+
+// Test 4: GET /notfound (should return 404)
+println("\n4. Testing GET /notfound:");
+try {
+    let res4 = std.network.get("http://127.0.0.1:18082/notfound");
+    println("   Status: " + res4.status + " (" + std.network.http.getStatusText(res4.status) + ")");
+    println("   Body: " + res4.body);
+} catch (e) {
+    println("   Error: " + e.message);
+}
+
+// Test 5: HEAD request
+println("\n5. Testing HEAD /hello:");
+try {
+    let res5 = std.network.head("http://127.0.0.1:18082/hello");
+    println("   Status: " + res5.status + " (" + std.network.http.getStatusText(res5.status) + ")");
+    println("   Body length: " + res5.body.len());
+} catch (e) {
+    println("   Error: " + e.message);
+}
+
+println("\nAll client tests completed!");

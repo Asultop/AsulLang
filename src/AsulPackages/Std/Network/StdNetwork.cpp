@@ -796,11 +796,26 @@ void registerStdNetworkPackage(Interpreter& interp) {
 							std::istringstream reqStream(requestData);
 							reqStream >> method >> url >> version;
 
+							// Parse headers and body from request
+							std::string headersSection;
+							std::string body;
+							size_t headerEndPos = requestData.find("\r\n\r\n");
+							if (headerEndPos != std::string::npos) {
+								headersSection = requestData.substr(0, headerEndPos);
+								if (headerEndPos + 4 < requestData.size()) {
+									body = requestData.substr(headerEndPos + 4);
+								}
+							} else {
+								headersSection = requestData;
+							}
+
 							// Create request object
 							auto reqObj = std::make_shared<Object>();
 							(*reqObj)["method"] = Value{method};
 							(*reqObj)["url"] = Value{url};
-							(*reqObj)["headers"] = Value{requestData};
+							(*reqObj)["version"] = Value{version};
+							(*reqObj)["headers"] = Value{headersSection};
+							(*reqObj)["body"] = Value{body};
 
 							// Create response object
 							auto resObj = std::make_shared<Object>();
@@ -836,9 +851,30 @@ void registerStdNetworkPackage(Interpreter& interp) {
 									body = toString(args[0]);
 								}
 
-								std::string statusText = "OK";
-								if (*statusCodePtr == 404) statusText = "Not Found";
-								else if (*statusCodePtr == 500) statusText = "Internal Server Error";
+								// Get status text based on status code
+								std::string statusText;
+								switch (*statusCodePtr) {
+									case 100: statusText = "Continue"; break;
+									case 101: statusText = "Switching Protocols"; break;
+									case 200: statusText = "OK"; break;
+									case 201: statusText = "Created"; break;
+									case 202: statusText = "Accepted"; break;
+									case 204: statusText = "No Content"; break;
+									case 301: statusText = "Moved Permanently"; break;
+									case 302: statusText = "Found"; break;
+									case 303: statusText = "See Other"; break;
+									case 304: statusText = "Not Modified"; break;
+									case 400: statusText = "Bad Request"; break;
+									case 401: statusText = "Unauthorized"; break;
+									case 403: statusText = "Forbidden"; break;
+									case 404: statusText = "Not Found"; break;
+									case 405: statusText = "Method Not Allowed"; break;
+									case 500: statusText = "Internal Server Error"; break;
+									case 501: statusText = "Not Implemented"; break;
+									case 502: statusText = "Bad Gateway"; break;
+									case 503: statusText = "Service Unavailable"; break;
+									default: statusText = "Unknown"; break;
+								}
 
 								std::ostringstream response;
 								response << "HTTP/1.1 " << *statusCodePtr << " " << statusText << "\r\n";

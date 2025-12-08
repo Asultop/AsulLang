@@ -1,0 +1,54 @@
+// Example/http_server_enhanced_test.alang
+// Test for enhanced HTTP server with better request/response handling
+
+import std.network;
+
+let PORT = 18082;
+println("Starting enhanced HTTP server on port " + PORT);
+
+let srv = new std.network.http.Server();
+srv.listen(PORT, [](req, res) {
+    println("\n--- New Request ---");
+    println("Method: " + req.method);
+    println("URL: " + req.url);
+    println("Version: " + req.version);
+    println("Body: " + req.body);
+    
+    if (req.url == "/hello") {
+        res.writeHead(std.network.http.status.OK, {
+            "Content-Type": "text/plain",
+            "X-Custom-Header": "ALang Server"
+        });
+        res.end("Hello from ALang HTTP Server!");
+        return;
+    }
+    
+    if (req.url == "/created") {
+        res.writeHead(std.network.http.status.CREATED, {
+            "Content-Type": "text/plain"
+        });
+        res.end("Resource created");
+        return;
+    }
+    
+    if (req.url == "/error") {
+        res.writeHead(std.network.http.status.INTERNAL_SERVER_ERROR, {
+            "Content-Type": "text/plain"
+        });
+        res.end("Internal Server Error");
+        return;
+    }
+    
+    // Default 404
+    res.writeHead(std.network.http.status.NOT_FOUND, {
+        "Content-Type": "text/plain"
+    });
+    res.end("Not Found: " + req.url);
+});
+
+println("Server is running...");
+println("Test with the client test script");
+
+// Keep server alive
+await sleep(8000);
+println("Server shutting down");

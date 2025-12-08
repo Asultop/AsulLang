@@ -1,0 +1,31 @@
+// Example/http_enhanced_integration_test.alang
+// Integration test for enhanced HTTP server and client
+
+import std.os;
+
+println("=== Enhanced HTTP Integration Test ===\n");
+
+let alangPath = "build/alang";
+
+// Start server in background
+println("1. Starting enhanced HTTP server...");
+let serverCmd = alangPath + " Example/http_server_enhanced_test.alang";
+
+// We'll use a simple approach: start server, wait, run client
+let serverProc = std.os.popen(serverCmd, "r");
+
+// Give server time to start
+println("2. Waiting for server to start...");
+await sleep(500);
+
+// Run client test
+println("3. Running client tests...\n");
+let clientProc = std.os.popen(alangPath + " Example/http_client_enhanced_test.alang", "r");
+let clientOutput = clientProc.read(8192);
+println(clientOutput);
+
+// Clean up
+println("\n4. Cleaning up...");
+await sleep(500);
+
+println("\n=== Integration test completed ===");
