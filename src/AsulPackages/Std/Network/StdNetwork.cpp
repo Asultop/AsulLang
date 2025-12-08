@@ -48,6 +48,45 @@
 
 namespace asul {
 
+// Helper function to get HTTP status text from status code
+static std::string getHttpStatusText(int statusCode) {
+	switch (statusCode) {
+		// 1xx Informational
+		case 100: return "Continue";
+		case 101: return "Switching Protocols";
+		// 2xx Success
+		case 200: return "OK";
+		case 201: return "Created";
+		case 202: return "Accepted";
+		case 204: return "No Content";
+		// 3xx Redirection
+		case 301: return "Moved Permanently";
+		case 302: return "Found";
+		case 303: return "See Other";
+		case 304: return "Not Modified";
+		case 307: return "Temporary Redirect";
+		case 308: return "Permanent Redirect";
+		// 4xx Client Errors
+		case 400: return "Bad Request";
+		case 401: return "Unauthorized";
+		case 403: return "Forbidden";
+		case 404: return "Not Found";
+		case 405: return "Method Not Allowed";
+		case 406: return "Not Acceptable";
+		case 409: return "Conflict";
+		case 410: return "Gone";
+		case 422: return "Unprocessable Entity";
+		case 429: return "Too Many Requests";
+		// 5xx Server Errors
+		case 500: return "Internal Server Error";
+		case 501: return "Not Implemented";
+		case 502: return "Bad Gateway";
+		case 503: return "Service Unavailable";
+		case 504: return "Gateway Timeout";
+		default: return "Unknown";
+	}
+}
+
 void registerStdNetworkPackage(Interpreter& interp) {
 	// Get pointer to async interface (Interpreter implements AsulAsync)
 	// The Interpreter outlives all packages and threads
@@ -851,30 +890,8 @@ void registerStdNetworkPackage(Interpreter& interp) {
 									body = toString(args[0]);
 								}
 
-								// Get status text based on status code
-								std::string statusText;
-								switch (*statusCodePtr) {
-									case 100: statusText = "Continue"; break;
-									case 101: statusText = "Switching Protocols"; break;
-									case 200: statusText = "OK"; break;
-									case 201: statusText = "Created"; break;
-									case 202: statusText = "Accepted"; break;
-									case 204: statusText = "No Content"; break;
-									case 301: statusText = "Moved Permanently"; break;
-									case 302: statusText = "Found"; break;
-									case 303: statusText = "See Other"; break;
-									case 304: statusText = "Not Modified"; break;
-									case 400: statusText = "Bad Request"; break;
-									case 401: statusText = "Unauthorized"; break;
-									case 403: statusText = "Forbidden"; break;
-									case 404: statusText = "Not Found"; break;
-									case 405: statusText = "Method Not Allowed"; break;
-									case 500: statusText = "Internal Server Error"; break;
-									case 501: statusText = "Not Implemented"; break;
-									case 502: statusText = "Bad Gateway"; break;
-									case 503: statusText = "Service Unavailable"; break;
-									default: statusText = "Unknown"; break;
-								}
+								// Get status text using helper function
+								std::string statusText = getHttpStatusText(*statusCodePtr);
 
 								std::ostringstream response;
 								response << "HTTP/1.1 " << *statusCodePtr << " " << statusText << "\r\n";
@@ -985,43 +1002,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			getStatusTextFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 				if (args.empty()) throw std::runtime_error("getStatusText expects 1 argument (status code)");
 				int code = static_cast<int>(getNumber(args[0], "status code"));
-				std::string text;
-				switch (code) {
-					// 1xx
-					case 100: text = "Continue"; break;
-					case 101: text = "Switching Protocols"; break;
-					// 2xx
-					case 200: text = "OK"; break;
-					case 201: text = "Created"; break;
-					case 202: text = "Accepted"; break;
-					case 204: text = "No Content"; break;
-					// 3xx
-					case 301: text = "Moved Permanently"; break;
-					case 302: text = "Found"; break;
-					case 303: text = "See Other"; break;
-					case 304: text = "Not Modified"; break;
-					case 307: text = "Temporary Redirect"; break;
-					case 308: text = "Permanent Redirect"; break;
-					// 4xx
-					case 400: text = "Bad Request"; break;
-					case 401: text = "Unauthorized"; break;
-					case 403: text = "Forbidden"; break;
-					case 404: text = "Not Found"; break;
-					case 405: text = "Method Not Allowed"; break;
-					case 406: text = "Not Acceptable"; break;
-					case 409: text = "Conflict"; break;
-					case 410: text = "Gone"; break;
-					case 422: text = "Unprocessable Entity"; break;
-					case 429: text = "Too Many Requests"; break;
-					// 5xx
-					case 500: text = "Internal Server Error"; break;
-					case 501: text = "Not Implemented"; break;
-					case 502: text = "Bad Gateway"; break;
-					case 503: text = "Service Unavailable"; break;
-					case 504: text = "Gateway Timeout"; break;
-					default: text = "Unknown"; break;
-				}
-				return Value{text};
+				return Value{getHttpStatusText(code)};
 			};
 			(*httpPkg)["getStatusText"] = Value{getStatusTextFn};
 
