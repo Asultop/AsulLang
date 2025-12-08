@@ -1,0 +1,61 @@
+// Example/http_methods_test.alang
+// Test for new HTTP methods and utilities
+
+import std.network;
+
+println("=== HTTP Methods Test ===");
+
+// Test URL parsing with query parameters
+println("\n1. Testing URL class with query parsing:");
+let url = new std.network.URL("http://example.com:8080/api/users?name=john&age=30");
+println("  Protocol: " + url.protocol);
+println("  Host: " + url.host);
+println("  Port: " + url.port);
+println("  Path: " + url.path);
+println("  Query: " + url.query);
+
+let params = url.parseQuery();
+println("  Query parameters:");
+println("    name = " + params.name);
+println("    age = " + params.age);
+
+// Test HTTP status codes
+println("\n2. Testing HTTP status codes:");
+println("  OK = " + std.network.http.status.OK);
+println("  NOT_FOUND = " + std.network.http.status.NOT_FOUND);
+println("  INTERNAL_SERVER_ERROR = " + std.network.http.status.INTERNAL_SERVER_ERROR);
+
+// Test getStatusText
+println("\n3. Testing getStatusText:");
+println("  Status 200: " + std.network.http.getStatusText(200));
+println("  Status 404: " + std.network.http.getStatusText(404));
+println("  Status 500: " + std.network.http.getStatusText(500));
+
+// Test parseHeaders
+println("\n4. Testing parseHeaders:");
+let headerStr = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 1234\r\nServer: ALang/1.0\r\n\r\n";
+let headers = std.network.parseHeaders(headerStr);
+println("  Content-Type: " + headers["Content-Type"]);
+println("  Content-Length: " + headers["Content-Length"]);
+println("  Server: " + headers["Server"]);
+
+// Test new HTTP methods (these will likely fail without a real server, but will show the API works)
+println("\n5. Testing new HTTP methods (may fail without internet/test server):");
+
+try {
+    println("  Testing HEAD request...");
+    let headRes = std.network.head("http://example.com");
+    println("    HEAD status: " + headRes.status);
+} catch (e) {
+    println("    HEAD request error (expected): " + e.message);
+}
+
+try {
+    println("  Testing generic request method...");
+    let reqRes = std.network.request("GET", "http://example.com");
+    println("    Request status: " + reqRes.status);
+} catch (e) {
+    println("    Request error (expected): " + e.message);
+}
+
+println("\n=== All tests completed ===");

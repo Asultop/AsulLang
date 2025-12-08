@@ -344,8 +344,84 @@ void registerStdNetworkPackage(Interpreter& interp) {
 				return Value{ std::monostate{} };
 			};
 			urlClass->methods["constructor"] = urlCtor;
+
+			// parseQuery() method - returns an object with query parameters
+			auto parseQueryFn = std::make_shared<Function>();
+			parseQueryFn->isBuiltin = true;
+			parseQueryFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				std::string query = toString(inst->fields["query"]);
+				
+				auto params = std::make_shared<Object>();
+				if (query.empty()) return Value{params};
+				
+				// Parse query string: key1=value1&key2=value2
+				size_t pos = 0;
+				while (pos < query.size()) {
+					size_t ampPos = query.find('&', pos);
+					if (ampPos == std::string::npos) ampPos = query.size();
+					
+					std::string pair = query.substr(pos, ampPos - pos);
+					size_t eqPos = pair.find('=');
+					if (eqPos != std::string::npos) {
+						std::string key = pair.substr(0, eqPos);
+						std::string value = pair.substr(eqPos + 1);
+						(*params)[key] = Value{value};
+					} else {
+						(*params)[pair] = Value{std::string("")};
+					}
+					pos = ampPos + 1;
+				}
+				return Value{params};
+			};
+			urlClass->methods["parseQuery"] = parseQueryFn;
+
 			(*netPkg)["URL"] = Value{ urlClass };
 		}
+
+		// parseHeaders(headersString) -> object with header key-value pairs
+		auto parseHeadersFn = std::make_shared<Function>();
+		parseHeadersFn->isBuiltin = true;
+		parseHeadersFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.empty()) throw std::runtime_error("parseHeaders expects 1 argument (headers string)");
+			std::string headersStr = toString(args[0]);
+			auto headers = std::make_shared<Object>();
+			
+			// Parse headers line by line
+			std::istringstream stream(headersStr);
+			std::string line;
+			bool firstLine = true;
+			
+			while (std::getline(stream, line)) {
+				if (firstLine) {
+					// Skip HTTP status line (e.g., "HTTP/1.1 200 OK")
+					firstLine = false;
+					continue;
+				}
+				// Remove \r if present
+				if (!line.empty() && line.back() == '\r') {
+					line.pop_back();
+				}
+				if (line.empty()) break; // Empty line marks end of headers
+				
+				size_t colonPos = line.find(':');
+				if (colonPos != std::string::npos) {
+					std::string key = line.substr(0, colonPos);
+					std::string value = line.substr(colonPos + 1);
+					// Trim leading/trailing spaces from value
+					size_t start = value.find_first_not_of(" \t");
+					size_t end = value.find_last_not_of(" \t");
+					if (start != std::string::npos && end != std::string::npos) {
+						value = value.substr(start, end - start + 1);
+					}
+					(*headers)[key] = Value{value};
+				}
+			}
+			return Value{headers};
+		};
+		(*netPkg)["parseHeaders"] = Value{parseHeadersFn};
+
 
 		// fetch(url[, options]) -> Promise<Response-like>
 		{
@@ -571,6 +647,54 @@ void registerStdNetworkPackage(Interpreter& interp) {
 		};
 		(*netPkg)["post"] = Value{postFn};
 
+		auto putFn = std::make_shared<Function>();
+		putFn->isBuiltin = true;
+		putFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 2) throw std::runtime_error("http.put expects 2 arguments (url, data)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("PUT", std::get<std::string>(args[0]), toString(args[1]));
+		};
+		(*netPkg)["put"] = Value{putFn};
+
+		auto deleteFn = std::make_shared<Function>();
+		deleteFn->isBuiltin = true;
+		deleteFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("http.delete expects 1 argument (url)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("DELETE", std::get<std::string>(args[0]), "");
+		};
+		(*netPkg)["delete"] = Value{deleteFn};
+
+		auto patchFn = std::make_shared<Function>();
+		patchFn->isBuiltin = true;
+		patchFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 2) throw std::runtime_error("http.patch expects 2 arguments (url, data)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("PATCH", std::get<std::string>(args[0]), toString(args[1]));
+		};
+		(*netPkg)["patch"] = Value{patchFn};
+
+		auto headFn = std::make_shared<Function>();
+		headFn->isBuiltin = true;
+		headFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() != 1) throw std::runtime_error("http.head expects 1 argument (url)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("url must be string");
+			return httpRequest("HEAD", std::get<std::string>(args[0]), "");
+		};
+		(*netPkg)["head"] = Value{headFn};
+
+		// Generic request function: request(method, url, data="")
+		auto requestFn = std::make_shared<Function>();
+		requestFn->isBuiltin = true;
+		requestFn->builtin = [httpRequest](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+			if (args.size() < 2) throw std::runtime_error("http.request expects at least 2 arguments (method, url)");
+			if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("method must be string");
+			if (!std::holds_alternative<std::string>(args[1])) throw std::runtime_error("url must be string");
+			std::string data = args.size() >= 3 ? toString(args[2]) : "";
+			return httpRequest(std::get<std::string>(args[0]), std::get<std::string>(args[1]), data);
+		};
+		(*netPkg)["request"] = Value{requestFn};
+
 		// http sub-package with Server class
 		{
 			auto httpPkg = std::make_shared<Object>();
@@ -782,6 +906,89 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			serverClass->methods["close"] = closeFn;
 
 			(*httpPkg)["Server"] = Value{serverClass};
+
+			// HTTP Status Codes
+			auto statusObj = std::make_shared<Object>();
+			// 1xx Informational
+			(*statusObj)["CONTINUE"] = Value{100.0};
+			(*statusObj)["SWITCHING_PROTOCOLS"] = Value{101.0};
+			// 2xx Success
+			(*statusObj)["OK"] = Value{200.0};
+			(*statusObj)["CREATED"] = Value{201.0};
+			(*statusObj)["ACCEPTED"] = Value{202.0};
+			(*statusObj)["NO_CONTENT"] = Value{204.0};
+			// 3xx Redirection
+			(*statusObj)["MOVED_PERMANENTLY"] = Value{301.0};
+			(*statusObj)["FOUND"] = Value{302.0};
+			(*statusObj)["SEE_OTHER"] = Value{303.0};
+			(*statusObj)["NOT_MODIFIED"] = Value{304.0};
+			(*statusObj)["TEMPORARY_REDIRECT"] = Value{307.0};
+			(*statusObj)["PERMANENT_REDIRECT"] = Value{308.0};
+			// 4xx Client Errors
+			(*statusObj)["BAD_REQUEST"] = Value{400.0};
+			(*statusObj)["UNAUTHORIZED"] = Value{401.0};
+			(*statusObj)["FORBIDDEN"] = Value{403.0};
+			(*statusObj)["NOT_FOUND"] = Value{404.0};
+			(*statusObj)["METHOD_NOT_ALLOWED"] = Value{405.0};
+			(*statusObj)["NOT_ACCEPTABLE"] = Value{406.0};
+			(*statusObj)["CONFLICT"] = Value{409.0};
+			(*statusObj)["GONE"] = Value{410.0};
+			(*statusObj)["UNPROCESSABLE_ENTITY"] = Value{422.0};
+			(*statusObj)["TOO_MANY_REQUESTS"] = Value{429.0};
+			// 5xx Server Errors
+			(*statusObj)["INTERNAL_SERVER_ERROR"] = Value{500.0};
+			(*statusObj)["NOT_IMPLEMENTED"] = Value{501.0};
+			(*statusObj)["BAD_GATEWAY"] = Value{502.0};
+			(*statusObj)["SERVICE_UNAVAILABLE"] = Value{503.0};
+			(*statusObj)["GATEWAY_TIMEOUT"] = Value{504.0};
+			(*httpPkg)["status"] = Value{statusObj};
+
+			// Helper function to get status text from code
+			auto getStatusTextFn = std::make_shared<Function>();
+			getStatusTextFn->isBuiltin = true;
+			getStatusTextFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+				if (args.empty()) throw std::runtime_error("getStatusText expects 1 argument (status code)");
+				int code = static_cast<int>(getNumber(args[0], "status code"));
+				std::string text;
+				switch (code) {
+					// 1xx
+					case 100: text = "Continue"; break;
+					case 101: text = "Switching Protocols"; break;
+					// 2xx
+					case 200: text = "OK"; break;
+					case 201: text = "Created"; break;
+					case 202: text = "Accepted"; break;
+					case 204: text = "No Content"; break;
+					// 3xx
+					case 301: text = "Moved Permanently"; break;
+					case 302: text = "Found"; break;
+					case 303: text = "See Other"; break;
+					case 304: text = "Not Modified"; break;
+					case 307: text = "Temporary Redirect"; break;
+					case 308: text = "Permanent Redirect"; break;
+					// 4xx
+					case 400: text = "Bad Request"; break;
+					case 401: text = "Unauthorized"; break;
+					case 403: text = "Forbidden"; break;
+					case 404: text = "Not Found"; break;
+					case 405: text = "Method Not Allowed"; break;
+					case 406: text = "Not Acceptable"; break;
+					case 409: text = "Conflict"; break;
+					case 410: text = "Gone"; break;
+					case 422: text = "Unprocessable Entity"; break;
+					case 429: text = "Too Many Requests"; break;
+					// 5xx
+					case 500: text = "Internal Server Error"; break;
+					case 501: text = "Not Implemented"; break;
+					case 502: text = "Bad Gateway"; break;
+					case 503: text = "Service Unavailable"; break;
+					case 504: text = "Gateway Timeout"; break;
+					default: text = "Unknown"; break;
+				}
+				return Value{text};
+			};
+			(*httpPkg)["getStatusText"] = Value{getStatusTextFn};
+
 			(*netPkg)["http"] = Value{httpPkg};
 		}
 	});
