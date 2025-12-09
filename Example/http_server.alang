@@ -13,6 +13,6 @@ srv.listen(PORT, [](req, res){
     res.end("not found");
 });
 
-// Keep server alive for a short while to handle requests
-await sleep(1200);
+// Keep server alive while processing event loop; returns when server is closed or on timeout
+srv.waitForFinished();
 println("HTTP server shutting down");

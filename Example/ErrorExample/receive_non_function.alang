@@ -1,0 +1,9 @@
+// 示例: 事件连接槽类型错误（运行时错误）
+// 说明: receive 的第二个参数必须是函数
+
+import std.events;
+
+let obj = new std.events.AsulObject();
+
+// receive 的第二个参数必须是函数，这里传递了字符串
+obj.receive("signal", "not a function");

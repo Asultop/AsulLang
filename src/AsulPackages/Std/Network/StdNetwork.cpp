@@ -1119,6 +1119,37 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			};
 			serverClass->methods["close"] = closeFn;
 
+			// waitForFinished(ms=-1) - block until server is closed or timeout (ms).
+			// While waiting this will drain the interpreter event loop so async callbacks run.
+			auto waitFn = std::make_shared<Function>();
+			waitFn->isBuiltin = true;
+			waitFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment> closure) -> Value {
+				double timeoutMs = -1.0;
+				if (!args.empty()) timeoutMs = getNumber(args[0], "ms");
+				Value thisVal = closure->get("this");
+				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
+				auto ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				using namespace std::chrono;
+				auto start = steady_clock::now();
+				while (ext && ext->nativeHandle) {
+					// Drain any pending tasks so callbacks (e.g., request handlers) execute
+					interpPtr->runEventLoopUntilIdle();
+					if (timeoutMs >= 0.0) {
+						auto elapsed = duration_cast<milliseconds>(steady_clock::now() - start).count();
+						if (elapsed >= static_cast<long long>(timeoutMs)) return Value{false};
+					}
+					// Sleep briefly to avoid busy-looping when there's nothing to process
+					std::this_thread::sleep_for(milliseconds(10));
+					// Re-fetch ext in case server was closed from another thread
+					std::this_thread::yield();
+					Value tv = closure->get("this");
+					inst = std::get<std::shared_ptr<Instance>>(tv);
+					ext = std::dynamic_pointer_cast<InstanceExt>(inst);
+				}
+				return Value{true};
+			};
+			serverClass->methods["waitForFinished"] = waitFn;
+
 			(*httpPkg)["Server"] = Value{serverClass};
 
 			// HTTP Status Codes

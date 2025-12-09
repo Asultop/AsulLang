@@ -1,0 +1,9 @@
+// 示例: JSON 解析错误（运行时错误）
+// 说明: 尝试解析无效的 JSON 字符串会抛出解析错误
+
+import json;
+
+// 无效的 JSON - 缺少闭合括号
+let invalidJson = "{name: test";
+let data = json.parse(invalidJson);
+println(data);

@@ -1,0 +1,134 @@
+/*
+ * Comprehensive std.events inheritance test
+ * Demonstrates multiple inheritance levels and signal-slot mechanisms
+ */
+
+import std.events;
+
+let AsulObject = std.events.AsulObject;
+
+println("=== Comprehensive std.events Inheritance Test ===\n");
+
+// Test 1: Simple inheritance
+println("--- Test 1: Simple Button Inheritance ---");
+
+class Button <- AsulObject {
+    function constructor(label) {
+        this.label = label;
+    }
+
+    function click() {
+        println("Button '" + this.label + "' clicked!");
+        this.emit("clicked", this.label);
+    }
+}
+
+let btn = new Button("OK");
+btn.receive("clicked", [](label) {
+    println("  Handler received: " + label);
+});
+btn.click();
+
+println("");
+
+// Test 2: Multi-level inheritance
+println("--- Test 2: Multi-level Inheritance ---");
+
+class Widget <- AsulObject {
+    function constructor() {
+        this.id = "widget";
+    }
+    
+    function notify(message) {
+        println("Widget " + this.id + " notifying: " + message);
+        this.emit("notification", this.id, message);
+    }
+}
+
+class ClickableWidget <- Widget {
+    function constructor(id) {
+        this.id = id;
+        this.clickCount = 0;
+    }
+    
+    function handleClick() {
+        this.clickCount = this.clickCount + 1;
+        println("ClickableWidget " + this.id + " clicked (count: " + this.clickCount + ")");
+        this.emit("clicked", this.clickCount);
+    }
+}
+
+let cw = new ClickableWidget("button1");
+cw.receive("notification", [](id, msg) {
+    println("  Notification received from " + id + ": " + msg);
+});
+cw.receive("clicked", [](count) {
+    println("  Click count: " + count);
+});
+
+cw.notify("Widget initialized");
+cw.handleClick();
+cw.handleClick();
+
+println("");
+
+// Test 3: Cross-object connections
+println("--- Test 3: Cross-object Connections ---");
+
+class Sender <- AsulObject {
+    function constructor(name) {
+        this.name = name;
+    }
+    
+    function send(data) {
+        println("Sender '" + this.name + "' sending: " + data);
+        this.emit("dataSent", data);
+    }
+}
+
+class Receiver <- AsulObject {
+    function constructor(name) {
+        this.name = name;
+    }
+    
+    function onDataReceived(data) {
+        println("  Receiver '" + this.name + "' got: " + data);
+    }
+}
+
+let sender = new Sender("Transmitter");
+let receiver1 = new Receiver("Monitor1");
+let receiver2 = new Receiver("Monitor2");
+
+std.events.connect(sender, "dataSent", receiver1, "onDataReceived");
+std.events.connect(sender, "dataSent", receiver2, "onDataReceived");
+
+sender.send("Hello World");
+
+println("");
+
+// Test 4: Self-referencing signals
+println("--- Test 4: Self-referencing Signals ---");
+
+class Counter <- AsulObject {
+    function constructor() {
+        this.value = 0;
+    }
+    
+    function increment() {
+        this.value = this.value + 1;
+        this.emit("valueChanged", this.value);
+    }
+    
+    function onValueChanged(newValue) {
+        println("  Counter value changed to: " + newValue);
+    }
+}
+
+let counter = new Counter();
+std.events.connect(counter, "valueChanged", counter, "onValueChanged");
+counter.increment();
+counter.increment();
+counter.increment();
+
+println("\n=== All comprehensive tests completed successfully! ===");

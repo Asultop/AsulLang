@@ -1,0 +1,27 @@
+/*
+ * Test std.events inheritance - matches the problem statement example
+ */
+
+import std.events;
+
+// Import AsulObject for easier use
+let AsulObject = std.events.AsulObject;
+
+class Button <- AsulObject {
+    function constructor(label) {
+        this.label = label;
+    }
+
+    function click() {
+        println("Button '" + this.label + "' clicked!");
+        this.emit("clicked", this.label);
+    }
+    
+    function clicked(label) {
+        println("Slot: Button '" + label + "' was clicked (from connect)!");
+    }
+}
+
+let button = new Button("Submit");
+std.events.connect(button, "clicked", button, "clicked");
+button.click();

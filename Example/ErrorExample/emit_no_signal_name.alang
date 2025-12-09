@@ -1,0 +1,9 @@
+// 示例: 事件系统参数错误（运行时错误）
+// 说明: emit 函数至少需要 1 个参数（信号名称）
+
+import std.events;
+
+let obj = new std.events.AsulObject();
+
+// emit 期望至少 1 个参数（信号名称）
+obj.emit();

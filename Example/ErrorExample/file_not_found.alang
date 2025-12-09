@@ -1,0 +1,7 @@
+// 示例: 文件读取失败（运行时错误）
+// 说明: 尝试读取不存在的文件会抛出文件打开错误
+
+import std.io;
+
+let content = std.io.readFile("/path/to/nonexistent/file.txt");
+println(content);

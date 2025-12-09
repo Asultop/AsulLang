@@ -49,6 +49,7 @@ srv.listen(PORT, [](req, res) {
 println("Server is running...");
 println("Test with the client test script");
 
-// Keep server alive
-await sleep(8000);
+// Keep server alive while processing event loop; returns when server is closed or on timeout
+// srv.waitForFinished(3000);
+await sleep(3000);
 println("Server shutting down");

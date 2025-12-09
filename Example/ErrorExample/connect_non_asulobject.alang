@@ -1,0 +1,10 @@
+// 示例: 连接非 AsulObject 实例（运行时错误）
+// 说明: connect 函数要求发送者和接收者都是 AsulObject 实例
+
+import std.events;
+
+let obj = new std.events.AsulObject();
+let notAnObject = { name: "plain object" };
+
+// connect 要求 sender 是 AsulObject 实例
+std.events.connect(notAnObject, "signal", obj, "slot");

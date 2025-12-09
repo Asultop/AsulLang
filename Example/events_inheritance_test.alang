@@ -1,0 +1,38 @@
+/*
+ * Test std.events inheritance support
+ * Tests that classes can inherit from AsulObject and use signal-slot functionality
+ */
+
+import std.events;
+
+println("=== Testing std.events Inheritance ===\n");
+
+// Import AsulObject to use it directly in inheritance
+let AsulObject = std.events.AsulObject;
+
+// Example from the issue: Button class inheriting from AsulObject
+class Button <- AsulObject {
+    function constructor(label) {
+        this.label = label;
+    }
+
+    function click() {
+        println("Button '" + this.label + "' clicked!");
+        this.emit("clicked", this.label);
+    }
+    
+    function clicked(label) {
+        println("Slot: Button '" + label + "' was clicked (from connect)!");
+    }
+}
+
+// Create a button instance
+let button = new Button("Submit");
+
+// Connect the button's clicked signal to its own clicked slot
+std.events.connect(button, "clicked", button, "clicked");
+
+// Trigger the click - should call the slot
+button.click();
+
+println("\n=== Test completed successfully! ===");

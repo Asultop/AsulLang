@@ -1,0 +1,8 @@
+// 示例: 数学函数参数错误（运行时错误）
+// 说明: 向数学函数传递错误数量的参数会抛出参数错误
+
+import std.math;
+
+// pow 期望 2 个数字参数，这里只传递了 1 个
+let result = std.math.pow(2);
+println(result);

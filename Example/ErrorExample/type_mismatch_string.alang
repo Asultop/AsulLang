@@ -1,0 +1,8 @@
+// 示例: 类型不匹配错误（运行时错误）
+// 说明: 向期望字符串参数的函数传递非字符串类型
+
+import std.string;
+
+// toUpperCase 期望字符串参数，这里传递了数字
+let upper = std.string.toUpperCase(123);
+println(upper);
