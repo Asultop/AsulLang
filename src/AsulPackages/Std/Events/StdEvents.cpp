@@ -43,9 +43,9 @@ void registerStdEventsPackage(Interpreter& interp) {
         auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
         auto instExt = static_cast<InstanceExt*>(inst.get());
         
-        // Allocate native event object handle
-        auto neo = new NativeEventObject();
-        instExt->nativeHandle = neo;
+        // Allocate native event object handle with exception safety
+        std::unique_ptr<NativeEventObject> neo(new NativeEventObject());
+        instExt->nativeHandle = neo.release();
         instExt->nativeDestructor = [](void* p) { delete static_cast<NativeEventObject*>(p); };
         
         return Value{std::monostate{}};
@@ -105,7 +105,7 @@ void registerStdEventsPackage(Interpreter& interp) {
                         
                         // Bind regular parameters
                         for (size_t i = 0; i < expectedParams && i < providedArgs; ++i) {
-                            if ((*fn)->restParamIndex >= 0 && (int)i >= (*fn)->restParamIndex) {
+                            if ((*fn)->restParamIndex >= 0 && static_cast<int>(i) >= (*fn)->restParamIndex) {
                                 // This is the rest parameter - collect remaining args into an array
                                 auto restArr = std::make_shared<Array>();
                                 for (size_t j = i; j < providedArgs; ++j) {
@@ -244,7 +244,7 @@ void registerStdEventsPackage(Interpreter& interp) {
                         
                         // Bind parameters
                         for (size_t i = 0; i < expectedParams && i < providedArgs; ++i) {
-                            if (slotFnCopy->restParamIndex >= 0 && (int)i >= slotFnCopy->restParamIndex) {
+                            if (slotFnCopy->restParamIndex >= 0 && static_cast<int>(i) >= slotFnCopy->restParamIndex) {
                                 auto restArr = std::make_shared<Array>();
                                 for (size_t j = i; j < providedArgs; ++j) {
                                     restArr->push_back(callArgs[j]);
