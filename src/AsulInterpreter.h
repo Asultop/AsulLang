@@ -896,8 +896,22 @@ public:
 			}
 			auto p = std::get<std::shared_ptr<PromiseState>>(v);
 			if (!p) return Value{std::monostate{}};
-			std::unique_lock<std::mutex> lk(p->mtx);
-			p->cv.wait(lk, [&]{ return p->settled; });
+			// While waiting, cooperatively drain the event loop so async callbacks keep running.
+			Interpreter* loop = static_cast<Interpreter*>(p->loopPtr);
+			using namespace std::chrono;
+			for (;;) {
+				{
+					std::unique_lock<std::mutex> lk(p->mtx);
+					if (p->settled) break;
+					// If no event loop available, fallback to timed wait to avoid busy-loop.
+					p->cv.wait_for(lk, milliseconds(2));
+				}
+				if (loop) {
+					// Run any queued tasks; sleep briefly to yield.
+					loop->runEventLoopUntilIdle();
+					std::this_thread::sleep_for(milliseconds(1));
+				}
+			}
 			if (p->rejected) throw ExceptionSignal{ p->result };
 			return p->result;
 		}
