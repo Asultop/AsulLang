@@ -11,8 +11,8 @@ echo ""
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Path to alang executable (same directory as this script)
-ALANG="$SCRIPT_DIR/alang"
+# Path to alang executable (from build directory)
+ALANG="$SCRIPT_DIR/build/alang"
 
 # Error examples directory
 ERROR_DIR="$SCRIPT_DIR/Example/ErrorExample"

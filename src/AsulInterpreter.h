@@ -1197,7 +1197,7 @@ public:
 							std::ostringstream oss; 
 							oss << "Base class constructor requires parameters but inheritance does not support parameter passing yet. "
 							    << "Base class constructors must be parameterless. "
-							    << "At line " << nw->line << ", column " << nw->column << ", length " << nw->length;
+							    << "at line " << nw->line << ", column " << nw->column << ", length " << nw->length;
 							throw std::runtime_error(oss.str());
 						}
 					} else {
