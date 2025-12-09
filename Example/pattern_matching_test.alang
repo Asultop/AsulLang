@@ -1,0 +1,55 @@
+// Pattern Matching Tests
+println("=== Pattern Matching Tests ===");
+
+// Test 1: Basic value matching
+let x = 2;
+match (x) {
+    case 1 -> { println("x is 1"); }
+    case 2 -> { println("x is 2"); }
+    case 3 -> { println("x is 3"); }
+    default -> { println("x is something else"); }
+}
+
+// Test 2: String matching
+let status = "success";
+match (status) {
+    case "success" -> { println("Operation succeeded!"); }
+    case "error" -> { println("Operation failed!"); }
+    case "pending" -> { println("Operation pending..."); }
+    default -> { println("Unknown status"); }
+}
+
+// Test 3: Guard clauses
+let num = 15;
+match (num) {
+    case 10 if num > 5 -> { println("10 with guard passed"); }
+    case 15 if num > 10 -> { println("15 and greater than 10"); }
+    case 15 -> { println("Just 15"); }
+    default -> { println("Other number"); }
+}
+
+// Test 4: Object matching
+let obj = {shape: "circle"};
+match (obj.shape) {
+    case "circle" -> { println("Shape is a circle"); }
+    case "square" -> { println("Shape is a square"); }
+    case "triangle" -> { println("Shape is a triangle"); }
+    default -> { println("Unknown shape"); }
+}
+
+// Test 5: Multiple patterns with blocks
+let value = 42;
+match (value) {
+    case 10 -> {
+        println("Value is 10");
+        println("This is a block");
+    }
+    case 42 -> {
+        println("The answer to everything!");
+    }
+    default -> {
+        println("Some other value");
+    }
+}
+
+println("\n=== All pattern matching tests completed ===");

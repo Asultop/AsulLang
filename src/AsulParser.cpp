@@ -440,6 +440,7 @@ StmtPtr Parser::statement() {
 	if (match({TokenType::For})) return forStatement();
 	if (match({TokenType::ForEach})) return forEachStatement();
 	if (match({TokenType::Switch})) return switchStatement();
+	if (match({TokenType::Match})) return matchStatement();
 	if (match({TokenType::Return})) return returnStatement();
 	if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
 	// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
@@ -552,6 +553,60 @@ StmtPtr Parser::switchStatement() {
 	
 	consume(TokenType::RightBrace, "Expect '}' after switch body");
 	return std::make_shared<SwitchStmt>(expr, cases);
+}
+
+StmtPtr Parser::matchStatement() {
+	// match (expr) { case pattern => stmt, ... }
+	consume(TokenType::LeftParen, "Expect '(' after 'match'");
+	ExprPtr expr = expression();
+	consume(TokenType::RightParen, "Expect ')' after match expression");
+	consume(TokenType::LeftBrace, "Expect '{' after match header");
+	
+	std::vector<MatchStmt::MatchArm> arms;
+	
+	while (!check(TokenType::RightBrace) && !isAtEnd()) {
+		if (match({TokenType::Case})) {
+			// case pattern [if guard] => body
+			// Use conditional() to stop before commas and arrows
+			ExprPtr pattern = conditional();
+			
+			// Optional guard clause
+			ExprPtr guard = nullptr;
+			if (match({TokenType::If})) {
+				guard = conditional();
+			}
+			
+			// Expect => (using arrow token)
+			consume(TokenType::Arrow, "Expect '=>' after match pattern");
+			
+			// Body can be a single statement or a block
+			StmtPtr body = statement();
+			
+			arms.push_back({pattern, guard, body});
+			
+			// Optional comma after arm
+			match({TokenType::Comma});
+		} else if (match({TokenType::Default})) {
+			// default => body (catchall pattern)
+			consume(TokenType::Arrow, "Expect '=>' after 'default'");
+			StmtPtr body = statement();
+			
+			// Use null pattern to indicate default
+			arms.push_back({nullptr, nullptr, body});
+			
+			// Optional comma after arm
+			match({TokenType::Comma});
+		} else {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect 'case' or 'default' in match body at line " << tok.line << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+	}
+	
+	consume(TokenType::RightBrace, "Expect '}' after match body");
+	return std::make_shared<MatchStmt>(expr, arms);
 }
 
 StmtPtr Parser::returnStatement() {

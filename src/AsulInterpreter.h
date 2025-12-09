@@ -1452,6 +1452,43 @@ public:
 			}
 			return;
 		}
+		if (auto m = std::dynamic_pointer_cast<MatchStmt>(stmt)) {
+			// match (expr) { case pattern => body, ... }
+			Value matchValue = evaluate(m->expr);
+			
+			for (const auto& arm : m->arms) {
+				bool matches = false;
+				
+				// Check if pattern matches
+				if (arm.pattern == nullptr) {
+					// Default/catchall pattern
+					matches = true;
+				} else {
+					// Evaluate pattern and check equality
+					Value patternValue = evaluate(arm.pattern);
+					matches = isStrictEqual(matchValue, patternValue);
+				}
+				
+				// If pattern matches, check guard (if any)
+				if (matches && arm.guard != nullptr) {
+					Value guardResult = evaluate(arm.guard);
+					matches = isTruthy(guardResult);
+				}
+				
+				// Execute body if matched
+				if (matches) {
+					try {
+						execute(arm.body);
+					} catch (const BreakSignal&) {
+						// Break out of match
+					}
+					// Match is exhaustive - stop after first match
+					return;
+				}
+			}
+			// No pattern matched and no default - this is allowed
+			return;
+		}
 		if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
 			Value val = r->value ? evaluate(r->value) : Value{std::monostate{}};
 			throw ReturnSignal{val};

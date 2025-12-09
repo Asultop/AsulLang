@@ -48,6 +48,7 @@ private:
 	StmtPtr forStatement();
 	StmtPtr forEachStatement();
 	StmtPtr switchStatement();
+	StmtPtr matchStatement();
 	StmtPtr returnStatement();
 	StmtPtr ifStatement();
 	StmtPtr whileStatement();
