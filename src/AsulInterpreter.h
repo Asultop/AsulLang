@@ -1534,6 +1534,67 @@ public:
 		}
 		if (std::dynamic_pointer_cast<BreakStmt>(stmt)) { throw BreakSignal{}; }
 		if (std::dynamic_pointer_cast<ContinueStmt>(stmt)) { throw ContinueSignal{}; }
+		if (auto dec = std::dynamic_pointer_cast<DecoratorStmt>(stmt)) {
+			// Execute the target (function or class declaration)
+			execute(dec->target);
+			
+			// Get the name of the declared function/class
+			std::string targetName;
+			if (auto f = std::dynamic_pointer_cast<FunctionStmt>(dec->target)) {
+				targetName = f->name;
+			} else if (auto c = std::dynamic_pointer_cast<ClassStmt>(dec->target)) {
+				targetName = c->name;
+			} else {
+				throw std::runtime_error("Decorators can only be applied to functions or classes");
+			}
+			
+			// Get the original value
+			Value originalValue = env->get(targetName);
+			
+			// Apply decorators in reverse order (bottom-up)
+			Value decoratedValue = originalValue;
+			for (auto it = dec->decorators.rbegin(); it != dec->decorators.rend(); ++it) {
+				Value decoratorFunc = evaluate(*it);
+				
+				// Check if decorator is a function
+				if (!std::holds_alternative<std::shared_ptr<Function>>(decoratorFunc)) {
+					throw std::runtime_error("Decorator must be a function");
+				}
+				
+				auto fn = std::get<std::shared_ptr<Function>>(decoratorFunc);
+				std::vector<Value> args = {decoratedValue};
+				
+				// Call the decorator function with the current value
+				if (fn->isBuiltin) {
+					decoratedValue = fn->builtin(args, fn->closure);
+				} else {
+					// Create new environment for decorator call
+					auto callEnv = std::make_shared<Environment>(fn->closure);
+					if (args.size() != fn->params.size() && fn->restParamIndex == -1) {
+						throw std::runtime_error("Decorator expects " + std::to_string(fn->params.size()) + " arguments");
+					}
+					for (size_t i = 0; i < fn->params.size() && i < args.size(); ++i) {
+						callEnv->define(fn->params[i], args[i]);
+					}
+					
+					// Execute decorator function body
+					try {
+						auto prevEnv = env;
+						env = callEnv;
+						for (auto& s : fn->body) execute(s);
+						env = prevEnv;
+						decoratedValue = Value{std::monostate{}}; // No return value
+					} catch (const ReturnSignal& ret) {
+						decoratedValue = ret.value;
+					}
+					env = env; // Restore environment is already handled
+				}
+			}
+			
+			// Update the binding with the decorated value
+			env->assign(targetName, decoratedValue);
+			return;
+		}
 		if (auto f = std::dynamic_pointer_cast<FunctionStmt>(stmt)) {
 			auto fn = std::make_shared<Function>();
 			// extract parameter names (ignore optional types at runtime)

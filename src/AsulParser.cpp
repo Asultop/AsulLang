@@ -124,20 +124,54 @@ std::string Parser::joinIdentifiers(const std::vector<Token>& parts, size_t begi
 }
 
 StmtPtr Parser::declaration() {
+	// Parse decorators first (if any)
+	std::vector<ExprPtr> decorators;
+	while (match({TokenType::At})) {
+		// @decorator or @decorator(args)
+		ExprPtr decoratorExpr = call(); // Parse decorator as a call expression
+		decorators.push_back(decoratorExpr);
+	}
+	
 	bool isExported = false;
 	if (match({TokenType::Export})) {
 		isExported = true;
 	}
-	if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true, isExported); }
-	if (match({TokenType::Function})) return functionDecl(false, isExported);
-	if (match({TokenType::Class})) return classDeclaration(isExported);
-	if (match({TokenType::Extends})) return extendsDeclaration(); // extends cannot be exported
-	if (match({TokenType::Interface})) return interfaceDeclaration(isExported);
-	if (match({TokenType::Import})) return importDeclaration(false);
-	if (match({TokenType::From})) return importDeclaration(true);
-	if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration(isExported);
-	if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
-	return statement();
+	
+	StmtPtr target = nullptr;
+	if (match({TokenType::Async})) { 
+		consume(TokenType::Function, "Expect 'function' after 'async'"); 
+		target = functionDecl(true, isExported); 
+	} else if (match({TokenType::Function})) {
+		target = functionDecl(false, isExported);
+	} else if (match({TokenType::Class})) {
+		target = classDeclaration(isExported);
+	} else if (match({TokenType::Extends})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'extends' declarations");
+		return extendsDeclaration(); // extends cannot be exported
+	} else if (match({TokenType::Interface})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'interface' declarations");
+		return interfaceDeclaration(isExported);
+	} else if (match({TokenType::Import})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'import' statements");
+		return importDeclaration(false);
+	} else if (match({TokenType::From})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'from' statements");
+		return importDeclaration(true);
+	} else if (match({TokenType::Let, TokenType::Var, TokenType::Const})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to variable declarations");
+		return varDeclaration(isExported);
+	} else {
+		if (!decorators.empty()) throw std::runtime_error("Decorators can only be applied to functions or classes");
+		if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
+		return statement();
+	}
+	
+	// If we have decorators, wrap the target in a DecoratorStmt
+	if (!decorators.empty()) {
+		return std::make_shared<DecoratorStmt>(decorators, target);
+	}
+	
+	return target;
 }
 
 StmtPtr Parser::importDeclaration(bool isFrom) {
