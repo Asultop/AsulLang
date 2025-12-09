@@ -206,22 +206,28 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto p = asyncPtr->createPromise();
 			
 			std::thread([p, asyncPtr, fd, host, port]{
-				struct sockaddr_in addr;
-				std::memset(&addr, 0, sizeof(addr));
-				addr.sin_family = AF_INET;
-				addr.sin_port = htons(port);
-				
-				struct hostent* server = gethostbyname(host.c_str());
-				if (server == NULL) {
-					asyncPtr->reject(p, Value{std::string("Host resolution failed")});
-					return;
-				}
-				std::memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+				try {
+					struct sockaddr_in addr;
+					std::memset(&addr, 0, sizeof(addr));
+					addr.sin_family = AF_INET;
+					addr.sin_port = htons(port);
+					
+					struct hostent* server = gethostbyname(host.c_str());
+					if (server == NULL) {
+						asyncPtr->reject(p, Value{std::string("Host resolution failed")});
+						return;
+					}
+					std::memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
-				if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-					asyncPtr->reject(p, Value{std::string("Connection failed")});
-				} else {
-					asyncPtr->resolve(p, Value{true});
+					if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+						asyncPtr->reject(p, Value{std::string("Connection failed")});
+					} else {
+						asyncPtr->resolve(p, Value{true});
+					}
+				} catch (const std::exception& ex) {
+					asyncPtr->reject(p, Value{std::string("Socket connect exception: ") + ex.what()});
+				} catch (...) {
+					asyncPtr->reject(p, Value{std::string("Socket connect unknown exception")});
 				}
 			}).detach();
 			
@@ -241,24 +247,30 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto p = asyncPtr->createPromise();
 
 			std::thread([p, asyncPtr, fd, socketClass]{
-				struct sockaddr_in cli_addr;
-				socklen_t clilen = sizeof(cli_addr);
-				int newsockfd = accept(fd, (struct sockaddr*)&cli_addr, &clilen);
-				if (newsockfd < 0) {
-					asyncPtr->reject(p, Value{std::string("accept failed")});
-					return;
+				try {
+					struct sockaddr_in cli_addr;
+					socklen_t clilen = sizeof(cli_addr);
+					int newsockfd = accept(fd, (struct sockaddr*)&cli_addr, &clilen);
+					if (newsockfd < 0) {
+						asyncPtr->reject(p, Value{std::string("accept failed")});
+						return;
+					}
+					
+					auto newInst = std::make_shared<InstanceExt>();
+					newInst->klass = socketClass;
+					newInst->nativeHandle = new int(newsockfd);
+					newInst->nativeDestructor = [](void* p) {
+						int* fdp = static_cast<int*>(p);
+						close(*fdp);
+						delete fdp;
+					};
+					
+					asyncPtr->resolve(p, Value{std::shared_ptr<Instance>(newInst)});
+				} catch (const std::exception& ex) {
+					asyncPtr->reject(p, Value{std::string("Socket accept exception: ") + ex.what()});
+				} catch (...) {
+					asyncPtr->reject(p, Value{std::string("Socket accept unknown exception")});
 				}
-				
-				auto newInst = std::make_shared<InstanceExt>();
-				newInst->klass = socketClass;
-				newInst->nativeHandle = new int(newsockfd);
-				newInst->nativeDestructor = [](void* p) {
-					int* fdp = static_cast<int*>(p);
-					close(*fdp);
-					delete fdp;
-				};
-				
-				asyncPtr->resolve(p, Value{std::shared_ptr<Instance>(newInst)});
 			}).detach();
 
 			return Value{p};
@@ -280,11 +292,17 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto p = asyncPtr->createPromise();
 
 			std::thread([p, asyncPtr, fd, data]{
-				ssize_t n = write(fd, data.c_str(), data.length());
-				if (n < 0) {
-					asyncPtr->reject(p, Value{std::string("write failed")});
-				} else {
-					asyncPtr->resolve(p, Value{static_cast<double>(n)});
+				try {
+					ssize_t n = write(fd, data.c_str(), data.length());
+					if (n < 0) {
+						asyncPtr->reject(p, Value{std::string("write failed")});
+					} else {
+						asyncPtr->resolve(p, Value{static_cast<double>(n)});
+					}
+				} catch (const std::exception& ex) {
+					asyncPtr->reject(p, Value{std::string("Socket write exception: ") + ex.what()});
+				} catch (...) {
+					asyncPtr->reject(p, Value{std::string("Socket write unknown exception")});
 				}
 			}).detach();
 
@@ -307,14 +325,20 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			auto p = asyncPtr->createPromise();
 
 			std::thread([p, asyncPtr, fd, size]{
-				std::vector<char> buf(size);
-				ssize_t n = read(fd, buf.data(), size);
-				if (n < 0) {
-					asyncPtr->reject(p, Value{std::string("read failed")});
-				} else if (n == 0) {
-					asyncPtr->resolve(p, Value{std::string("")});
-				} else {
-					asyncPtr->resolve(p, Value{std::string(buf.data(), n)});
+				try {
+					std::vector<char> buf(size);
+					ssize_t n = read(fd, buf.data(), size);
+					if (n < 0) {
+						asyncPtr->reject(p, Value{std::string("read failed")});
+					} else if (n == 0) {
+						asyncPtr->resolve(p, Value{std::string("")});
+					} else {
+						asyncPtr->resolve(p, Value{std::string(buf.data(), n)});
+					}
+				} catch (const std::exception& ex) {
+					asyncPtr->reject(p, Value{std::string("Socket read exception: ") + ex.what()});
+				} catch (...) {
+					asyncPtr->reject(p, Value{std::string("Socket read unknown exception")});
 				}
 			}).detach();
 
@@ -468,60 +492,181 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			fetchFn->isBuiltin = true;
 			fetchFn->builtin = [interpPtr, asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 				if (args.empty()) throw std::runtime_error("fetch expects at least 1 argument (url)");
-				std::string url = toString(args[0]);
+				std::string initialUrl = toString(args[0]);
 				std::string method = "GET";
 				std::shared_ptr<Object> hdrObj;
 				std::string body;
+				bool followRedirects = true;
+				int maxRedirects = 5;
+				
 				if (args.size() >= 2) {
 					if (!std::holds_alternative<std::shared_ptr<Object>>(args[1])) throw std::runtime_error("fetch options must be object");
 					auto opt = std::get<std::shared_ptr<Object>>(args[1]);
 					auto itM = opt->find("method"); if (itM != opt->end()) method = toString(itM->second);
 					auto itH = opt->find("headers"); if (itH != opt->end() && std::holds_alternative<std::shared_ptr<Object>>(itH->second)) hdrObj = std::get<std::shared_ptr<Object>>(itH->second);
 					auto itB = opt->find("body"); if (itB != opt->end()) body = toString(itB->second);
+					auto itR = opt->find("redirect"); 
+					if (itR != opt->end()) {
+						std::string redirectMode = toString(itR->second);
+						if (redirectMode == "manual" || redirectMode == "error") followRedirects = false;
+					}
+					auto itMR = opt->find("maxRedirects");
+					if (itMR != opt->end() && std::holds_alternative<double>(itMR->second)) {
+						maxRedirects = static_cast<int>(std::get<double>(itMR->second));
+					}
 				}
+				
 				// Promise
 				auto p = asyncPtr->createPromise();
-				std::thread([interpPtr, asyncPtr, p, url, method, hdrObj, body]{
+				std::thread([interpPtr, asyncPtr, p, initialUrl, method, hdrObj, body, followRedirects, maxRedirects]{
 					try {
-						// Parse URL
-						std::string proto = "http"; std::string host; int port = 80; std::string path = "/";
-						size_t schemePos = url.find("://"); if (schemePos != std::string::npos) proto = url.substr(0, schemePos);
-						size_t hostStart = (schemePos == std::string::npos) ? 0 : (schemePos + 3);
-						size_t pathStart = url.find('/', hostStart); if (pathStart == std::string::npos) pathStart = url.size();
-						size_t colon = url.find(':', hostStart);
-						if (colon != std::string::npos && colon < pathStart) { host = url.substr(hostStart, colon - hostStart); port = std::stoi(url.substr(colon + 1, pathStart - colon - 1)); }
-						else { host = url.substr(hostStart, pathStart - hostStart); }
-						if (pathStart < url.size()) path = url.substr(pathStart);
-						if (proto == "https") { asyncPtr->reject(p, Value{ std::string("HTTPS not supported") }); return; }
-						// DNS
-						struct hostent* server = gethostbyname(host.c_str());
-						if (server == NULL) { asyncPtr->reject(p, Value{ std::string("No such host: ")+host }); return; }
-						int sockfd = socket(AF_INET, SOCK_STREAM, 0); if (sockfd < 0) { asyncPtr->reject(p, Value{ std::string("socket failed") }); return; }
-						struct sockaddr_in serv_addr; std::memset(&serv_addr, 0, sizeof(serv_addr));
-						serv_addr.sin_family = AF_INET; std::memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length); serv_addr.sin_port = htons(port);
-						if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sockfd); asyncPtr->reject(p, Value{ std::string("connect failed") }); return; }
-						std::ostringstream req;
-						req << method << " " << path << " HTTP/1.1\r\n";
-						req << "Host: " << host << "\r\n";
-						req << "Connection: close\r\n";
-						req << "User-Agent: ALang/1.0\r\n";
-						if (hdrObj) { for (auto& kv : *hdrObj) { req << kv.first << ": " << toString(kv.second) << "\r\n"; } }
-						if (!body.empty()) { req << "Content-Length: " << body.size() << "\r\n"; }
-						req << "\r\n"; if (!body.empty()) req << body;
-						std::string rs = req.str(); if (write(sockfd, rs.c_str(), rs.size()) < 0) { close(sockfd); asyncPtr->reject(p, Value{ std::string("write failed") }); return; }
-						std::string response; char buf[4096]; int n; while ((n = read(sockfd, buf, sizeof(buf))) > 0) response.append(buf, n); close(sockfd);
-						auto respObj = std::make_shared<Object>();
-						size_t headerEnd = response.find("\r\n\r\n"); std::string headers, bodyStr; double status = 0.0;
-						if (headerEnd != std::string::npos) { headers = response.substr(0, headerEnd); bodyStr = response.substr(headerEnd + 4);
-							size_t sp1 = headers.find(' '); size_t sp2 = headers.find(' ', sp1 + 1);
-							if (sp1 != std::string::npos && sp2 != std::string::npos) { try { status = std::stod(headers.substr(sp1 + 1, sp2 - sp1 - 1)); } catch (...) {} }
+						std::string currentUrl = initialUrl;
+						int redirectCount = 0;
+						std::string finalHeaders, finalBody;
+						double finalStatus = 0.0;
+						
+						while (true) {
+							// Parse URL
+							std::string proto = "http"; std::string host; int port = 80; std::string path = "/";
+							size_t schemePos = currentUrl.find("://"); 
+							if (schemePos != std::string::npos) proto = currentUrl.substr(0, schemePos);
+							size_t hostStart = (schemePos == std::string::npos) ? 0 : (schemePos + 3);
+							size_t pathStart = currentUrl.find('/', hostStart); 
+							if (pathStart == std::string::npos) pathStart = currentUrl.size();
+							size_t colon = currentUrl.find(':', hostStart);
+							if (colon != std::string::npos && colon < pathStart) { 
+								host = currentUrl.substr(hostStart, colon - hostStart); 
+								port = std::stoi(currentUrl.substr(colon + 1, pathStart - colon - 1)); 
+							} else { 
+								host = currentUrl.substr(hostStart, pathStart - hostStart); 
+							}
+							if (pathStart < currentUrl.size()) path = currentUrl.substr(pathStart);
+							if (proto == "https") { asyncPtr->reject(p, Value{ std::string("HTTPS not supported") }); return; }
+							
+							// DNS
+							struct hostent* server = gethostbyname(host.c_str());
+							if (server == NULL) { asyncPtr->reject(p, Value{ std::string("No such host: ") + host }); return; }
+							
+							int sockfd = socket(AF_INET, SOCK_STREAM, 0); 
+							if (sockfd < 0) { asyncPtr->reject(p, Value{ std::string("socket failed") }); return; }
+							
+							struct sockaddr_in serv_addr; 
+							std::memset(&serv_addr, 0, sizeof(serv_addr));
+							serv_addr.sin_family = AF_INET; 
+							std::memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length); 
+							serv_addr.sin_port = htons(port);
+							
+							if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { 
+								close(sockfd); 
+								asyncPtr->reject(p, Value{ std::string("connect failed") }); 
+								return; 
+							}
+							
+							std::ostringstream req;
+							req << method << " " << path << " HTTP/1.1\r\n";
+							req << "Host: " << host << "\r\n";
+							req << "Connection: close\r\n";
+							req << "User-Agent: ALang/1.0\r\n";
+							if (hdrObj) { for (auto& kv : *hdrObj) { req << kv.first << ": " << toString(kv.second) << "\r\n"; } }
+							if (!body.empty()) { req << "Content-Length: " << body.size() << "\r\n"; }
+							req << "\r\n"; 
+							if (!body.empty()) req << body;
+							
+							std::string rs = req.str(); 
+							if (write(sockfd, rs.c_str(), rs.size()) < 0) { 
+								close(sockfd); 
+								asyncPtr->reject(p, Value{ std::string("write failed") }); 
+								return; 
+							}
+							
+							std::string response; 
+							char buf[4096]; 
+							int n; 
+							while ((n = read(sockfd, buf, sizeof(buf))) > 0) response.append(buf, n); 
+							close(sockfd);
+							
+							// Parse response
+							size_t headerEnd = response.find("\r\n\r\n"); 
+							std::string headers, bodyStr; 
+							double status = 0.0;
+							if (headerEnd != std::string::npos) { 
+								headers = response.substr(0, headerEnd); 
+								bodyStr = response.substr(headerEnd + 4);
+								size_t sp1 = headers.find(' '); 
+								size_t sp2 = headers.find(' ', sp1 + 1);
+								if (sp1 != std::string::npos && sp2 != std::string::npos) { 
+									try { 
+										status = std::stod(headers.substr(sp1 + 1, sp2 - sp1 - 1)); 
+									} catch (...) {}
+								}
+							}
+							
+							// Check for redirect
+							if (followRedirects && status >= 300 && status < 400) {
+								if (redirectCount >= maxRedirects) {
+									asyncPtr->reject(p, Value{ std::string("Too many redirects") });
+									return;
+								}
+								
+								// Find Location header
+								std::string location;
+								std::istringstream stream(headers);
+								std::string line;
+								std::getline(stream, line); // Skip status line
+								while (std::getline(stream, line)) {
+									if (!line.empty() && line.back() == '\r') line.pop_back();
+									if (line.find("Location:") == 0 || line.find("location:") == 0) {
+										size_t colonPos = line.find(':');
+										if (colonPos != std::string::npos) {
+											location = line.substr(colonPos + 1);
+											// Trim spaces
+											size_t start = location.find_first_not_of(" \t");
+											if (start != std::string::npos) location = location.substr(start);
+											size_t end = location.find_last_not_of(" \t\r\n");
+											if (end != std::string::npos) location = location.substr(0, end + 1);
+										}
+										break;
+									}
+								}
+								
+								if (location.empty()) {
+									asyncPtr->reject(p, Value{ std::string("Redirect without Location header") });
+									return;
+								}
+								
+								// Handle relative URLs
+								if (location[0] == '/') {
+									currentUrl = proto + "://" + host + (port != 80 ? ":" + std::to_string(port) : "") + location;
+								} else if (location.find("://") == std::string::npos) {
+									// Relative path
+									size_t lastSlash = path.find_last_of('/');
+									std::string basePath = (lastSlash != std::string::npos) ? path.substr(0, lastSlash + 1) : "/";
+									currentUrl = proto + "://" + host + (port != 80 ? ":" + std::to_string(port) : "") + basePath + location;
+								} else {
+									currentUrl = location;
+								}
+								
+								redirectCount++;
+								continue; // Follow redirect
+							}
+							
+							// No redirect or reached final destination
+							finalHeaders = headers;
+							finalBody = bodyStr;
+							finalStatus = status;
+							break;
 						}
-						(*respObj)["status"] = Value{ status };
-						(*respObj)["headers"] = Value{ headers };
+						
+						auto respObj = std::make_shared<Object>();
+						(*respObj)["status"] = Value{ finalStatus };
+						(*respObj)["headers"] = Value{ finalHeaders };
+						(*respObj)["redirected"] = Value{ redirectCount > 0 };
+						(*respObj)["url"] = Value{ currentUrl };
+						
 						// text(): Promise<string>
 						{
 							auto textFn = std::make_shared<Function>(); textFn->isBuiltin = true;
-							std::string copy = bodyStr;
+							std::string copy = finalBody;
 							textFn->builtin = [asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
 								auto tp = asyncPtr->createPromise(); asyncPtr->resolve(tp, Value{ copy }); return Value{ tp };
 							};
@@ -529,7 +674,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 						}
 						// json(): Promise<any>
 						{
-							auto jsonFn = std::make_shared<Function>(); jsonFn->isBuiltin = true; std::string copy = bodyStr;
+							auto jsonFn = std::make_shared<Function>(); jsonFn->isBuiltin = true; std::string copy = finalBody;
 							jsonFn->builtin = [interpPtr, asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
 								auto tp = asyncPtr->createPromise();
 								asyncPtr->postTask([interpPtr, asyncPtr, tp, copy]{
@@ -549,7 +694,9 @@ void registerStdNetworkPackage(Interpreter& interp) {
 						}
 						asyncPtr->resolve(p, Value{ respObj });
 					} catch (const std::exception& ex) {
-						asyncPtr->reject(p, Value{ std::string(ex.what()) });
+						asyncPtr->reject(p, Value{ std::string("Fetch exception: ") + ex.what() });
+					} catch (...) {
+						asyncPtr->reject(p, Value{ std::string("Fetch unknown exception") });
 					}
 				}).detach();
 				return Value{ p };
@@ -813,52 +960,54 @@ void registerStdNetworkPackage(Interpreter& interp) {
 
 				// Start accepting connections in background thread
 				std::thread([serverFd, callback, asyncPtr, interpPtr]() {
-					while (true) {
-						struct sockaddr_in clientAddr;
-						socklen_t clientLen = sizeof(clientAddr);
-						int clientFd = accept(serverFd, (struct sockaddr*)&clientAddr, &clientLen);
-						if (clientFd < 0) break; // Server closed
+					try {
+						while (true) {
+							struct sockaddr_in clientAddr;
+							socklen_t clientLen = sizeof(clientAddr);
+							int clientFd = accept(serverFd, (struct sockaddr*)&clientAddr, &clientLen);
+							if (clientFd < 0) break; // Server closed
 
-						// Handle each connection in its own thread
-						std::thread([clientFd, callback, asyncPtr, interpPtr]() {
-							// Read HTTP request
-							std::string requestData;
-							char buf[4096];
-							ssize_t n = read(clientFd, buf, sizeof(buf) - 1);
-							if (n > 0) {
-								buf[n] = '\0';
-								requestData = std::string(buf, n);
-							}
+							// Handle each connection in its own thread
+							std::thread([clientFd, callback, asyncPtr, interpPtr]() {
+								try {
+									// Read HTTP request
+									std::string requestData;
+									char buf[4096];
+									ssize_t n = read(clientFd, buf, sizeof(buf) - 1);
+									if (n > 0) {
+										buf[n] = '\0';
+										requestData = std::string(buf, n);
+									}
 
-							// Parse request line
-							std::string method, url, version;
-							std::istringstream reqStream(requestData);
-							reqStream >> method >> url >> version;
+									// Parse request line
+									std::string method, url, version;
+									std::istringstream reqStream(requestData);
+									reqStream >> method >> url >> version;
 
-							// Parse headers and body from request
-							std::string headersSection;
-							std::string body;
-							size_t headerEndPos = requestData.find("\r\n\r\n");
-							if (headerEndPos != std::string::npos) {
-								headersSection = requestData.substr(0, headerEndPos);
-								if (headerEndPos + 4 < requestData.size()) {
-									body = requestData.substr(headerEndPos + 4);
-								}
-							} else {
-								headersSection = requestData;
-							}
+									// Parse headers and body from request
+									std::string headersSection;
+									std::string body;
+									size_t headerEndPos = requestData.find("\r\n\r\n");
+									if (headerEndPos != std::string::npos) {
+										headersSection = requestData.substr(0, headerEndPos);
+										if (headerEndPos + 4 < requestData.size()) {
+											body = requestData.substr(headerEndPos + 4);
+										}
+									} else {
+										headersSection = requestData;
+									}
 
-							// Create request object
-							auto reqObj = std::make_shared<Object>();
-							(*reqObj)["method"] = Value{method};
-							(*reqObj)["url"] = Value{url};
-							(*reqObj)["version"] = Value{version};
-							(*reqObj)["headers"] = Value{headersSection};
-							(*reqObj)["body"] = Value{body};
+									// Create request object
+									auto reqObj = std::make_shared<Object>();
+									(*reqObj)["method"] = Value{method};
+									(*reqObj)["url"] = Value{url};
+									(*reqObj)["version"] = Value{version};
+									(*reqObj)["headers"] = Value{headersSection};
+									(*reqObj)["body"] = Value{body};
 
-							// Create response object
-							auto resObj = std::make_shared<Object>();
-							int* clientFdPtr = new int(clientFd);
+									// Create response object
+									auto resObj = std::make_shared<Object>();
+									int* clientFdPtr = new int(clientFd);
 
 							// res.writeHead(statusCode, headers)
 							auto writeHeadFn = std::make_shared<Function>();
@@ -933,9 +1082,21 @@ void registerStdNetworkPackage(Interpreter& interp) {
 									std::cerr << "HTTP Server callback error: " << ex.what() << std::endl;
 								}
 							});
-						}).detach();
-					}
-				}).detach();
+						} catch (const std::exception& ex) {
+							std::cerr << "HTTP Server connection handler exception: " << ex.what() << std::endl;
+							close(clientFd);
+						} catch (...) {
+							std::cerr << "HTTP Server connection handler unknown exception" << std::endl;
+							close(clientFd);
+						}
+					}).detach();
+				}
+			} catch (const std::exception& ex) {
+				std::cerr << "HTTP Server accept loop exception: " << ex.what() << std::endl;
+			} catch (...) {
+				std::cerr << "HTTP Server accept loop unknown exception" << std::endl;
+			}
+		}).detach();
 
 				return Value{std::monostate{}};
 			};
