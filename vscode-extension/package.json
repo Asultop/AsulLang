@@ -2,7 +2,7 @@
   "name": "alang-language-support",
   "displayName": "ALang Language Support",
   "description": "Syntax highlighting and language support for ALang scripting language",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "asultop",
   "icon": "images/icon.png",
   "engines": {
@@ -14,6 +14,24 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Asultop/AsulLang"
+  },
+  "activationEvents": [
+    "onLanguage:alang"
+  ],
+  "main": "./client/out/extension",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "postinstall": "cd client && npm install && cd ../server && npm install && cd .."
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.60.0",
+    "typescript": "^5.0.0"
   },
   "contributes": {
     "languages": [
@@ -35,6 +53,36 @@
         "scopeName": "source.alang",
         "path": "./syntaxes/alang.tmLanguage.json"
       }
-    ]
+    ],
+    "themes": [
+      {
+        "label": "ALang Default Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/alang-color-theme.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ALang",
+      "properties": {
+        "alangLanguageServer.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "alangLanguageServer.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
   }
 }

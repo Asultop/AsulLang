@@ -1,0 +1,21 @@
+{
+  "name": "alang-language-client",
+  "description": "VSCode extension client for ALang",
+  "version": "0.1.0",
+  "author": "asultop",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.0"
+  },
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.60.0",
+    "typescript": "^5.0.0"
+  }
+}

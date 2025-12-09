@@ -1,24 +1,55 @@
 # ALang Language Support for Visual Studio Code
 
-Provides syntax highlighting and language support for the ALang scripting language.
+Provides comprehensive language support for the ALang scripting language, including syntax highlighting, diagnostics, and navigation features.
 
 ## Features
 
-- **Syntax Highlighting**: Full syntax highlighting for ALang files (.alang)
-  - Keywords (let, var, const, function, class, interface, etc.)
-  - Control flow statements (if, else, while, for, foreach, switch, etc.)
-  - Async/await keywords (async, await, go)
-  - Operators (arithmetic, logical, bitwise, special operators like =~=, ?., etc.)
-  - Literals (strings, numbers, booleans, null)
-  - Comments (line and block comments)
-  - String interpolation with template literals
+### Syntax Highlighting
+Full syntax highlighting for ALang files (.alang):
+- Keywords (let, var, const, function, class, interface, etc.)
+- Control flow statements (if, else, while, for, foreach, switch, etc.)
+- Async/await keywords (async, await, go)
+- Operators (arithmetic, logical, bitwise, special operators like =~=, ?., etc.)
+- Literals (strings, numbers, booleans, null)
+- Comments (line and block comments)
+- String interpolation with template literals
 
-- **Editor Features**:
-  - Bracket matching for (), [], {}
-  - Auto-closing pairs for brackets and quotes
-  - Comment toggling (Ctrl+/)
-  - Block comment toggling (Shift+Alt+A)
-  - Code folding support
+### Color Theme
+**NEW!** Default color theme with special highlighting for ALang-specific operators:
+- `=~=` (interface match) - Bold pink
+- `<-` `->` `=>` (arrows) - Bold red
+- `?.` `??` (nullish) - Bold gold
+- `...` (spread) - Bold blue
+- `@` (decorator) - Bold yellow
+
+Activate via: `Preferences: Color Theme` → `ALang Default Dark`
+
+### Language Server Features
+**NEW!** Advanced IDE features powered by Language Server Protocol:
+
+#### Syntax Checking
+- Real-time syntax validation
+- Error diagnostics with inline highlighting
+- Unclosed string detection
+- Bracket mismatch warnings
+
+#### Go to Definition
+- Jump to function definitions
+- Navigate to class declarations
+- Find interface definitions
+- Locate variable declarations
+
+#### Auto-completion
+- Keyword suggestions
+- Symbol completion
+- Context-aware recommendations
+
+### Editor Features
+- Bracket matching for (), [], {}
+- Auto-closing pairs for brackets and quotes
+- Comment toggling (Ctrl+/)
+- Block comment toggling (Shift+Alt+A)
+- Code folding support
 
 ## ALang Language Features
 
