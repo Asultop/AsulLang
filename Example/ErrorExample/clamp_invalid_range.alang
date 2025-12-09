@@ -1,0 +1,9 @@
+// 示例: clamp 函数参数约束错误（运行时错误）
+// 说明: clamp 函数要求 min <= max，否则会抛出错误
+
+import std.math;
+
+// clamp(value, min, max) 要求 min <= max
+// 这里 min=10, max=5，违反约束
+let clamped = std.math.clamp(7, 10, 5);
+println(clamped);

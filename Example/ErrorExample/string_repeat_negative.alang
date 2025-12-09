@@ -1,0 +1,8 @@
+// 示例: 字符串重复次数为负数（运行时错误）
+// 说明: repeat 函数的重复次数不能为负数
+
+import std.string;
+
+// repeat 重复次数必须为非负数
+let repeated = std.string.repeat("hello", -5);
+println(repeated);
