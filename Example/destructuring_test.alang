@@ -1,0 +1,38 @@
+// Array Destructuring Tests
+println("=== Array Destructuring ===");
+
+// Basic array destructuring
+let [a, b, c] = [1, 2, 3];
+println("a =", a); // 1
+println("b =", b); // 2
+println("c =", c); // 3
+
+// Array destructuring with rest
+let [first, ...rest] = [10, 20, 30, 40, 50];
+println("first =", first); // 10
+println("rest =", rest); // [20, 30, 40, 50]
+
+// Array destructuring with default values
+let [x = 5, y = 10] = [100];
+println("x =", x); // 100
+println("y =", y); // 10 (default)
+
+// Object Destructuring Tests
+println("\n=== Object Destructuring ===");
+
+// Basic object destructuring
+let {name, age} = {name: "Alice", age: 30, city: "NYC"};
+println("name =", name); // "Alice"
+println("age =", age); // 30
+
+// Object destructuring with rest
+let {id, ...others} = {id: 123, name: "Bob", role: "Admin"};
+println("id =", id); // 123
+println("others =", others); // {name: "Bob", role: "Admin"}
+
+// Object destructuring with default values
+let {foo = 42, bar = "default"} = {foo: 100};
+println("foo =", foo); // 100
+println("bar =", bar); // "default"
+
+println("\n=== All destructuring tests completed ===");

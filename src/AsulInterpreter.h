@@ -314,6 +314,19 @@ public:
 				std::ostringstream oss; oss << ex.what() << " at line " << gp->line << ", column " << gp->column << ", length " << gp->length; throw std::runtime_error(oss.str());
 			}
 		}
+		if (auto oc = std::dynamic_pointer_cast<OptionalChainingExpr>(expr)) {
+			// Optional chaining: obj?.prop returns null if obj is null/undefined
+			Value o = evaluate(oc->object);
+			if (std::holds_alternative<std::monostate>(o)) {
+				return Value{std::monostate{}};
+			}
+			try {
+				return getProperty(o, oc->name);
+			} catch (const std::exception&) {
+				// If property doesn't exist, return null instead of throwing
+				return Value{std::monostate{}};
+			}
+		}
 		if (auto ix = std::dynamic_pointer_cast<IndexExpr>(expr)) {
 			Value o = evaluate(ix->object);
 			Value k = evaluate(ix->index);
@@ -888,6 +901,14 @@ public:
 			if (p->rejected) throw ExceptionSignal{ p->result };
 			return p->result;
 		}
+		if (auto yieldExpr = std::dynamic_pointer_cast<YieldExpr>(expr)) {
+			// For now, yield simply evaluates to the value (basic implementation)
+			// Full generator support would require coroutine-like state management
+			if (yieldExpr->value) {
+				return evaluate(yieldExpr->value);
+			}
+			return Value{std::monostate{}};
+		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			// derive callee name for stack trace
 			auto deriveName = [&](const ExprPtr& e)->std::string{
@@ -1107,6 +1128,7 @@ public:
 			}
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(fexpr->body)) fn->body = innerBlock->statements; else fn->body = { fexpr->body };
 			fn->closure = env; // 关闭环境捕获
+			fn->isGenerator = fexpr->isGenerator;
 			return Value{fn};
 		}
 		if (auto nw = std::dynamic_pointer_cast<NewExpr>(expr)) {
@@ -1305,6 +1327,11 @@ public:
 			if (v->isExported) env->explicitExports.insert(v->name);
 			return;
 		}
+		if (auto vd = std::dynamic_pointer_cast<VarDeclDestructuring>(stmt)) {
+			Value init = vd->init ? evaluate(vd->init) : Value{std::monostate{}};
+			destructurePattern(vd->pattern, init);
+			return;
+		}
 		if (auto b = std::dynamic_pointer_cast<BlockStmt>(stmt)) { executeBlock(b->statements, std::make_shared<Environment>(env)); return; }
 		if (auto i = std::dynamic_pointer_cast<IfStmt>(stmt)) {
 			if (isTruthy(evaluate(i->cond))) execute(i->thenB); else if (i->elseB) execute(i->elseB);
@@ -1426,6 +1453,43 @@ public:
 			}
 			return;
 		}
+		if (auto m = std::dynamic_pointer_cast<MatchStmt>(stmt)) {
+			// match (expr) { case pattern => body, ... }
+			Value matchValue = evaluate(m->expr);
+			
+			for (const auto& arm : m->arms) {
+				bool matches = false;
+				
+				// Check if pattern matches
+				if (arm.pattern == nullptr) {
+					// Default/catchall pattern
+					matches = true;
+				} else {
+					// Evaluate pattern and check equality
+					Value patternValue = evaluate(arm.pattern);
+					matches = isStrictEqual(matchValue, patternValue);
+				}
+				
+				// If pattern matches, check guard (if any)
+				if (matches && arm.guard != nullptr) {
+					Value guardResult = evaluate(arm.guard);
+					matches = isTruthy(guardResult);
+				}
+				
+				// Execute body if matched
+				if (matches) {
+					try {
+						execute(arm.body);
+					} catch (const BreakSignal&) {
+						// Break out of match
+					}
+					// Match is exhaustive - stop after first match
+					return;
+				}
+			}
+			// No pattern matched and no default - this is allowed
+			return;
+		}
 		if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
 			Value val = r->value ? evaluate(r->value) : Value{std::monostate{}};
 			throw ReturnSignal{val};
@@ -1470,6 +1534,67 @@ public:
 		}
 		if (std::dynamic_pointer_cast<BreakStmt>(stmt)) { throw BreakSignal{}; }
 		if (std::dynamic_pointer_cast<ContinueStmt>(stmt)) { throw ContinueSignal{}; }
+		if (auto dec = std::dynamic_pointer_cast<DecoratorStmt>(stmt)) {
+			// Execute the target (function or class declaration)
+			execute(dec->target);
+			
+			// Get the name of the declared function/class
+			std::string targetName;
+			if (auto f = std::dynamic_pointer_cast<FunctionStmt>(dec->target)) {
+				targetName = f->name;
+			} else if (auto c = std::dynamic_pointer_cast<ClassStmt>(dec->target)) {
+				targetName = c->name;
+			} else {
+				throw std::runtime_error("Decorators can only be applied to functions or classes");
+			}
+			
+			// Get the original value
+			Value originalValue = env->get(targetName);
+			
+			// Apply decorators in reverse order (bottom-up)
+			Value decoratedValue = originalValue;
+			for (auto it = dec->decorators.rbegin(); it != dec->decorators.rend(); ++it) {
+				Value decoratorFunc = evaluate(*it);
+				
+				// Check if decorator is a function
+				if (!std::holds_alternative<std::shared_ptr<Function>>(decoratorFunc)) {
+					throw std::runtime_error("Decorator must be a function");
+				}
+				
+				auto fn = std::get<std::shared_ptr<Function>>(decoratorFunc);
+				std::vector<Value> args = {decoratedValue};
+				
+				// Call the decorator function with the current value
+				if (fn->isBuiltin) {
+					decoratedValue = fn->builtin(args, fn->closure);
+				} else {
+					// Create new environment for decorator call
+					auto callEnv = std::make_shared<Environment>(fn->closure);
+					if (args.size() != fn->params.size() && fn->restParamIndex == -1) {
+						throw std::runtime_error("Decorator expects " + std::to_string(fn->params.size()) + " arguments");
+					}
+					for (size_t i = 0; i < fn->params.size() && i < args.size(); ++i) {
+						callEnv->define(fn->params[i], args[i]);
+					}
+					
+					// Execute decorator function body
+					try {
+						auto prevEnv = env;
+						env = callEnv;
+						for (auto& s : fn->body) execute(s);
+						env = prevEnv;
+						decoratedValue = Value{std::monostate{}}; // No return value
+					} catch (const ReturnSignal& ret) {
+						decoratedValue = ret.value;
+					}
+					env = env; // Restore environment is already handled
+				}
+			}
+			
+			// Update the binding with the decorated value
+			env->assign(targetName, decoratedValue);
+			return;
+		}
 		if (auto f = std::dynamic_pointer_cast<FunctionStmt>(stmt)) {
 			auto fn = std::make_shared<Function>();
 			// extract parameter names (ignore optional types at runtime)
@@ -1488,6 +1613,7 @@ public:
 			else fn->body = { f->body };
 			fn->closure = env;
 			fn->isAsync = f->isAsync;
+			fn->isGenerator = f->isGenerator;
 			env->define(f->name, fn);
 			if (f->isExported) env->explicitExports.insert(f->name);
 			return;
@@ -1513,6 +1639,7 @@ public:
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
+				fn->isGenerator = m->isGenerator;
 				
 				if (m->isStatic) {
 					klass->staticMethods[m->name] = fn;
@@ -1569,6 +1696,7 @@ public:
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
+				fn->isGenerator = m->isGenerator;
 				klass->methods[m->name] = fn; // 覆盖或新增
 			}
 			return;
@@ -2500,6 +2628,79 @@ public:
 	}
 
 	Value tempStorage; // used to hold temporary during Set* operations
+
+	// Helper function to destructure patterns
+	void destructurePattern(const PatternPtr& pattern, const Value& value) {
+		if (auto idPat = std::dynamic_pointer_cast<IdentifierPattern>(pattern)) {
+			// Simple identifier pattern
+			Value val = value;
+			if (std::holds_alternative<std::monostate>(value) && idPat->defaultValue) {
+				val = evaluate(idPat->defaultValue);
+			}
+			env->define(idPat->name, val);
+		} else if (auto arrPat = std::dynamic_pointer_cast<ArrayPattern>(pattern)) {
+			// Array destructuring pattern
+			auto arrPtr = std::get_if<std::shared_ptr<Array>>(&value);
+			if (!arrPtr) {
+				std::ostringstream oss;
+				oss << "Cannot destructure non-array value (got " << typeOf(value) << ") in array pattern";
+				throw std::runtime_error(oss.str());
+			}
+			auto& arr = **arrPtr;
+			size_t i = 0;
+			for (auto& elem : arrPat->elements) {
+				if (i < arr.size()) {
+					destructurePattern(elem, arr[i]);
+				} else {
+					// Use default value if provided
+					destructurePattern(elem, Value{std::monostate{}});
+				}
+				i++;
+			}
+			// Handle rest element
+			if (arrPat->hasRest) {
+				auto restArr = std::make_shared<Array>();
+				for (size_t j = i; j < arr.size(); j++) {
+					restArr->push_back(arr[j]);
+				}
+				env->define(arrPat->restName, Value{restArr});
+			}
+		} else if (auto objPat = std::dynamic_pointer_cast<ObjectPattern>(pattern)) {
+			// Object destructuring pattern
+			auto objPtr = std::get_if<std::shared_ptr<Object>>(&value);
+			if (!objPtr) {
+				std::ostringstream oss;
+				oss << "Cannot destructure non-object value (got " << typeOf(value) << ") in object pattern";
+				throw std::runtime_error(oss.str());
+			}
+			auto& obj = **objPtr;
+			std::unordered_set<std::string> extractedKeys;
+			
+			for (auto& prop : objPat->properties) {
+				auto it = obj.find(prop.key);
+				Value propValue = (it != obj.end()) ? it->second : Value{std::monostate{}};
+				
+				// Use default value if property doesn't exist
+				if (std::holds_alternative<std::monostate>(propValue) && prop.defaultValue) {
+					propValue = evaluate(prop.defaultValue);
+				}
+				
+				destructurePattern(prop.pattern, propValue);
+				extractedKeys.insert(prop.key);
+			}
+			
+			// Handle rest element
+			if (objPat->hasRest) {
+				auto restObj = std::make_shared<Object>();
+				for (auto& [key, val] : obj) {
+					if (extractedKeys.find(key) == extractedKeys.end()) {
+						(*restObj)[key] = val;
+					}
+				}
+				env->define(objPat->restName, Value{restObj});
+			}
+		}
+	}
 
 	void installBuiltins() {
 		stdRoot = std::make_shared<Object>();

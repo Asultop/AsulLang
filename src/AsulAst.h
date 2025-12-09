@@ -43,6 +43,39 @@ struct ObjectLiteralExpr : Expr {
 };
 struct SpreadExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit SpreadExpr(ExprPtr e, int l=0, int c=1, int len=1): expr(std::move(e)), line(l), column(c), length(len){} };
 struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; explicit AwaitExpr(ExprPtr e, int l=0, int c0=1, int len=1): expr(std::move(e)), line(l), column(c0), length(len){} };
+struct OptionalChainingExpr : Expr { ExprPtr object; std::string name; int line{0}, column{1}, length{1}; OptionalChainingExpr(ExprPtr o, std::string n, int l, int c0, int len): object(std::move(o)), name(std::move(n)), line(l), column(c0), length(len){} };
+struct YieldExpr : Expr { ExprPtr value; bool isDelegate{false}; int line{0}, column{1}, length{1}; YieldExpr(ExprPtr v, bool delegate, int l, int c0, int len): value(std::move(v)), isDelegate(delegate), line(l), column(c0), length(len){} };
+
+// Destructuring patterns
+struct DestructuringPattern {
+	virtual ~DestructuringPattern() = default;
+};
+using PatternPtr = std::shared_ptr<DestructuringPattern>;
+
+struct IdentifierPattern : DestructuringPattern {
+	std::string name;
+	ExprPtr defaultValue{nullptr};
+	explicit IdentifierPattern(std::string n, ExprPtr def = nullptr): name(std::move(n)), defaultValue(std::move(def)) {}
+};
+
+struct ArrayPattern : DestructuringPattern {
+	std::vector<PatternPtr> elements;
+	bool hasRest{false};
+	std::string restName;
+	explicit ArrayPattern(std::vector<PatternPtr> e, bool rest = false, std::string rn = ""): elements(std::move(e)), hasRest(rest), restName(std::move(rn)) {}
+};
+
+struct ObjectPattern : DestructuringPattern {
+	struct Property {
+		std::string key;
+		PatternPtr pattern;
+		ExprPtr defaultValue{nullptr};
+	};
+	std::vector<Property> properties;
+	bool hasRest{false};
+	std::string restName;
+	explicit ObjectPattern(std::vector<Property> p, bool rest = false, std::string rn = ""): properties(std::move(p)), hasRest(rest), restName(std::move(rn)) {}
+};
 
 // Parameter for function definitions
 struct Param { 
@@ -54,18 +87,19 @@ struct Param {
 		name(std::move(n)), type(std::move(t)), isRest(rest), defaultValue(std::move(defVal)) {} 
 };
 
-struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; explicit FunctionExpr(std::vector<Param> p, StmtPtr b): params(std::move(p)), body(std::move(b)){} };
+struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; bool isGenerator{false}; FunctionExpr(std::vector<Param> p, StmtPtr b, bool g=false): params(std::move(p)), body(std::move(b)), isGenerator(g){} };
 
 // ----------- Statements -----------
 struct Stmt { virtual ~Stmt() = default; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
 struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; bool isExported{false}; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i, bool exported=false): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)), isExported(exported){} };
+struct VarDeclDestructuring : Stmt { PatternPtr pattern; ExprPtr init; bool isExported{false}; VarDeclDestructuring(PatternPtr p, ExprPtr i, bool exported=false): pattern(std::move(p)), init(std::move(i)), isExported(exported){} };
 struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
 struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), returnType(std::move(r)), isStatic(s), isExported(exported){} };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; bool isGenerator{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, bool g=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), isGenerator(g), returnType(std::move(r)), isStatic(s), isExported(exported){} };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; bool isExported{false}; };
@@ -107,6 +141,25 @@ struct ImportStmt : Stmt {
 		int length{1};
 	};
 	std::vector<Entry> entries;
+};
+
+// Match expression and pattern matching
+struct MatchStmt : Stmt {
+	struct MatchArm {
+		ExprPtr pattern; // Can be literal, variable, or special patterns
+		ExprPtr guard; // Optional when condition
+		StmtPtr body;
+	};
+	ExprPtr expr;
+	std::vector<MatchArm> arms;
+	MatchStmt(ExprPtr e, std::vector<MatchArm> a): expr(std::move(e)), arms(std::move(a)) {}
+};
+
+// Decorator support for functions and classes
+struct DecoratorStmt : Stmt {
+	std::vector<ExprPtr> decorators; // List of decorator expressions
+	StmtPtr target; // The function or class being decorated
+	DecoratorStmt(std::vector<ExprPtr> d, StmtPtr t): decorators(std::move(d)), target(std::move(t)) {}
 };
 
 } // namespace asul

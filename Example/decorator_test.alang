@@ -1,0 +1,82 @@
+// Decorator Tests
+println("=== Decorator Tests ===");
+
+// Test 1: Simple function decorator
+function logger(func) {
+    return [](a, b) {
+        println("Calling function with args:", a, b);
+        let result = func(a, b);
+        println("Function returned:", result);
+        return result;
+    };
+}
+
+@logger
+function add(a, b) {
+    return a + b;
+}
+
+println("\nTest 1: Simple decorator");
+let result1 = add(5, 3);
+println("Final result:", result1);
+
+// Test 2: Multiple decorators
+function doubler(func) {
+    return [](a, b) {
+        let result = func(a, b);
+        return result * 2;
+    };
+}
+
+function plusTen(func) {
+    return [](a, b) {
+        let result = func(a, b);
+        return result + 10;
+    };
+}
+
+@plusTen
+@doubler
+function multiply(a, b) {
+    return a * b;
+}
+
+println("\nTest 2: Multiple decorators (applied bottom-up)");
+let result2 = multiply(3, 4);
+println("Result:", result2); // Should be (3*4)*2 + 10 = 34
+
+// Test 3: Decorator with counter
+let callCount = 0;
+
+function counter(func) {
+    return [](name) {
+        callCount = callCount + 1;
+        println("Call", callCount);
+        return func(name);
+    };
+}
+
+@counter
+function sayHi(name) {
+    println("Hi,", name);
+}
+
+println("\nTest 3: Decorator with state");
+sayHi("Alice");
+sayHi("Bob");
+sayHi("Charlie");
+
+// Test 4: Identity decorator
+function identity(func) {
+    return func;
+}
+
+@identity
+function greet(name) {
+    return "Hello, " + name;
+}
+
+println("\nTest 4: Identity decorator");
+println(greet("World"));
+
+println("\n=== All decorator tests completed ===");

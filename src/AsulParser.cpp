@@ -5,6 +5,56 @@
 
 namespace asul {
 
+// Helper function to check if a token type can be used as a property name
+// Many keywords can be used as property names in member access expressions
+static bool isPropertyNameToken(TokenType type) {
+	switch (type) {
+		case TokenType::Identifier:
+		// Allow keywords as property names (like JavaScript)
+		case TokenType::Catch:
+		case TokenType::Match:
+		case TokenType::Yield:
+		case TokenType::Let:
+		case TokenType::Var:
+		case TokenType::Const:
+		case TokenType::Function:
+		case TokenType::Return:
+		case TokenType::If:
+		case TokenType::Else:
+		case TokenType::While:
+		case TokenType::Do:
+		case TokenType::For:
+		case TokenType::ForEach:
+		case TokenType::In:
+		case TokenType::Break:
+		case TokenType::Continue:
+		case TokenType::Switch:
+		case TokenType::Case:
+		case TokenType::Default:
+		case TokenType::Class:
+		case TokenType::Extends:
+		case TokenType::New:
+		case TokenType::True:
+		case TokenType::False:
+		case TokenType::Null:
+		case TokenType::Await:
+		case TokenType::Async:
+		case TokenType::Go:
+		case TokenType::Try:
+		case TokenType::Finally:
+		case TokenType::Throw:
+		case TokenType::Interface:
+		case TokenType::Import:
+		case TokenType::From:
+		case TokenType::As:
+		case TokenType::Export:
+		case TokenType::Static:
+			return true;
+		default:
+			return false;
+	}
+}
+
 Parser::Parser(const std::vector<Token>& t, const std::string& src)
 	: tokens(t), source(src) {}
 
@@ -74,20 +124,54 @@ std::string Parser::joinIdentifiers(const std::vector<Token>& parts, size_t begi
 }
 
 StmtPtr Parser::declaration() {
+	// Parse decorators first (if any)
+	std::vector<ExprPtr> decorators;
+	while (match({TokenType::At})) {
+		// @decorator or @decorator(args)
+		ExprPtr decoratorExpr = call(); // Parse decorator as a call expression
+		decorators.push_back(decoratorExpr);
+	}
+	
 	bool isExported = false;
 	if (match({TokenType::Export})) {
 		isExported = true;
 	}
-	if (match({TokenType::Async})) { consume(TokenType::Function, "Expect 'function' after 'async'"); return functionDecl(true, isExported); }
-	if (match({TokenType::Function})) return functionDecl(false, isExported);
-	if (match({TokenType::Class})) return classDeclaration(isExported);
-	if (match({TokenType::Extends})) return extendsDeclaration(); // extends cannot be exported
-	if (match({TokenType::Interface})) return interfaceDeclaration(isExported);
-	if (match({TokenType::Import})) return importDeclaration(false);
-	if (match({TokenType::From})) return importDeclaration(true);
-	if (match({TokenType::Let, TokenType::Var, TokenType::Const})) return varDeclaration(isExported);
-	if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
-	return statement();
+	
+	StmtPtr target = nullptr;
+	if (match({TokenType::Async})) { 
+		consume(TokenType::Function, "Expect 'function' after 'async'"); 
+		target = functionDecl(true, isExported); 
+	} else if (match({TokenType::Function})) {
+		target = functionDecl(false, isExported);
+	} else if (match({TokenType::Class})) {
+		target = classDeclaration(isExported);
+	} else if (match({TokenType::Extends})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'extends' declarations");
+		return extendsDeclaration(); // extends cannot be exported
+	} else if (match({TokenType::Interface})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'interface' declarations");
+		return interfaceDeclaration(isExported);
+	} else if (match({TokenType::Import})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'import' statements");
+		return importDeclaration(false);
+	} else if (match({TokenType::From})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to 'from' statements");
+		return importDeclaration(true);
+	} else if (match({TokenType::Let, TokenType::Var, TokenType::Const})) {
+		if (!decorators.empty()) throw std::runtime_error("Decorators cannot be applied to variable declarations");
+		return varDeclaration(isExported);
+	} else {
+		if (!decorators.empty()) throw std::runtime_error("Decorators can only be applied to functions or classes");
+		if (isExported) throw std::runtime_error("Unexpected 'export' before statement");
+		return statement();
+	}
+	
+	// If we have decorators, wrap the target in a DecoratorStmt
+	if (!decorators.empty()) {
+		return std::make_shared<DecoratorStmt>(decorators, target);
+	}
+	
+	return target;
 }
 
 StmtPtr Parser::importDeclaration(bool isFrom) {
@@ -298,6 +382,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			bool isStatic = match({TokenType::Static});
 			bool isAsync = match({TokenType::Async});
 			(void)match({TokenType::Function});
+			bool isGenerator = match({TokenType::Star});
 			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 			consume(TokenType::LeftParen, "Expect '('");
 			std::vector<Param> params;
@@ -314,7 +399,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			std::optional<std::string> retType = std::nullopt;
 			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 			auto body = statement();
-			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType, isStatic));
+			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after class body");
 		// 可选分号：class Name { ... };
@@ -332,6 +417,7 @@ StmtPtr Parser::extendsDeclaration() {
 	while (!check(TokenType::RightBrace) && !isAtEnd()) {
 		bool isAsync = match({TokenType::Async});
 		(void)match({TokenType::Function});
+		bool isGenerator = match({TokenType::Star});
 		auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
 		std::vector<Param> params;
@@ -348,7 +434,7 @@ StmtPtr Parser::extendsDeclaration() {
 		std::optional<std::string> retType = std::nullopt;
 		if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 		auto body = statement();
-		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
+		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType));
 	}
 	consume(TokenType::RightBrace, "Expect '}' after extension body");
 	// 可选分号：extends Name { ... };
@@ -357,6 +443,8 @@ StmtPtr Parser::extendsDeclaration() {
 }
 
 StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
+	// Check for generator function: function* name()
+	bool isGenerator = match({TokenType::Star});
 	auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 	consume(TokenType::LeftParen, "Expect '('");
 	std::vector<Param> params;
@@ -406,10 +494,20 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 	std::optional<std::string> retType = std::nullopt;
 	if (match({TokenType::Colon, TokenType::Arrow})) retType = consume(TokenType::Identifier, "Expect return type name after ':' or '->'").lexeme;
 	auto body = statement();
-	return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType, false, isExported);
+	return std::make_shared<FunctionStmt>(name, params, body, isAsync, isGenerator, retType, false, isExported);
 }
 
 StmtPtr Parser::varDeclaration(bool isExported) {
+	// Check if this is a destructuring pattern
+	if (check(TokenType::LeftBracket) || check(TokenType::LeftBrace)) {
+		auto pattern = parsePattern();
+		consume(TokenType::Equal, "Expect '=' in destructuring declaration");
+		auto init = expression();
+		consume(TokenType::Semicolon, "Expect ';' after variable declaration");
+		return std::make_shared<VarDeclDestructuring>(pattern, init, isExported);
+	}
+	
+	// Regular variable declaration
 	auto name = consume(TokenType::Identifier, "Expect variable name").lexeme;
 	std::optional<std::string> type = std::nullopt;
 	ExprPtr typeExpr = nullptr;
@@ -430,6 +528,7 @@ StmtPtr Parser::statement() {
 	if (match({TokenType::For})) return forStatement();
 	if (match({TokenType::ForEach})) return forEachStatement();
 	if (match({TokenType::Switch})) return switchStatement();
+	if (match({TokenType::Match})) return matchStatement();
 	if (match({TokenType::Return})) return returnStatement();
 	if (match({TokenType::Throw})) { auto v = expression(); consume(TokenType::Semicolon, "Expect ';' after throw"); return std::make_shared<ThrowStmt>(v); }
 	// 空语句：允许单独的 ';'，不执行任何操作（支持多连分号）
@@ -542,6 +641,60 @@ StmtPtr Parser::switchStatement() {
 	
 	consume(TokenType::RightBrace, "Expect '}' after switch body");
 	return std::make_shared<SwitchStmt>(expr, cases);
+}
+
+StmtPtr Parser::matchStatement() {
+	// match (expr) { case pattern => stmt, ... }
+	consume(TokenType::LeftParen, "Expect '(' after 'match'");
+	ExprPtr expr = expression();
+	consume(TokenType::RightParen, "Expect ')' after match expression");
+	consume(TokenType::LeftBrace, "Expect '{' after match header");
+	
+	std::vector<MatchStmt::MatchArm> arms;
+	
+	while (!check(TokenType::RightBrace) && !isAtEnd()) {
+		if (match({TokenType::Case})) {
+			// case pattern [if guard] => body
+			// Use conditional() to stop before commas and arrows
+			ExprPtr pattern = conditional();
+			
+			// Optional guard clause
+			ExprPtr guard = nullptr;
+			if (match({TokenType::If})) {
+				guard = conditional();
+			}
+			
+			// Expect => (using arrow token)
+			consume(TokenType::Arrow, "Expect '=>' after match pattern");
+			
+			// Body can be a single statement or a block
+			StmtPtr body = statement();
+			
+			arms.push_back({pattern, guard, body});
+			
+			// Optional comma after arm
+			match({TokenType::Comma});
+		} else if (match({TokenType::Default})) {
+			// default => body (catchall pattern)
+			consume(TokenType::Arrow, "Expect '=>' after 'default'");
+			StmtPtr body = statement();
+			
+			// Use null pattern to indicate default
+			arms.push_back({nullptr, nullptr, body});
+			
+			// Optional comma after arm
+			match({TokenType::Comma});
+		} else {
+			const Token& tok = peek();
+			std::ostringstream oss;
+			oss << "Expect 'case' or 'default' in match body at line " << tok.line << "\n";
+			oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+			throw std::runtime_error(oss.str());
+		}
+	}
+	
+	consume(TokenType::RightBrace, "Expect '}' after match body");
+	return std::make_shared<MatchStmt>(expr, arms);
 }
 
 StmtPtr Parser::returnStatement() {
@@ -847,6 +1000,20 @@ ExprPtr Parser::unary() {
 		auto inner = unary();
 		return std::make_shared<AwaitExpr>(inner, awTok.line, awTok.column, std::max(1, awTok.length));
 	}
+	if (match({TokenType::Yield})) {
+		Token yieldTok = previous();
+		bool isDelegate = false;
+		ExprPtr value = nullptr;
+		// yield* for delegating to another generator
+		if (match({TokenType::Star})) {
+			isDelegate = true;
+		}
+		// yield can have an optional value
+		if (!check(TokenType::Semicolon) && !check(TokenType::RightParen) && !check(TokenType::RightBrace)) {
+			value = unary();
+		}
+		return std::make_shared<YieldExpr>(value, isDelegate, yieldTok.line, yieldTok.column, std::max(1, yieldTok.length));
+	}
 	return postfix();
 }
 
@@ -873,10 +1040,22 @@ ExprPtr Parser::call() {
 	auto expr = primary();
 	for (;;) {
 		if (match({TokenType::LeftParen})) expr = finishCall(expr);
+		else if (match({TokenType::QuestionDot})) {
+			// Optional chaining: obj?.prop
+			std::string name; Token nameTok;
+			if (isPropertyNameToken(peek().type)) { nameTok = advance(); name = nameTok.lexeme; }
+			else {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "[Parse] Expect property name after '?.' at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+			expr = std::make_shared<OptionalChainingExpr>(expr, name, nameTok.line, nameTok.column, std::max(1, nameTok.length));
+		}
 		else if (match({TokenType::Dot})) {
 			std::string name; Token nameTok;
-			if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
-			else if (check(TokenType::Catch)) { nameTok = advance(); name = nameTok.lexeme; /* allow .catch */ }
+			if (isPropertyNameToken(peek().type)) { nameTok = advance(); name = nameTok.lexeme; }
 			else {
 				const Token& tok = peek();
 				std::ostringstream oss;
@@ -898,12 +1077,28 @@ ExprPtr Parser::call() {
 }
 
 ExprPtr Parser::primary() {
-	// 支持匿名函数：[](x, y){ ... }
+	// 支持匿名函数：[](x, y){ ... } 或生成器: []*() { ... }
 	if (check(TokenType::LeftBracket)) {
-		// 仅当模式为 [] ( 开始时，识别为 lambda；否则按数组字面量
-		if (current + 2 < tokens.size() && tokens[current].type == TokenType::LeftBracket && tokens[current+1].type == TokenType::RightBracket && tokens[current+2].type == TokenType::LeftParen) {
+		// 仅当模式为 [] ( 或 []*( 开始时，识别为 lambda；否则按数组字面量
+		bool isLambda = false;
+		if (current + 2 < tokens.size() && 
+		    tokens[current].type == TokenType::LeftBracket && 
+		    tokens[current+1].type == TokenType::RightBracket && 
+		    tokens[current+2].type == TokenType::LeftParen) {
+			isLambda = true;
+		} else if (current + 3 < tokens.size() && 
+		           tokens[current].type == TokenType::LeftBracket && 
+		           tokens[current+1].type == TokenType::RightBracket && 
+		           tokens[current+2].type == TokenType::Star &&
+		           tokens[current+3].type == TokenType::LeftParen) {
+			isLambda = true;
+		}
+		
+		if (isLambda) {
 			advance(); // [
 			advance(); // ]
+			// Check for generator lambda: []*()
+			bool isGenerator = match({TokenType::Star});
 			advance(); // (
 			std::vector<Param> params;
 			bool hasRest = false;
@@ -949,7 +1144,7 @@ ExprPtr Parser::primary() {
 			}
 			consume(TokenType::RightParen, "Expect ')' after lambda parameters");
 			auto body = statement();
-			return std::make_shared<FunctionExpr>(params, body);
+			return std::make_shared<FunctionExpr>(params, body, isGenerator);
 		}
 	}
 	if (match({TokenType::New})) {
@@ -1110,6 +1305,84 @@ ExprPtr Parser::parseExprSnippet(const std::string& code, int line, int column, 
 	std::ostringstream oss;
 	oss << "Invalid interpolation expression at line " << line << ", column " << column << ", length " << length;
 	throw std::runtime_error(oss.str());
+}
+
+// Parse destructuring patterns
+PatternPtr Parser::parsePattern() {
+	if (check(TokenType::LeftBracket)) {
+		return parseArrayPattern();
+	} else if (check(TokenType::LeftBrace)) {
+		return parseObjectPattern();
+	} else if (check(TokenType::Identifier)) {
+		auto name = advance().lexeme;
+		ExprPtr defaultValue = nullptr;
+		if (match({TokenType::Equal})) {
+			defaultValue = assignment();
+		}
+		return std::make_shared<IdentifierPattern>(name, defaultValue);
+	}
+	throw std::runtime_error("Expected identifier, array pattern, or object pattern");
+}
+
+PatternPtr Parser::parseArrayPattern() {
+	consume(TokenType::LeftBracket, "Expect '['");
+	std::vector<PatternPtr> elements;
+	bool hasRest = false;
+	std::string restName;
+	
+	while (!check(TokenType::RightBracket) && !isAtEnd()) {
+		if (match({TokenType::Ellipsis})) {
+			hasRest = true;
+			restName = consume(TokenType::Identifier, "Expect identifier after '...'").lexeme;
+			break;
+		}
+		elements.push_back(parsePattern());
+		if (!check(TokenType::RightBracket)) {
+			consume(TokenType::Comma, "Expect ',' or ']' in array pattern");
+		}
+	}
+	
+	consume(TokenType::RightBracket, "Expect ']'");
+	return std::make_shared<ArrayPattern>(elements, hasRest, restName);
+}
+
+PatternPtr Parser::parseObjectPattern() {
+	consume(TokenType::LeftBrace, "Expect '{'");
+	std::vector<ObjectPattern::Property> properties;
+	bool hasRest = false;
+	std::string restName;
+	
+	while (!check(TokenType::RightBrace) && !isAtEnd()) {
+		if (match({TokenType::Ellipsis})) {
+			hasRest = true;
+			restName = consume(TokenType::Identifier, "Expect identifier after '...'").lexeme;
+			break;
+		}
+		
+		auto key = consume(TokenType::Identifier, "Expect property name").lexeme;
+		PatternPtr pattern;
+		ExprPtr defaultValue = nullptr;
+		
+		if (match({TokenType::Colon})) {
+			pattern = parsePattern();
+		} else {
+			// Shorthand: { x } is equivalent to { x: x }
+			pattern = std::make_shared<IdentifierPattern>(key, nullptr);
+		}
+		
+		if (match({TokenType::Equal})) {
+			defaultValue = assignment();
+		}
+		
+		properties.push_back({key, pattern, defaultValue});
+		
+		if (!check(TokenType::RightBrace)) {
+			consume(TokenType::Comma, "Expect ',' or '}' in object pattern");
+		}
+	}
+	
+	consume(TokenType::RightBrace, "Expect '}'");
+	return std::make_shared<ObjectPattern>(properties, hasRest, restName);
 }
 
 } // namespace asul
