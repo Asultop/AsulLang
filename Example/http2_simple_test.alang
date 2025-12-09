@@ -1,0 +1,88 @@
+// Example/http2_simple_test.alang
+// Simple test to verify HTTP/2 implementation builds correctly
+
+import std.network;
+
+println("=== HTTP/2 Simple Feature Test ===\n");
+
+// Test that fetch accepts http2 option
+println("Test 1: Verify fetch accepts http2 option");
+try {
+    // This will fail without internet, but verifies the option is accepted
+    let promise = std.network.fetch("http://localhost:9999", {
+        http2: true,
+        method: "GET"
+    });
+    println("  ✓ fetch() accepts http2 option");
+    
+    // Try to await (will likely fail due to connection)
+    try {
+        let res = await promise;
+        println("  Unexpected success: " + res.status);
+    } catch (connErr) {
+        println("  Expected connection error (no server): " + connErr.message);
+    }
+} catch (e) {
+    println("  Error creating request: " + e.message);
+}
+
+println("");
+
+// Test HTTP/1.1 mode
+println("Test 2: Verify HTTP/1.1 fallback option");
+try {
+    let promise = std.network.fetch("http://localhost:9999", {
+        http2: false,
+        method: "GET"
+    });
+    println("  ✓ fetch() accepts http2:false option");
+    
+    try {
+        let res = await promise;
+        println("  Unexpected success: " + res.status);
+    } catch (connErr) {
+        println("  Expected connection error (no server): " + connErr.message);
+    }
+} catch (e) {
+    println("  Error creating request: " + e.message);
+}
+
+println("");
+
+// Test backward compatibility - fetchLegacy
+println("Test 3: Verify fetchLegacy is available");
+try {
+    let promise = std.network.fetchLegacy("http://localhost:9999");
+    println("  ✓ fetchLegacy() is available for backward compatibility");
+    
+    try {
+        let res = await promise;
+        println("  Unexpected success: " + res.status);
+    } catch (connErr) {
+        println("  Expected connection error (no server)");
+    }
+} catch (e) {
+    println("  Error: " + e.message);
+}
+
+println("");
+
+// Test various HTTP methods with http2 option
+println("Test 4: Verify different HTTP methods with http2");
+let methods = ["GET", "POST", "PUT", "DELETE", "PATCH"];
+foreach (method in methods) {
+    try {
+        let promise = std.network.fetch("http://localhost:9999", {
+            method: method,
+            http2: true,
+            body: (method == "GET" || method == "DELETE") ? "" : "test data"
+        });
+        println("  ✓ " + method + " method accepted with http2 option");
+    } catch (e) {
+        println("  ✗ " + method + " method error: " + e.message);
+    }
+}
+
+println("\n=== HTTP/2 feature verification complete ===");
+println("\nNOTE: Full HTTP/2 testing requires internet access.");
+println("Run http2_test.alang to test against real HTTP/2 servers.");

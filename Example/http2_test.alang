@@ -1,0 +1,88 @@
+// Example/http2_test.alang
+// Test HTTP/2 support in std.network.fetch
+
+import std.network;
+
+println("=== HTTP/2 Support Test ===\n");
+
+// Test 1: Fetch with HTTP/2 (default)
+println("Test 1: Fetch with HTTP/2 enabled (default)");
+try {
+    let res = await std.network.fetch("https://http2.pro/api/v1");
+    println("  Status: " + res.status);
+    println("  Protocol: " + res.version);
+    println("  URL: " + res.url);
+    
+    if (res.version == "HTTP/2") {
+        println("  ✓ HTTP/2 is working!");
+    } else {
+        println("  Note: Server responded with " + res.version);
+    }
+    
+    let body = await res.text();
+    println("  Response length: " + body.len());
+} catch (e) {
+    println("  Error: " + e.message);
+}
+
+println("");
+
+// Test 2: Fetch with HTTP/1.1 (explicitly disabled HTTP/2)
+println("Test 2: Fetch with HTTP/2 disabled (force HTTP/1.1)");
+try {
+    let res = await std.network.fetch("http://example.com", {
+        http2: false
+    });
+    println("  Status: " + res.status);
+    println("  Protocol: " + res.version);
+    
+    if (res.version == "HTTP/1.1" || res.version == "HTTP/1.0") {
+        println("  ✓ HTTP/1.x fallback working!");
+    }
+    
+    let body = await res.text();
+    println("  Response length: " + body.len());
+} catch (e) {
+    println("  Error: " + e.message);
+}
+
+println("");
+
+// Test 3: POST request with HTTP/2
+println("Test 3: POST request with HTTP/2");
+try {
+    let res = await std.network.fetch("https://httpbin.org/post", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: '{"test": "http2", "version": 2}'
+    });
+    println("  Status: " + res.status);
+    println("  Protocol: " + res.version);
+    
+    let body = await res.text();
+    println("  Response received (length: " + body.len() + ")");
+} catch (e) {
+    println("  Error: " + e.message);
+}
+
+println("");
+
+// Test 4: Custom headers with HTTP/2
+println("Test 4: Custom headers with HTTP/2");
+try {
+    let res = await std.network.fetch("https://httpbin.org/headers", {
+        headers: {
+            "User-Agent": "AsulLang-HTTP2-Test",
+            "X-Custom-Header": "test-value"
+        }
+    });
+    println("  Status: " + res.status);
+    println("  Protocol: " + res.version);
+    println("  ✓ Request with custom headers successful");
+} catch (e) {
+    println("  Error: " + e.message);
+}
+
+println("\n=== All HTTP/2 tests completed ===");

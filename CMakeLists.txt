@@ -146,7 +146,18 @@ if(WIN32)
 endif()
 
 find_package(OpenSSL)
+find_package(CURL REQUIRED)
+
 target_link_libraries(alang PRIVATE Threads::Threads)
+
+# Link CURL for HTTP/2 support
+if (CURL_FOUND)
+  target_link_libraries(alang PRIVATE CURL::libcurl)
+  target_compile_definitions(alang PRIVATE ASUL_HAS_CURL=1)
+  message(STATUS "libcurl found: HTTP/2 support enabled")
+else()
+  message(WARNING "libcurl not found: HTTP/2 support will not be available")
+endif()
 
 # Link OpenSSL if available
 if (OPENSSL_FOUND)
