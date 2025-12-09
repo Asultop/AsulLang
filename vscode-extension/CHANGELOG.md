@@ -2,6 +2,30 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.1] - 2025-12-09
+
+### Added
+- **Automated Build System**: Complete build automation with `build.sh`
+  - Automatic dependency installation
+  - TypeScript compilation
+  - .vsix package generation in `build/` directory
+  - No manual intervention required
+- **Build Output**: `.vsix` files now generated in `vscode-extension/build/`
+  - Versioned package (e.g., `alang-language-support-0.2.1.vsix`)
+  - Symlink to latest version (`alang-language-support-latest.vsix`)
+- **NPM Scripts**: Added convenience scripts
+  - `npm run build` - Full automated build
+  - `npm run build:quick` - Quick build (assumes deps installed)
+  - `npm run package` - Package to build/ directory
+- **Documentation**: Added `build/README.md` with build instructions
+- **Dev Dependency**: Added `@vscode/vsce` for packaging
+
+### Changed
+- Updated build process to output to `build/` directory
+- Enhanced `build.sh` with full automation
+- Updated README with automated build instructions
+- Modified .gitignore to track build directory structure
+
 ## [0.2.0] - 2025-12-09
 
 ### Added

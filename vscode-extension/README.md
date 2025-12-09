@@ -98,13 +98,46 @@ The syntax highlighter recognizes ALang's special operators:
 
 ## Building the Extension
 
-To package the extension as a .vsix file:
+### Automated Build (Recommended)
+
+The extension includes an automated build system that handles everything:
 
 ```bash
-npm install -g vsce
 cd vscode-extension
-vsce package
+./build.sh
 ```
+
+This will:
+1. Install all dependencies
+2. Compile TypeScript
+3. Package the extension
+4. Output `.vsix` file to `build/` directory
+
+The packaged extension will be available at:
+- `build/alang-language-support-0.2.0.vsix` (versioned)
+- `build/alang-language-support-latest.vsix` (symlink to latest)
+
+### Manual Build
+
+If you prefer manual control:
+
+```bash
+npm install -g @vscode/vsce
+cd vscode-extension
+npm run postinstall  # Install dependencies
+npm run compile      # Compile TypeScript
+npm run package      # Create .vsix in build/
+```
+
+### Quick Build
+
+For quick iterations during development:
+
+```bash
+npm run build:quick
+```
+
+See `build/README.md` for more details.
 
 ## Usage
 

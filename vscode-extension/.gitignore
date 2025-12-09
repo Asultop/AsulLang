@@ -1,0 +1,24 @@
+# Node modules
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# TypeScript build outputs (we keep these for the extension)
+# client/out/
+# server/out/
+
+# Map files
+**/*.map
+
+# Temporary files
+.vscode-test/
+*.log
+
+# Build directory - keep structure but ignore .vsix files from being committed
+# The .vsix files are build artifacts that can be regenerated
+build/*.vsix
+
+# Keep these files in build/
+!build/README.md
+!build/.gitkeep
+

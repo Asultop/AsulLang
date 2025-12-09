@@ -2,7 +2,7 @@
   "name": "alang-language-support",
   "displayName": "ALang Language Support",
   "description": "Syntax highlighting and language support for ALang scripting language",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "asultop",
   "icon": "images/icon.png",
   "engines": {
@@ -23,7 +23,10 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
-    "postinstall": "cd client && npm install && cd ../server && npm install && cd .."
+    "postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
+    "package": "vsce package -o build/",
+    "build": "./build.sh full",
+    "build:quick": "npm run compile && vsce package -o build/"
   },
   "dependencies": {
     "vscode-languageclient": "^8.0.0"
@@ -31,7 +34,8 @@
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.60.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
   },
   "contributes": {
     "languages": [
