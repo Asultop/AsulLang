@@ -36,6 +36,8 @@ set(SRCS
   src/AsulPackages/Std/Log/StdLog.cpp
   src/AsulPackages/Std/Test/StdTest.cpp
   src/AsulPackages/Std/Ffi/StdFfi.cpp
+  src/AsulPackages/Std/Uuid/StdUuid.cpp
+  src/AsulPackages/Std/Url/StdUrl.cpp
   src/AsulPackages/Json/Json.cpp
   src/AsulPackages/Xml/Xml.cpp
   src/AsulPackages/Yaml/Yaml.cpp

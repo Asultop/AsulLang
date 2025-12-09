@@ -1587,7 +1587,7 @@ public:
 					} catch (const ReturnSignal& ret) {
 						decoratedValue = ret.value;
 					}
-					env = env; // Restore environment is already handled
+					// env = env; // Restore environment is already handled
 				}
 			}
 			

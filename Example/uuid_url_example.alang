@@ -1,0 +1,45 @@
+/*
+ * UUID and URL Standard Library Example
+ * Demonstrates usage of std.uuid and std.url packages
+ */
+
+import std.uuid;
+import std.url;
+
+println("== std.uuid Example ==");
+// Generate a UUID v4
+let uuid = std.uuid.v4();
+println("Generated UUID: " + uuid);
+
+// Verify format (simple check)
+if (len(uuid) == 36) {
+    println("UUID length is correct (36 chars)");
+} else {
+    println("Error: UUID length is incorrect: " + len(uuid));
+}
+
+println("\n== std.url Example ==");
+let urlStr = "https://user:pass@example.com:8080/path/to/resource?query=param&key=value#fragment";
+println("Parsing URL: " + urlStr);
+
+let url = new std.url.URL(urlStr);
+
+println("Protocol: " + url.protocol);
+println("Host:     " + url.host);
+println("Port:     " + url.port);
+println("Path:     " + url.path);
+println("Query:    " + url.query);
+
+// Parse query parameters
+let params = url.parseQuery();
+println("Query Params:");
+foreach (k in params) {
+    println("  " + k + ": " + params[k]);
+}
+
+// Validation
+if (url.protocol == "https") println("Protocol check: OK");
+if (url.host == "example.com") println("Host check: OK");
+if (url.port == 8080) println("Port check: OK");
+if (url.path == "/path/to/resource") println("Path check: OK");
+if (params["query"] == "param") println("Query param check: OK");

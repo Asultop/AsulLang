@@ -98,6 +98,7 @@ std::vector<std::string> funcFiles = {
     "ternaryExample.alang",
     "try_catchExample.alang",
     "type_and_match_example.alang",
+    "uuid_url_example.alang",
     "type_comparison.alang",
     "map_example.alang",
     "containers_example.alang",
