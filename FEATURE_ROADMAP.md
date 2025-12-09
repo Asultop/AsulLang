@@ -83,7 +83,7 @@ call(funcPtr, "void", obj.x, obj.y);
 - 自动类型转换和安全检查
 
 **实现计划：**
-```cpp
+```alang
 // 新增 API 设计
 let ffi = new std.ffi.FFI();
 
