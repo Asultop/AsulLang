@@ -14,5 +14,6 @@ srv.listen(PORT, [](req, res){
 });
 
 // Keep server alive for a short while to handle requests
-await sleep(1200);
+// Using waitForFinish which properly drains the event loop
+srv.waitForFinish(1200);
 println("HTTP server shutting down");

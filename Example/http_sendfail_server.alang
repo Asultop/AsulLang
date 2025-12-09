@@ -17,5 +17,6 @@ srv.listen(PORT, [](req, res){
 });
 
 // Keep server alive long enough to handle the test
-await sleep(800);
+// Using waitForFinish which properly drains the event loop
+srv.waitForFinish(800);
 println("HTTP send-fail server shutting down");

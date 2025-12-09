@@ -130,6 +130,43 @@ public:
 			if (fn) fn();
 		}
 	}
+	
+	// Drain event loop for a specified duration (in milliseconds)
+	// If timeoutMs < 0, run until stopCondition returns true
+	// Returns true if stopCondition was satisfied, false on timeout
+	template<typename StopCondition>
+	bool drainEventLoopUntil(double timeoutMs, StopCondition stopCondition) {
+		auto startTime = std::chrono::steady_clock::now();
+		while (true) {
+			if (stopCondition()) return true;
+			
+			if (timeoutMs >= 0) {
+				auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - startTime
+				).count();
+				if (elapsed >= timeoutMs) return false;
+			}
+			
+			std::function<void()> fn;
+			{
+				std::unique_lock<std::mutex> lk(loopMutex);
+				if (!taskQueue.empty()) {
+					fn = std::move(taskQueue.front());
+					taskQueue.pop();
+				}
+			}
+			if (fn) {
+				fn();
+			} else {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		}
+	}
+	
+	// Simple drain for a fixed duration
+	void drainEventLoopFor(double timeoutMs) {
+		drainEventLoopUntil(timeoutMs, []{ return false; });
+	}
 
 	// Import external file: resolve path, read, parse and execute in isolated env, then return module object
 	std::shared_ptr<Object> importFilePath(const std::string& rawPath) {
@@ -896,10 +933,32 @@ public:
 			}
 			auto p = std::get<std::shared_ptr<PromiseState>>(v);
 			if (!p) return Value{std::monostate{}};
-			std::unique_lock<std::mutex> lk(p->mtx);
-			p->cv.wait(lk, [&]{ return p->settled; });
-			if (p->rejected) throw ExceptionSignal{ p->result };
-			return p->result;
+			// Drain event loop while waiting for the promise to settle
+			// This allows async callbacks (e.g., HTTP server handlers) to run
+			while (true) {
+				{
+					std::unique_lock<std::mutex> lk(p->mtx);
+					if (p->settled) {
+						if (p->rejected) throw ExceptionSignal{ p->result };
+						return p->result;
+					}
+				}
+				// Process pending tasks from the event loop
+				std::function<void()> fn;
+				{
+					std::unique_lock<std::mutex> lk(loopMutex);
+					if (!taskQueue.empty()) {
+						fn = std::move(taskQueue.front());
+						taskQueue.pop();
+					}
+				}
+				if (fn) {
+					fn();
+				} else {
+					// No tasks pending, wait briefly to avoid busy loop
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				}
+			}
 		}
 		if (auto yieldExpr = std::dynamic_pointer_cast<YieldExpr>(expr)) {
 			// For now, yield simply evaluates to the value (basic implementation)
