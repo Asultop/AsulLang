@@ -116,6 +116,7 @@ void Lexer::identifier() {
 		{"interface", TokenType::Interface},
 		{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
 		{"static", TokenType::Static},
+		{"match", TokenType::Match}, {"yield", TokenType::Yield},
 	};
 	auto it = keywords.find(text);
 	int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
@@ -216,10 +217,12 @@ void Lexer::scanToken() {
 	case ';': add(TokenType::Semicolon); break;
 	case ':': add(TokenType::Colon); break;
 	case '?':
-		// Support ?? and ??=
+		// Support ?? and ??= and ?.
 		if (match('?')) {
 			if (match('=')) add(TokenType::QuestionQuestionEqual);
 			else add(TokenType::QuestionQuestion);
+		} else if (match('.')) {
+			add(TokenType::QuestionDot);
 		} else add(TokenType::Question);
 		break;
 	case '.':
@@ -295,6 +298,7 @@ void Lexer::scanToken() {
 		}
 		break;
 	case '^': add(TokenType::Caret); break;
+	case '@': add(TokenType::At); break;
 	case '/':
 		if (match('=')) add(TokenType::SlashEqual);
 		else add(TokenType::Slash);

@@ -314,7 +314,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			std::optional<std::string> retType = std::nullopt;
 			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 			auto body = statement();
-			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType, isStatic));
+			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, false, retType, isStatic));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after class body");
 		// 可选分号：class Name { ... };
@@ -348,7 +348,7 @@ StmtPtr Parser::extendsDeclaration() {
 		std::optional<std::string> retType = std::nullopt;
 		if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 		auto body = statement();
-		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, retType));
+		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, false, retType));
 	}
 	consume(TokenType::RightBrace, "Expect '}' after extension body");
 	// 可选分号：extends Name { ... };
@@ -406,7 +406,7 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 	std::optional<std::string> retType = std::nullopt;
 	if (match({TokenType::Colon, TokenType::Arrow})) retType = consume(TokenType::Identifier, "Expect return type name after ':' or '->'").lexeme;
 	auto body = statement();
-	return std::make_shared<FunctionStmt>(name, params, body, isAsync, retType, false, isExported);
+	return std::make_shared<FunctionStmt>(name, params, body, isAsync, false, retType, false, isExported);
 }
 
 StmtPtr Parser::varDeclaration(bool isExported) {
