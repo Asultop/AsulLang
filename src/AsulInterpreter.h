@@ -1187,12 +1187,29 @@ public:
 				} else {
 					// For non-builtin constructors, check parameter count
 					bool isBaseConstructor = (ctorIdx < ctors.size() - 1);
-					bool isParameterlessConstructor = (bound->params.empty() && ctorArgs.empty());
-					bool isValidArityMismatch = isBaseConstructor && isParameterlessConstructor;
 					
-					if (ctorArgs.size() != bound->params.size() && !isValidArityMismatch) {
-						std::ostringstream oss; oss << "Arity mismatch at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
+					// Base class constructors are called with no arguments
+					// They must either have no parameters or have default values for all parameters
+					if (isBaseConstructor) {
+						if (!bound->params.empty() && ctorArgs.empty()) {
+							// Check if all parameters have defaults (would be supported)
+							// For now, require parameterless base constructors
+							std::ostringstream oss; 
+							oss << "Base class constructor requires parameters but inheritance does not support parameter passing yet. "
+							    << "Base class constructors must be parameterless. "
+							    << "At line " << nw->line << ", column " << nw->column << ", length " << nw->length;
+							throw std::runtime_error(oss.str());
+						}
+					} else {
+						// Most derived constructor - check normal arity
+						if (ctorArgs.size() != bound->params.size()) {
+							std::ostringstream oss; 
+							oss << "Constructor expects " << bound->params.size() << " arguments but got " << ctorArgs.size()
+							    << " at line " << nw->line << ", column " << nw->column << ", length " << nw->length;
+							throw std::runtime_error(oss.str());
+						}
 					}
+					
 					auto local = std::make_shared<Environment>(bound->closure);
 					for (size_t i=0;i<ctorArgs.size() && i<bound->params.size();++i) local->define(bound->params[i], ctorArgs[i]);
 					try { executeBlock(bound->body, local); } catch (const ReturnSignal&) {}
