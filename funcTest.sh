@@ -104,6 +104,7 @@ func_files=(
     "operator_overload_test.alang"
     "ffi_test.alang"
     "events_example.alang"
+    "events_inheritance_test.alang"
 )
 
 # Counter for passed/failed tests
