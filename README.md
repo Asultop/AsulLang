@@ -22,6 +22,7 @@
   - [构建步骤](#构建步骤)
   - [运行方式](#运行方式)
   - [平台注意事项](#平台注意事项)
+- [VSCode 语法高亮插件](#-vscode-语法高亮插件)
 - [语言特性详解](#-语言特性详解)
   - [基础语法](#基础语法)
   - [数据类型与内置函数](#数据类型与内置函数)
@@ -80,6 +81,14 @@ ALang/
 │   ├── fileIOExample.alang
 │   ├── lambdaExample.alang
 │   └── ...（更多示例）
+├── vscode-extension/         # VSCode 语法高亮扩展
+│   ├── package.json          # 扩展清单文件
+│   ├── syntaxes/             # TextMate 语法定义
+│   │   └── alang.tmLanguage.json
+│   ├── language-configuration.json  # 语言配置
+│   ├── examples/             # 语法高亮示例
+│   ├── images/               # 扩展图标
+│   └── *.md                  # 扩展文档
 ├── src/                      # 模块化核心组件
 │   ├── AsulLexer.h/cpp       # 词法分析器（TokenType、Token、Lexer）
 │   ├── AsulParser.h/cpp      # 递归下降语法分析器
@@ -209,6 +218,63 @@ make -j$(nproc)
 
 #### 异步脚本注意事项
 若脚本使用 `then/catch`、`go` 等异步特性，宿主程序需在脚本执行后调用 `runEventLoopUntilIdle()` 处理事件循环任务（CLI 已在 `Main.cpp` 中内置该逻辑）。
+
+---
+
+## 🎨 VSCode 语法高亮插件
+
+ALang 提供官方 Visual Studio Code 语法高亮扩展，为 `.alang` 文件提供完整的语法着色和编辑器支持。
+
+### 特性
+
+- **完整语法高亮**：支持所有 ALang 语言特性
+  - 关键字（let、var、const、function、class、async、await 等）
+  - 控制流语句（if、while、for、foreach、switch 等）
+  - 特殊运算符（`=~=`、`?.`、`??`、`<-`、`=>` 等）
+  - 字符串插值和模板字面量
+  - 多种注释风格（`//`、`/* */`、`#`、`"""`、`'''`）
+
+- **编辑器功能**：
+  - 括号匹配和自动闭合
+  - 注释切换（Ctrl+/）
+  - 代码折叠支持
+  - 智能缩进
+
+### 安装
+
+**方法 1：从源码安装（开发）**
+
+```bash
+# 复制扩展到 VSCode 扩展目录
+# Windows:
+xcopy /E /I /Y vscode-extension "%USERPROFILE%\.vscode\extensions\alang-language-support-0.1.0"
+
+# macOS/Linux:
+mkdir -p ~/.vscode/extensions/alang-language-support-0.1.0
+cp -r vscode-extension/* ~/.vscode/extensions/alang-language-support-0.1.0/
+
+# 重新加载 VSCode 窗口
+```
+
+**方法 2：打包并安装**
+
+```bash
+cd vscode-extension
+npm install -g vsce
+vsce package
+code --install-extension alang-language-support-0.1.0.vsix
+```
+
+### 使用
+
+安装后，VSCode 会自动为 `.alang` 文件应用语法高亮。打开任何 ALang 脚本文件即可享受完整的编辑器支持。
+
+### 文档
+
+- [安装指南](vscode-extension/INSTALL.md)
+- [语法参考](vscode-extension/SYNTAX-REFERENCE.md)
+- [开发者指南](vscode-extension/DEVELOPER.md)
+- [示例文件](vscode-extension/examples/)
 
 ---
 
