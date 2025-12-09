@@ -90,7 +90,15 @@ if (res.redirected) {
 - Pass object fields individually
 - Use pointer passing for structured data
 
-**Future Enhancement**: Full libffi integration for complex type marshalling is documented in the HTTP design plan.
+**Future Enhancement**: Full libffi integration for complex type marshalling is documented in the [Feature Roadmap](FEATURE_ROADMAP.md#1-ffiforeign-function-interface增强).
+
+For detailed FFI enhancement plans including:
+- libffi integration for arbitrary argument counts
+- Complex type marshalling (arrays, objects, structs)
+- Callback support (C calling ALang functions)
+- Variable arguments and advanced features
+
+Please refer to [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) Section 1.
 
 ## Testing
 

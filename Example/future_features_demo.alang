@@ -1,0 +1,489 @@
+// ============================================
+// ALang 未来特性演示 (Future Features Demo)
+// ============================================
+// 
+// 注意：这些特性尚未实现，此文件仅作为语法设计参考
+// NOTE: These features are NOT YET IMPLEMENTED. This file is for syntax design reference only.
+//
+// 完整文档：FEATURE_ROADMAP.md
+// Full documentation: FEATURE_ROADMAP.md
+
+println("=== Future Features Syntax Demo ===\n");
+
+// ============================================
+// 1. 解构赋值 (Destructuring Assignment)
+// ============================================
+println("1. Destructuring Assignment Examples:\n");
+
+// 数组解构 (Array Destructuring)
+/*
+let arr = [1, 2, 3, 4, 5];
+let [a, b, c] = arr;
+println("a:", a, "b:", b, "c:", c);  // 1 2 3
+
+// 跳过元素
+let [first, , third] = arr;
+println("first:", first, "third:", third);  // 1 3
+
+// 剩余元素
+let [head, ...tail] = arr;
+println("head:", head);  // 1
+println("tail:", tail);  // [2, 3, 4, 5]
+
+// 嵌套解构
+let nested = [1, [2, 3], 4];
+let [x, [y, z], w] = nested;
+println("x:", x, "y:", y, "z:", z, "w:", w);  // 1 2 3 4
+*/
+
+// 对象解构 (Object Destructuring)
+/*
+let person = { name: "Alice", age: 30, city: "Beijing" };
+let { name, age } = person;
+println("name:", name, "age:", age);  // Alice 30
+
+// 重命名
+let { name: userName, age: userAge } = person;
+println("userName:", userName);  // Alice
+
+// 默认值
+let { name, country = "China" } = person;
+println("country:", country);  // China
+
+// 函数参数解构
+function greet({ name, age, greeting = "Hello" }) {
+    println(`${greeting}, ${name}! You are ${age} years old.`);
+}
+
+greet({ name: "Bob", age: 25 });
+*/
+
+// ============================================
+// 2. 可选链 (Optional Chaining)
+// ============================================
+println("\n2. Optional Chaining Examples:\n");
+
+/*
+let user = { 
+    name: "Alice", 
+    address: { city: "Beijing" } 
+};
+
+// 安全访问
+println(user?.name);  // Alice
+println(user?.address?.city);  // Beijing
+println(user?.phone);  // null (不会报错)
+
+// 与 null 对象
+let nullUser = null;
+println(nullUser?.name);  // null (不会抛出异常)
+
+// 方法调用
+let obj = {
+    method: function() {
+        return "Hello";
+    }
+};
+println(obj.method?.());  // Hello
+println(nullUser?.method?.());  // null
+
+// 数组访问
+let arr = [1, 2, 3];
+println(arr?.[0]);  // 1
+println(nullUser?.arr?.[0]);  // null
+
+// 与空值合并运算符配合
+let city = user?.address?.city ?? "Unknown";
+println("City:", city);  // Beijing
+
+let emptyCity = nullUser?.address?.city ?? "Unknown";
+println("Empty City:", emptyCity);  // Unknown
+*/
+
+// ============================================
+// 3. 生成器/yield (Generators)
+// ============================================
+println("\n3. Generator Examples:\n");
+
+/*
+// 基础生成器
+function* range(start, end) {
+    for (let i = start; i < end; i++) {
+        yield i;
+    }
+}
+
+let gen = range(0, 5);
+println(gen.next().value);  // 0
+println(gen.next().value);  // 1
+println(gen.next().value);  // 2
+
+// for-of 遍历
+for (let num of range(0, 5)) {
+    println(num);  // 0, 1, 2, 3, 4
+}
+
+// 无限生成器
+function* fibonacci() {
+    let a = 0, b = 1;
+    while (true) {
+        yield a;
+        [a, b] = [b, a + b];
+    }
+}
+
+// 获取前 10 个斐波那契数
+let fib = fibonacci();
+for (let i = 0; i < 10; i++) {
+    println(fib.next().value);
+}
+
+// 生成器委托
+function* inner() {
+    yield 1;
+    yield 2;
+}
+
+function* outer() {
+    yield 0;
+    yield* inner();
+    yield 3;
+}
+
+for (let num of outer()) {
+    println(num);  // 0, 1, 2, 3
+}
+
+// 惰性求值示例
+function* lazyMap(iterable, fn) {
+    for (let item of iterable) {
+        yield fn(item);
+    }
+}
+
+function* lazyFilter(iterable, predicate) {
+    for (let item of iterable) {
+        if (predicate(item)) {
+            yield item;
+        }
+    }
+}
+
+let numbers = range(0, 1000000);
+let evens = lazyFilter(numbers, [](x) { return x % 2 === 0; });
+let squares = lazyMap(evens, [](x) { return x * x; });
+
+// 只计算前 5 个，不会处理全部数字
+let result = [];
+let squareGen = squares;
+for (let i = 0; i < 5; i++) {
+    result.push(squareGen.next().value);
+}
+println("First 5 even squares:", result);
+*/
+
+// ============================================
+// 4. 装饰器 (Decorators)
+// ============================================
+println("\n4. Decorator Examples:\n");
+
+/*
+// 定义装饰器
+function log(target, name, descriptor) {
+    let originalMethod = descriptor.value;
+    descriptor.value = function(...args) {
+        println(`Calling ${name} with args:`, args);
+        let result = originalMethod.apply(this, args);
+        println(`${name} returned:`, result);
+        return result;
+    };
+    return descriptor;
+}
+
+function timer(target, name, descriptor) {
+    let originalMethod = descriptor.value;
+    descriptor.value = function(...args) {
+        let start = Date.now();
+        let result = originalMethod.apply(this, args);
+        let end = Date.now();
+        println(`${name} took ${end - start}ms`);
+        return result;
+    };
+    return descriptor;
+}
+
+// 使用装饰器
+class Calculator {
+    @log
+    @timer
+    function add(a, b) {
+        return a + b;
+    }
+    
+    @log
+    function multiply(a, b) {
+        return a * b;
+    }
+}
+
+let calc = new Calculator();
+calc.add(2, 3);
+// 输出:
+// Calling add with args: [2, 3]
+// add took 0ms
+// add returned: 5
+
+// 装饰器工厂
+function memoize(maxSize = 100) {
+    return function(target, name, descriptor) {
+        let originalMethod = descriptor.value;
+        let cache = {};
+        
+        descriptor.value = function(...args) {
+            let key = JSON.stringify(args);
+            
+            if (key in cache) {
+                return cache[key];
+            }
+            
+            let result = originalMethod.apply(this, args);
+            cache[key] = result;
+            return result;
+        };
+        
+        return descriptor;
+    };
+}
+
+class MathUtils {
+    @memoize(50)
+    function fibonacci(n) {
+        if (n <= 1) return n;
+        return this.fibonacci(n - 1) + this.fibonacci(n - 2);
+    }
+}
+
+let utils = new MathUtils();
+println(utils.fibonacci(40));  // 第一次计算
+println(utils.fibonacci(40));  // 从缓存返回
+
+// 类装饰器
+function singleton(target) {
+    let instance = null;
+    
+    return class {
+        function constructor(...args) {
+            if (instance === null) {
+                instance = new target(...args);
+            }
+            return instance;
+        }
+    };
+}
+
+@singleton
+class Database {
+    function constructor(connectionString) {
+        this.connection = connectionString;
+        println("Database created");
+    }
+}
+
+let db1 = new Database("localhost:5432");
+let db2 = new Database("localhost:5432");
+println(db1 === db2);  // true，单例模式
+*/
+
+// ============================================
+// 5. 模式匹配 (Pattern Matching)
+// ============================================
+println("\n5. Pattern Matching Examples:\n");
+
+/*
+// 基础匹配
+function describe(value) {
+    match (value) {
+        case 0 => "zero",
+        case 1 => "one",
+        case 2 => "two",
+        case _ => "other"
+    }
+}
+
+println(describe(1));  // one
+println(describe(99));  // other
+
+// 类型匹配
+function processValue(value) {
+    match (typeof value) {
+        case "number" => println("It's a number:", value),
+        case "string" => println("It's a string:", value),
+        case "array" => println("It's an array with", value.length, "elements"),
+        case "object" => println("It's an object"),
+        case _ => println("Unknown type")
+    }
+}
+
+// 解构匹配
+function processPoint(point) {
+    match (point) {
+        case { x: 0, y: 0 } => println("Origin"),
+        case { x: 0, y } => println("On Y axis at", y),
+        case { x, y: 0 } => println("On X axis at", x),
+        case { x, y } => println("Point at", x, ",", y),
+        case _ => println("Not a valid point")
+    }
+}
+
+processPoint({ x: 0, y: 0 });  // Origin
+processPoint({ x: 5, y: 0 });  // On X axis at 5
+processPoint({ x: 3, y: 4 });  // Point at 3, 4
+
+// 数组模式
+function processList(list) {
+    match (list) {
+        case [] => println("Empty list"),
+        case [x] => println("Single element:", x),
+        case [x, y] => println("Two elements:", x, y),
+        case [head, ...tail] => {
+            println("Head:", head);
+            println("Tail:", tail);
+        },
+        case _ => println("Unknown pattern")
+    }
+}
+
+processList([]);  // Empty list
+processList([1]);  // Single element: 1
+processList([1, 2, 3, 4]);  // Head: 1, Tail: [2, 3, 4]
+
+// 条件守卫
+function categorizeNumber(n) {
+    match (n) {
+        case x if x < 0 => "negative",
+        case x if x === 0 => "zero",
+        case x if x > 0 && x <= 10 => "small positive",
+        case x if x > 10 => "large positive",
+        case _ => "unknown"
+    }
+}
+
+println(categorizeNumber(-5));  // negative
+println(categorizeNumber(5));   // small positive
+println(categorizeNumber(20));  // large positive
+
+// OR 模式
+function isWeekend(day) {
+    match (day) {
+        case "Saturday" | "Sunday" => true,
+        case _ => false
+    }
+}
+
+println(isWeekend("Saturday"));  // true
+println(isWeekend("Monday"));    // false
+
+// 表达式形式
+let result = match (value) {
+    case 0 => "zero",
+    case 1 => "one",
+    case _ => "other"
+};
+
+// 嵌套模式
+function processData(data) {
+    match (data) {
+        case { type: "user", user: { name, age } } if age >= 18 => {
+            println(`Adult user: ${name}, age ${age}`);
+        },
+        case { type: "user", user: { name, age } } => {
+            println(`Minor user: ${name}, age ${age}`);
+        },
+        case { type: "admin", level } if level > 5 => {
+            println("High-level admin");
+        },
+        case { type: "admin" } => {
+            println("Regular admin");
+        },
+        case _ => println("Unknown data type")
+    }
+}
+*/
+
+// ============================================
+// 6. FFI 增强示例 (Enhanced FFI)
+// ============================================
+println("\n6. Enhanced FFI Examples:\n");
+
+/*
+import std.ffi.*;
+
+// Phase 1: libffi 集成
+let ffi = new std.ffi.FFI();
+
+// 定义函数签名
+let signature = ffi.defineSignature({
+    returnType: "int",
+    argTypes: ["string", "int", "double"],
+    convention: "cdecl"
+});
+
+let lib = dlopen("mylib.so", RTLD_LAZY);
+let funcPtr = dlsym(lib, "myFunction");
+
+// 创建可调用对象
+let myFunc = ffi.wrap(funcPtr, signature);
+
+// 直接调用，类型自动转换
+let result = myFunc("hello", 42, 3.14);
+
+// Phase 2: 结构体支持
+let PointStruct = ffi.defineStruct("Point", {
+    fields: [
+        { name: "x", type: "double", offset: 0 },
+        { name: "y", type: "double", offset: 8 }
+    ],
+    size: 16,
+    align: 8
+});
+
+// 创建结构体实例
+let point = { x: 10.0, y: 20.0 };
+let pointPtr = ffi.allocStruct(PointStruct, point);
+
+// 调用接受结构体的函数
+let drawPointPtr = dlsym(lib, "drawPoint");
+call(drawPointPtr, "void", pointPtr);
+
+// 释放内存
+ffi.free(pointPtr);
+
+// 或使用自动管理版本
+ffi.callWithStruct(drawPointPtr, PointStruct, point);
+
+// Phase 3: 回调支持
+function myCallback(value) {
+    println("Callback called with:", value);
+    return value * 2;
+}
+
+let callbackPtr = ffi.createCallback(myCallback, {
+    returnType: "int",
+    argTypes: ["int"]
+});
+
+// 传递回调给 C 函数
+let registerCallbackPtr = dlsym(lib, "registerCallback");
+call(registerCallbackPtr, "void", callbackPtr);
+
+// 清理
+ffi.destroyCallback(callbackPtr);
+dlclose(lib);
+*/
+
+// ============================================
+println("\n=== End of Future Features Demo ===");
+println("\n注意：以上所有代码均为未来特性的语法示例，当前版本尚未实现。");
+println("NOTE: All code above is syntax examples for future features, not yet implemented.\n");
+println("详细文档请参阅：FEATURE_ROADMAP.md");
+println("For detailed documentation, see: FEATURE_ROADMAP.md");
