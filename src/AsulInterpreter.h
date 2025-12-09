@@ -1186,11 +1186,12 @@ public:
 					}
 				} else {
 					// For non-builtin constructors, check parameter count
-					if (ctorArgs.size() != bound->params.size()) {
-						// Allow base class constructors with no parameters to be called with no args
-						if (!(ctorIdx < ctors.size() - 1 && bound->params.empty() && ctorArgs.empty())) {
-							std::ostringstream oss; oss << "Arity mismatch at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
-						}
+					bool isBaseConstructor = (ctorIdx < ctors.size() - 1);
+					bool isParameterlessConstructor = (bound->params.empty() && ctorArgs.empty());
+					bool isValidArityMismatch = isBaseConstructor && isParameterlessConstructor;
+					
+					if (ctorArgs.size() != bound->params.size() && !isValidArityMismatch) {
+						std::ostringstream oss; oss << "Arity mismatch at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
 					}
 					auto local = std::make_shared<Environment>(bound->closure);
 					for (size_t i=0;i<ctorArgs.size() && i<bound->params.size();++i) local->define(bound->params[i], ctorArgs[i]);
