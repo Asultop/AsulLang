@@ -298,6 +298,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			bool isStatic = match({TokenType::Static});
 			bool isAsync = match({TokenType::Async});
 			(void)match({TokenType::Function});
+			bool isGenerator = match({TokenType::Star});
 			auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 			consume(TokenType::LeftParen, "Expect '('");
 			std::vector<Param> params;
@@ -314,7 +315,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			std::optional<std::string> retType = std::nullopt;
 			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 			auto body = statement();
-			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, false, retType, isStatic));
+			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic));
 		}
 		consume(TokenType::RightBrace, "Expect '}' after class body");
 		// 可选分号：class Name { ... };
@@ -332,6 +333,7 @@ StmtPtr Parser::extendsDeclaration() {
 	while (!check(TokenType::RightBrace) && !isAtEnd()) {
 		bool isAsync = match({TokenType::Async});
 		(void)match({TokenType::Function});
+		bool isGenerator = match({TokenType::Star});
 		auto mname = consume(TokenType::Identifier, "Expect method name").lexeme;
 		consume(TokenType::LeftParen, "Expect '('");
 		std::vector<Param> params;
@@ -348,7 +350,7 @@ StmtPtr Parser::extendsDeclaration() {
 		std::optional<std::string> retType = std::nullopt;
 		if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "Expect return type name after ':'").lexeme;
 		auto body = statement();
-		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, false, retType));
+		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType));
 	}
 	consume(TokenType::RightBrace, "Expect '}' after extension body");
 	// 可选分号：extends Name { ... };
@@ -357,6 +359,8 @@ StmtPtr Parser::extendsDeclaration() {
 }
 
 StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
+	// Check for generator function: function* name()
+	bool isGenerator = match({TokenType::Star});
 	auto name = consume(TokenType::Identifier, "Expect function name").lexeme;
 	consume(TokenType::LeftParen, "Expect '('");
 	std::vector<Param> params;
@@ -406,7 +410,7 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 	std::optional<std::string> retType = std::nullopt;
 	if (match({TokenType::Colon, TokenType::Arrow})) retType = consume(TokenType::Identifier, "Expect return type name after ':' or '->'").lexeme;
 	auto body = statement();
-	return std::make_shared<FunctionStmt>(name, params, body, isAsync, false, retType, false, isExported);
+	return std::make_shared<FunctionStmt>(name, params, body, isAsync, isGenerator, retType, false, isExported);
 }
 
 StmtPtr Parser::varDeclaration(bool isExported) {
@@ -990,12 +994,28 @@ ExprPtr Parser::call() {
 }
 
 ExprPtr Parser::primary() {
-	// 支持匿名函数：[](x, y){ ... }
+	// 支持匿名函数：[](x, y){ ... } 或生成器: []*() { ... }
 	if (check(TokenType::LeftBracket)) {
-		// 仅当模式为 [] ( 开始时，识别为 lambda；否则按数组字面量
-		if (current + 2 < tokens.size() && tokens[current].type == TokenType::LeftBracket && tokens[current+1].type == TokenType::RightBracket && tokens[current+2].type == TokenType::LeftParen) {
+		// 仅当模式为 [] ( 或 []*( 开始时，识别为 lambda；否则按数组字面量
+		bool isLambda = false;
+		if (current + 2 < tokens.size() && 
+		    tokens[current].type == TokenType::LeftBracket && 
+		    tokens[current+1].type == TokenType::RightBracket && 
+		    tokens[current+2].type == TokenType::LeftParen) {
+			isLambda = true;
+		} else if (current + 3 < tokens.size() && 
+		           tokens[current].type == TokenType::LeftBracket && 
+		           tokens[current+1].type == TokenType::RightBracket && 
+		           tokens[current+2].type == TokenType::Star &&
+		           tokens[current+3].type == TokenType::LeftParen) {
+			isLambda = true;
+		}
+		
+		if (isLambda) {
 			advance(); // [
 			advance(); // ]
+			// Check for generator lambda: []*()
+			bool isGenerator = match({TokenType::Star});
 			advance(); // (
 			std::vector<Param> params;
 			bool hasRest = false;
@@ -1041,7 +1061,7 @@ ExprPtr Parser::primary() {
 			}
 			consume(TokenType::RightParen, "Expect ')' after lambda parameters");
 			auto body = statement();
-			return std::make_shared<FunctionExpr>(params, body);
+			return std::make_shared<FunctionExpr>(params, body, isGenerator);
 		}
 	}
 	if (match({TokenType::New})) {

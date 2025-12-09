@@ -2577,7 +2577,9 @@ public:
 			// Array destructuring pattern
 			auto arrPtr = std::get_if<std::shared_ptr<Array>>(&value);
 			if (!arrPtr) {
-				throw std::runtime_error("Cannot destructure non-array value in array pattern");
+				std::ostringstream oss;
+				oss << "Cannot destructure non-array value (got " << typeOf(value) << ") in array pattern";
+				throw std::runtime_error(oss.str());
 			}
 			auto& arr = **arrPtr;
 			size_t i = 0;
@@ -2602,7 +2604,9 @@ public:
 			// Object destructuring pattern
 			auto objPtr = std::get_if<std::shared_ptr<Object>>(&value);
 			if (!objPtr) {
-				throw std::runtime_error("Cannot destructure non-object value in object pattern");
+				std::ostringstream oss;
+				oss << "Cannot destructure non-object value (got " << typeOf(value) << ") in object pattern";
+				throw std::runtime_error(oss.str());
 			}
 			auto& obj = **objPtr;
 			std::unordered_set<std::string> extractedKeys;
