@@ -3,6 +3,10 @@
 #include "../../../AsulAsync.h"
 #include <cstring>
 
+#ifdef ASUL_HAS_CURL
+#include <curl/curl.h>
+#endif
+
 #ifdef _WIN32
     // Windows networking
     #include <winsock2.h>
@@ -86,6 +90,212 @@ static std::string getHttpStatusText(int statusCode) {
 		default: return "Unknown";
 	}
 }
+
+#ifdef ASUL_HAS_CURL
+// CURL global initialization helper
+struct CurlGlobalInit {
+	CurlGlobalInit() {
+		curl_global_init(CURL_GLOBAL_DEFAULT);
+	}
+	~CurlGlobalInit() {
+		curl_global_cleanup();
+	}
+};
+static CurlGlobalInit g_curlInit;
+
+// Callback for CURL to write response data
+static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+	size_t realsize = size * nmemb;
+	std::string* str = static_cast<std::string*>(userp);
+	str->append(static_cast<char*>(contents), realsize);
+	return realsize;
+}
+
+// Callback for CURL to write response headers
+static size_t curlHeaderCallback(char* buffer, size_t size, size_t nitems, void* userdata) {
+	size_t realsize = size * nitems;
+	std::string* headers = static_cast<std::string*>(userdata);
+	headers->append(buffer, realsize);
+	return realsize;
+}
+
+// HTTP/2 capable fetch implementation using libcurl
+static void fetchWithCurl(
+	AsulAsync* asyncPtr,
+	Interpreter* interpPtr,
+	std::shared_ptr<PromiseState> p,
+	const std::string& url,
+	const std::string& method,
+	std::shared_ptr<Object> hdrObj,
+	const std::string& body,
+	bool followRedirects,
+	int maxRedirects,
+	bool useHttp2
+) {
+	std::thread([asyncPtr, interpPtr, p, url, method, hdrObj, body, followRedirects, maxRedirects, useHttp2]() {
+		try {
+			CURL* curl = curl_easy_init();
+			if (!curl) {
+				asyncPtr->reject(p, Value{std::string("Failed to initialize CURL")});
+				return;
+			}
+
+			std::string responseBody;
+			std::string responseHeaders;
+			
+			// Set URL
+			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+			
+			// Enable HTTP/2 if requested (only for HTTPS)
+			if (useHttp2) {
+				// Use CURL_HTTP_VERSION_2TLS to only attempt HTTP/2 over TLS
+				// This is more appropriate as HTTP/2 is primarily used with HTTPS
+				curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+			} else {
+				curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+			}
+			
+			// Set method
+			if (method == "POST") {
+				curl_easy_setopt(curl, CURLOPT_POST, 1L);
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.size());
+			} else if (method == "PUT") {
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.size());
+			} else if (method == "DELETE") {
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+			} else if (method == "PATCH") {
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.size());
+			} else if (method == "HEAD") {
+				curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+			}
+			// GET is default
+			
+			// Set custom headers
+			struct curl_slist* headers = nullptr;
+			if (hdrObj) {
+				for (auto& kv : *hdrObj) {
+					std::string headerLine = kv.first + ": " + toString(kv.second);
+					headers = curl_slist_append(headers, headerLine.c_str());
+				}
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+			}
+			
+			// Set redirect handling
+			if (followRedirects) {
+				curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+				curl_easy_setopt(curl, CURLOPT_MAXREDIRS, static_cast<long>(maxRedirects));
+			} else {
+				curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+			}
+			
+			// Set User-Agent
+			curl_easy_setopt(curl, CURLOPT_USERAGENT, "ALang/2.0 (HTTP2)");
+			
+			// Set callbacks
+			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
+			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBody);
+			curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, curlHeaderCallback);
+			curl_easy_setopt(curl, CURLOPT_HEADERDATA, &responseHeaders);
+			
+			// Perform request
+			CURLcode res = curl_easy_perform(curl);
+			
+			if (res != CURLE_OK) {
+				curl_easy_cleanup(curl);
+				if (headers) curl_slist_free_all(headers);
+				asyncPtr->reject(p, Value{std::string("CURL error: ") + curl_easy_strerror(res)});
+				return;
+			}
+			
+			// Get response info
+			long httpCode = 0;
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+			
+			char* effectiveUrl = nullptr;
+			curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl);
+			std::string finalUrl = effectiveUrl ? effectiveUrl : url;
+			
+			long redirectCount = 0;
+			curl_easy_getinfo(curl, CURLINFO_REDIRECT_COUNT, &redirectCount);
+			
+			// Get HTTP version used
+			long httpVersion = 0;
+			curl_easy_getinfo(curl, CURLINFO_HTTP_VERSION, &httpVersion);
+			std::string protocolVersion;
+			switch (httpVersion) {
+				case CURL_HTTP_VERSION_1_0: protocolVersion = "HTTP/1.0"; break;
+				case CURL_HTTP_VERSION_1_1: protocolVersion = "HTTP/1.1"; break;
+				case CURL_HTTP_VERSION_2_0: protocolVersion = "HTTP/2"; break;
+				case CURL_HTTP_VERSION_3: protocolVersion = "HTTP/3"; break;
+				default: protocolVersion = "HTTP/1.1"; break;
+			}
+			
+			// Clean up
+			curl_easy_cleanup(curl);
+			if (headers) curl_slist_free_all(headers);
+			
+			// Create response object
+			auto respObj = std::make_shared<Object>();
+			(*respObj)["status"] = Value{static_cast<double>(httpCode)};
+			(*respObj)["headers"] = Value{responseHeaders};
+			(*respObj)["redirected"] = Value{redirectCount > 0};
+			(*respObj)["url"] = Value{finalUrl};
+			(*respObj)["version"] = Value{protocolVersion};
+			
+			// text(): Promise<string>
+			{
+				auto textFn = std::make_shared<Function>();
+				textFn->isBuiltin = true;
+				std::string copy = responseBody;
+				textFn->builtin = [asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+					auto tp = asyncPtr->createPromise();
+					asyncPtr->resolve(tp, Value{copy});
+					return Value{tp};
+				};
+				(*respObj)["text"] = Value{textFn};
+			}
+			
+			// json(): Promise<any>
+			{
+				auto jsonFn = std::make_shared<Function>();
+				jsonFn->isBuiltin = true;
+				std::string copy = responseBody;
+				jsonFn->builtin = [interpPtr, asyncPtr, copy](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+					auto tp = asyncPtr->createPromise();
+					asyncPtr->postTask([interpPtr, asyncPtr, tp, copy]{
+						try {
+							auto jsonPkg = interpPtr->ensurePackage("json");
+							Value parseV = (*jsonPkg)["parse"];
+							if (!std::holds_alternative<std::shared_ptr<Function>>(parseV)) {
+								asyncPtr->reject(tp, Value{std::string("json.parse not found")});
+								return;
+							}
+							auto parseFn = std::get<std::shared_ptr<Function>>(parseV);
+							Value res = parseFn->builtin({Value{copy}}, parseFn->closure);
+							asyncPtr->resolve(tp, res);
+						} catch (const std::exception& ex) {
+							asyncPtr->reject(tp, Value{std::string(ex.what())});
+						}
+					});
+					return Value{tp};
+				};
+				(*respObj)["json"] = Value{jsonFn};
+			}
+			
+			asyncPtr->resolve(p, Value{respObj});
+		} catch (const std::exception& ex) {
+			asyncPtr->reject(p, Value{std::string("Fetch exception: ") + ex.what()});
+		} catch (...) {
+			asyncPtr->reject(p, Value{std::string("Fetch unknown exception")});
+		}
+	}).detach();
+}
+#endif // ASUL_HAS_CURL
 
 void registerStdNetworkPackage(Interpreter& interp) {
 	// Get pointer to async interface (Interpreter implements AsulAsync)
@@ -487,6 +697,8 @@ void registerStdNetworkPackage(Interpreter& interp) {
 
 
 		// fetch(url[, options]) -> Promise<Response-like>
+#ifdef ASUL_HAS_CURL
+		// HTTP/2 support available via libcurl
 		{
 			auto fetchFn = std::make_shared<Function>();
 			fetchFn->isBuiltin = true;
@@ -498,9 +710,54 @@ void registerStdNetworkPackage(Interpreter& interp) {
 				std::string body;
 				bool followRedirects = true;
 				int maxRedirects = 5;
+				bool useHttp2 = true; // Enable HTTP/2 by default
 				
 				if (args.size() >= 2) {
 					if (!std::holds_alternative<std::shared_ptr<Object>>(args[1])) throw std::runtime_error("fetch options must be object");
+					auto opt = std::get<std::shared_ptr<Object>>(args[1]);
+					auto itM = opt->find("method"); if (itM != opt->end()) method = toString(itM->second);
+					auto itH = opt->find("headers"); if (itH != opt->end() && std::holds_alternative<std::shared_ptr<Object>>(itH->second)) hdrObj = std::get<std::shared_ptr<Object>>(itH->second);
+					auto itB = opt->find("body"); if (itB != opt->end()) body = toString(itB->second);
+					auto itR = opt->find("redirect"); 
+					if (itR != opt->end()) {
+						std::string redirectMode = toString(itR->second);
+						if (redirectMode == "manual" || redirectMode == "error") followRedirects = false;
+					}
+					auto itMR = opt->find("maxRedirects");
+					if (itMR != opt->end() && std::holds_alternative<double>(itMR->second)) {
+						maxRedirects = static_cast<int>(std::get<double>(itMR->second));
+					}
+					// New option: http2 (default true)
+					auto itH2 = opt->find("http2");
+					if (itH2 != opt->end() && std::holds_alternative<bool>(itH2->second)) {
+						useHttp2 = std::get<bool>(itH2->second);
+					}
+				}
+				
+				// Promise - use new CURL-based implementation
+				auto p = asyncPtr->createPromise();
+				fetchWithCurl(asyncPtr, interpPtr, p, initialUrl, method, hdrObj, body, followRedirects, maxRedirects, useHttp2);
+				return Value{p};
+			};
+			(*netPkg)["fetch"] = Value{fetchFn};
+		}
+#endif // ASUL_HAS_CURL
+
+		// Keep old socket-based fetch as fetchLegacy for backward compatibility
+		{
+			auto fetchLegacyFn = std::make_shared<Function>();
+			fetchLegacyFn->isBuiltin = true;
+			fetchLegacyFn->builtin = [interpPtr, asyncPtr](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+				if (args.empty()) throw std::runtime_error("fetchLegacy expects at least 1 argument (url)");
+				std::string initialUrl = toString(args[0]);
+				std::string method = "GET";
+				std::shared_ptr<Object> hdrObj;
+				std::string body;
+				bool followRedirects = true;
+				int maxRedirects = 5;
+				
+				if (args.size() >= 2) {
+					if (!std::holds_alternative<std::shared_ptr<Object>>(args[1])) throw std::runtime_error("fetchLegacy options must be object");
 					auto opt = std::get<std::shared_ptr<Object>>(args[1]);
 					auto itM = opt->find("method"); if (itM != opt->end()) method = toString(itM->second);
 					auto itH = opt->find("headers"); if (itH != opt->end() && std::holds_alternative<std::shared_ptr<Object>>(itH->second)) hdrObj = std::get<std::shared_ptr<Object>>(itH->second);
@@ -701,8 +958,13 @@ void registerStdNetworkPackage(Interpreter& interp) {
 				}).detach();
 				return Value{ p };
 			};
-			(*netPkg)["fetch"] = Value{ fetchFn };
+			(*netPkg)["fetchLegacy"] = Value{fetchLegacyFn};
 		}
+
+#ifndef ASUL_HAS_CURL
+		// When CURL is not available, alias fetch to fetchLegacy
+		(*netPkg)["fetch"] = (*netPkg)["fetchLegacy"];
+#endif
 
 		// Helper for HTTP requests (Simple blocking implementation)
 		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {

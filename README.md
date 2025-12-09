@@ -31,6 +31,7 @@
   - [函数特性](#函数特性)
   - [面向对象](#面向对象)
   - [异步编程](#异步编程)
+  - [网络与 HTTP/2](#网络与-http2)
   - [元编程](#元编程)
   - [模块与导入](#模块与导入)
   - [文件I/O](#文件-io-stdio)
@@ -65,7 +66,8 @@ ALang 是一款基于 C++17 开发的轻量脚本语言解释器/运行时，专
 - ⚡ **异步编程**：`async/await`、`Promise`、`then/catch`、事件循环
 - 🔍 **元编程能力**：`eval(string)` 动态执行、`quote(string)` Token 级源码操作
 - 📥 **模块系统**：文件导入与包导入（`import`/`from`），支持去重机制
-- 📚 **标准库丰富**：字符串、数学、文件 I/O、网络、JSON/XML/YAML 解析等
+- 📚 **标准库丰富**：字符串、数学、文件 I/O、网络（支持 HTTP/2）、JSON/XML/YAML 解析等
+- 🌐 **HTTP/2 支持**：基于 libcurl 的现代 HTTP/2 协议支持，自动协议协商
 
 ---
 
@@ -475,6 +477,55 @@ go task().then([](res) { println("异步结果：", res); });
 
 // 事件循环（宿主需调用 runEventLoopUntilIdle()）
 ```
+
+### 网络与 HTTP/2
+AsulLang 的 `std.network` 模块现已支持现代 HTTP/2 协议，基于 libcurl 提供高效的网络通信能力。
+
+#### HTTP/2 请求示例
+```javascript
+import std.network;
+
+// HTTP/2 默认启用
+let res = await std.network.fetch("https://example.com");
+println("状态码：", res.status);
+println("协议版本：", res.version);  // "HTTP/2" 或 "HTTP/1.1"
+
+let body = await res.text();
+println("响应内容：", body);
+```
+
+#### POST 请求与自定义头
+```javascript
+let res = await std.network.fetch("https://api.example.com/data", {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer token123"
+    },
+    body: '{"key": "value"}'
+});
+
+let data = await res.json();
+println("返回数据：", data);
+```
+
+#### 强制使用 HTTP/1.1
+```javascript
+let res = await std.network.fetch("https://example.com", {
+    http2: false  // 禁用 HTTP/2，使用 HTTP/1.1
+});
+```
+
+#### HTTP/2 特性
+- ✅ 多路复用（Multiplexing）
+- ✅ 头部压缩（HPACK）
+- ✅ 自动协议协商（ALPN）
+- ✅ 支持所有 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD）
+- ✅ 自定义请求头
+- ✅ 重定向处理
+- ✅ 向后兼容 HTTP/1.1
+
+详细文档请参阅 [HTTP2_README.md](HTTP2_README.md)
 
 ### 元编程
 #### eval 动态执行

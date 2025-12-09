@@ -1,0 +1,34 @@
+// Example/http2_live_test.alang
+// Live test for HTTP/2 with real servers
+
+import std.network;
+
+println("=== HTTP/2 Live Test ===\n");
+println("Testing against real HTTP servers...\n");
+
+// Test 1: HTTP/2 enabled site (Google)
+println("Test 1: Fetch from HTTP/2-capable server");
+println("  URL: https://www.google.com");
+
+let p1 = std.network.fetch("https://www.google.com", {
+    http2: true
+});
+
+p1.then((res) => {
+    println("  Status: " + res.status);
+    println("  Protocol: " + res.version);
+    println("  URL: " + res.url);
+    
+    if (res.version == "HTTP/2") {
+        println("  ✓ HTTP/2 connection successful!");
+    } else {
+        println("  Note: Server responded with " + res.version);
+    }
+}).catch((err) => {
+    println("  Error: " + err);
+});
+
+// Give some time for async operations
+await sleep(2000);
+
+println("\n=== Test completed ===");
