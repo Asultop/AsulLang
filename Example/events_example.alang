@@ -1,0 +1,97 @@
+/*
+ * std.events Example - Signal-Slot Mechanism
+ * Demonstrates Qt-like signal-slot pattern using AsulObject
+ */
+
+import std.events;
+
+println("=== std.events Example: Signal-Slot Mechanism ===\n");
+
+// Example 1: Basic signal-slot usage with receive()
+println("--- Example 1: Using receive() method ---");
+
+// Create an AsulObject
+let button = new std.events.AsulObject();
+button.label = "Click Me";
+
+// Connect signal to slot using receive()
+button.receive("clicked", [](label) {
+    println("Lambda received: Button '" + label + "' was clicked");
+});
+
+// Emit the signal
+println("Button '" + button.label + "' clicked!");
+button.emit("clicked", button.label);
+
+println("");
+
+// Example 2: Multiple receivers for the same signal
+println("--- Example 2: Multiple receivers ---");
+
+let sensor = new std.events.AsulObject();
+
+// Connect multiple receivers to the same signal
+sensor.receive("dataReady", [](val) {
+    println("  Receiver 1: Got data = " + val);
+});
+
+sensor.receive("dataReady", [](val) {
+    println("  Receiver 2: Got data = " + val);
+});
+
+sensor.receive("dataReady", [](val) {
+    println("  Receiver 3: Got data = " + val);
+});
+
+// Trigger the signal - all receivers should get it
+println("Sensor read value: 42");
+sensor.emit("dataReady", 42);
+
+println("");
+
+// Example 3: Signal with multiple arguments
+println("--- Example 3: Multiple signal arguments ---");
+
+let bus = new std.events.AsulObject();
+
+// Create a handler that receives multiple arguments (using rest parameters)
+// Note: AsulLang supports rest parameters with ... syntax
+bus.receive("messageSent", [](sender, recipient, msg) {
+    println("  Observer: Message [" + sender + " -> " + recipient + "]: " + msg);
+});
+
+// Emit signal with multiple arguments
+println("Sending message from 'Alice' to 'Bob': Hello!");
+bus.emit("messageSent", "Alice", "Bob", "Hello!");
+
+println("");
+
+// Example 4: Using connect() to link two objects
+println("--- Example 4: Using connect() function ---");
+
+let counter = new std.events.AsulObject();
+counter.count = 0;
+
+let display = new std.events.AsulObject();
+
+// Define the updateDisplay method directly on the instance
+display.updateDisplay = [](value) {
+    println("Display showing: " + value);
+};
+
+// Connect counter's valueChanged signal to display's updateDisplay slot
+// Note: connect expects the slot to be a method name or function
+std.events.connect(counter, "valueChanged", display, "updateDisplay");
+
+// Increment and emit
+counter.count = 1;
+println("Counter incremented to: " + counter.count);
+counter.emit("valueChanged", counter.count);
+
+counter.count = 2;
+println("Counter incremented to: " + counter.count);
+counter.emit("valueChanged", counter.count);
+
+println("");
+
+println("=== All std.events tests completed successfully! ===");
