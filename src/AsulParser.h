@@ -33,6 +33,10 @@ private:
 	std::vector<Token> parseQualifiedIdentifiers(const char* message);
 	std::string joinIdentifiers(const std::vector<Token>& parts, size_t begin, size_t end) const;
 
+	PatternPtr parsePattern();
+	PatternPtr parseArrayPattern();
+	PatternPtr parseObjectPattern();
+
 	StmtPtr declaration();
 	StmtPtr importDeclaration(bool isFrom);
 	StmtPtr interfaceDeclaration(bool isExported = false);

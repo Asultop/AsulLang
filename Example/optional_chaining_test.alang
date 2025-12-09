@@ -1,0 +1,28 @@
+// Optional Chaining Tests
+println("=== Optional Chaining Tests ===");
+
+// Test 1: Access property on null/undefined
+let nullObj = null;
+let result1 = nullObj?.prop;
+println("nullObj?.prop =", result1); // null
+
+// Test 2: Access nested property
+let obj = {user: {name: "Alice", address: {city: "NYC"}}};
+let city = obj?.user?.address?.city;
+println("city =", city); // "NYC"
+
+// Test 3: Access non-existent property
+let result2 = obj?.nonExistent?.deeply?.nested;
+println("result2 =", result2); // null
+
+// Test 4: Access property on existing object
+let data = {id: 123, value: "test"};
+let value = data?.value;
+println("value =", value); // "test"
+
+// Test 5: Mixed with regular property access
+let mixed = {a: {b: {c: 42}}};
+let val1 = mixed.a?.b?.c;
+println("val1 =", val1); // 42
+
+println("\n=== All optional chaining tests completed ===");

@@ -1,0 +1,22 @@
+// Yield and Generator Tests
+println("=== Yield Expression Tests ===");
+
+// Basic yield in a function (simplified - full generators would need more implementation)
+function* simpleGenerator() {
+    yield 1;
+    yield 2;
+    yield 3;
+}
+
+println("Yield expressions are supported in generator functions");
+
+// Test yield with value
+function testYield() {
+    let x = yield 42;
+    println("Yielded value:", x);
+}
+
+testYield();
+
+println("\n=== Yield tests completed ===");
+println("Note: Full generator/iterator protocol would require additional runtime support");

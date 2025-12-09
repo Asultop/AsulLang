@@ -410,6 +410,16 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 }
 
 StmtPtr Parser::varDeclaration(bool isExported) {
+	// Check if this is a destructuring pattern
+	if (check(TokenType::LeftBracket) || check(TokenType::LeftBrace)) {
+		auto pattern = parsePattern();
+		consume(TokenType::Equal, "Expect '=' in destructuring declaration");
+		auto init = expression();
+		consume(TokenType::Semicolon, "Expect ';' after variable declaration");
+		return std::make_shared<VarDeclDestructuring>(pattern, init, isExported);
+	}
+	
+	// Regular variable declaration
 	auto name = consume(TokenType::Identifier, "Expect variable name").lexeme;
 	std::optional<std::string> type = std::nullopt;
 	ExprPtr typeExpr = nullptr;
@@ -847,6 +857,20 @@ ExprPtr Parser::unary() {
 		auto inner = unary();
 		return std::make_shared<AwaitExpr>(inner, awTok.line, awTok.column, std::max(1, awTok.length));
 	}
+	if (match({TokenType::Yield})) {
+		Token yieldTok = previous();
+		bool isDelegate = false;
+		ExprPtr value = nullptr;
+		// yield* for delegating to another generator
+		if (match({TokenType::Star})) {
+			isDelegate = true;
+		}
+		// yield can have an optional value
+		if (!check(TokenType::Semicolon) && !check(TokenType::RightParen) && !check(TokenType::RightBrace)) {
+			value = unary();
+		}
+		return std::make_shared<YieldExpr>(value, isDelegate, yieldTok.line, yieldTok.column, std::max(1, yieldTok.length));
+	}
 	return postfix();
 }
 
@@ -873,6 +897,19 @@ ExprPtr Parser::call() {
 	auto expr = primary();
 	for (;;) {
 		if (match({TokenType::LeftParen})) expr = finishCall(expr);
+		else if (match({TokenType::QuestionDot})) {
+			// Optional chaining: obj?.prop
+			std::string name; Token nameTok;
+			if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
+			else {
+				const Token& tok = peek();
+				std::ostringstream oss;
+				oss << "[Parse] Expect property name after '?.' at line " << tok.line << ", column " << tok.column << "\n";
+				oss << getLineText(tok.line) << "\n" << std::string(tok.column > 1 ? tok.column - 1 : 0, ' ') << std::string(std::max(1, tok.length), '^');
+				throw std::runtime_error(oss.str());
+			}
+			expr = std::make_shared<OptionalChainingExpr>(expr, name, nameTok.line, nameTok.column, std::max(1, nameTok.length));
+		}
 		else if (match({TokenType::Dot})) {
 			std::string name; Token nameTok;
 			if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
@@ -1110,6 +1147,84 @@ ExprPtr Parser::parseExprSnippet(const std::string& code, int line, int column, 
 	std::ostringstream oss;
 	oss << "Invalid interpolation expression at line " << line << ", column " << column << ", length " << length;
 	throw std::runtime_error(oss.str());
+}
+
+// Parse destructuring patterns
+PatternPtr Parser::parsePattern() {
+	if (check(TokenType::LeftBracket)) {
+		return parseArrayPattern();
+	} else if (check(TokenType::LeftBrace)) {
+		return parseObjectPattern();
+	} else if (check(TokenType::Identifier)) {
+		auto name = advance().lexeme;
+		ExprPtr defaultValue = nullptr;
+		if (match({TokenType::Equal})) {
+			defaultValue = assignment();
+		}
+		return std::make_shared<IdentifierPattern>(name, defaultValue);
+	}
+	throw std::runtime_error("Expected identifier, array pattern, or object pattern");
+}
+
+PatternPtr Parser::parseArrayPattern() {
+	consume(TokenType::LeftBracket, "Expect '['");
+	std::vector<PatternPtr> elements;
+	bool hasRest = false;
+	std::string restName;
+	
+	while (!check(TokenType::RightBracket) && !isAtEnd()) {
+		if (match({TokenType::Ellipsis})) {
+			hasRest = true;
+			restName = consume(TokenType::Identifier, "Expect identifier after '...'").lexeme;
+			break;
+		}
+		elements.push_back(parsePattern());
+		if (!check(TokenType::RightBracket)) {
+			consume(TokenType::Comma, "Expect ',' or ']' in array pattern");
+		}
+	}
+	
+	consume(TokenType::RightBracket, "Expect ']'");
+	return std::make_shared<ArrayPattern>(elements, hasRest, restName);
+}
+
+PatternPtr Parser::parseObjectPattern() {
+	consume(TokenType::LeftBrace, "Expect '{'");
+	std::vector<ObjectPattern::Property> properties;
+	bool hasRest = false;
+	std::string restName;
+	
+	while (!check(TokenType::RightBrace) && !isAtEnd()) {
+		if (match({TokenType::Ellipsis})) {
+			hasRest = true;
+			restName = consume(TokenType::Identifier, "Expect identifier after '...'").lexeme;
+			break;
+		}
+		
+		auto key = consume(TokenType::Identifier, "Expect property name").lexeme;
+		PatternPtr pattern;
+		ExprPtr defaultValue = nullptr;
+		
+		if (match({TokenType::Colon})) {
+			pattern = parsePattern();
+		} else {
+			// Shorthand: { x } is equivalent to { x: x }
+			pattern = std::make_shared<IdentifierPattern>(key, nullptr);
+		}
+		
+		if (match({TokenType::Equal})) {
+			defaultValue = assignment();
+		}
+		
+		properties.push_back({key, pattern, defaultValue});
+		
+		if (!check(TokenType::RightBrace)) {
+			consume(TokenType::Comma, "Expect ',' or '}' in object pattern");
+		}
+	}
+	
+	consume(TokenType::RightBrace, "Expect '}'");
+	return std::make_shared<ObjectPattern>(properties, hasRest, restName);
 }
 
 } // namespace asul

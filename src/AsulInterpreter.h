@@ -314,6 +314,19 @@ public:
 				std::ostringstream oss; oss << ex.what() << " at line " << gp->line << ", column " << gp->column << ", length " << gp->length; throw std::runtime_error(oss.str());
 			}
 		}
+		if (auto oc = std::dynamic_pointer_cast<OptionalChainingExpr>(expr)) {
+			// Optional chaining: obj?.prop returns null if obj is null/undefined
+			Value o = evaluate(oc->object);
+			if (std::holds_alternative<std::monostate>(o)) {
+				return Value{std::monostate{}};
+			}
+			try {
+				return getProperty(o, oc->name);
+			} catch (const std::exception&) {
+				// If property doesn't exist, return null instead of throwing
+				return Value{std::monostate{}};
+			}
+		}
 		if (auto ix = std::dynamic_pointer_cast<IndexExpr>(expr)) {
 			Value o = evaluate(ix->object);
 			Value k = evaluate(ix->index);
@@ -888,6 +901,14 @@ public:
 			if (p->rejected) throw ExceptionSignal{ p->result };
 			return p->result;
 		}
+		if (auto yieldExpr = std::dynamic_pointer_cast<YieldExpr>(expr)) {
+			// For now, yield simply evaluates to the value (basic implementation)
+			// Full generator support would require coroutine-like state management
+			if (yieldExpr->value) {
+				return evaluate(yieldExpr->value);
+			}
+			return Value{std::monostate{}};
+		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			// derive callee name for stack trace
 			auto deriveName = [&](const ExprPtr& e)->std::string{
@@ -1303,6 +1324,11 @@ public:
 			}
 			if (declaredName) env->defineWithType(v->name, init, declaredName); else env->define(v->name, init);
 			if (v->isExported) env->explicitExports.insert(v->name);
+			return;
+		}
+		if (auto vd = std::dynamic_pointer_cast<VarDeclDestructuring>(stmt)) {
+			Value init = vd->init ? evaluate(vd->init) : Value{std::monostate{}};
+			destructurePattern(vd->pattern, init);
 			return;
 		}
 		if (auto b = std::dynamic_pointer_cast<BlockStmt>(stmt)) { executeBlock(b->statements, std::make_shared<Environment>(env)); return; }
@@ -2500,6 +2526,75 @@ public:
 	}
 
 	Value tempStorage; // used to hold temporary during Set* operations
+
+	// Helper function to destructure patterns
+	void destructurePattern(const PatternPtr& pattern, const Value& value) {
+		if (auto idPat = std::dynamic_pointer_cast<IdentifierPattern>(pattern)) {
+			// Simple identifier pattern
+			Value val = value;
+			if (std::holds_alternative<std::monostate>(value) && idPat->defaultValue) {
+				val = evaluate(idPat->defaultValue);
+			}
+			env->define(idPat->name, val);
+		} else if (auto arrPat = std::dynamic_pointer_cast<ArrayPattern>(pattern)) {
+			// Array destructuring pattern
+			auto arrPtr = std::get_if<std::shared_ptr<Array>>(&value);
+			if (!arrPtr) {
+				throw std::runtime_error("Cannot destructure non-array value in array pattern");
+			}
+			auto& arr = **arrPtr;
+			size_t i = 0;
+			for (auto& elem : arrPat->elements) {
+				if (i < arr.size()) {
+					destructurePattern(elem, arr[i]);
+				} else {
+					// Use default value if provided
+					destructurePattern(elem, Value{std::monostate{}});
+				}
+				i++;
+			}
+			// Handle rest element
+			if (arrPat->hasRest) {
+				auto restArr = std::make_shared<Array>();
+				for (size_t j = i; j < arr.size(); j++) {
+					restArr->push_back(arr[j]);
+				}
+				env->define(arrPat->restName, Value{restArr});
+			}
+		} else if (auto objPat = std::dynamic_pointer_cast<ObjectPattern>(pattern)) {
+			// Object destructuring pattern
+			auto objPtr = std::get_if<std::shared_ptr<Object>>(&value);
+			if (!objPtr) {
+				throw std::runtime_error("Cannot destructure non-object value in object pattern");
+			}
+			auto& obj = **objPtr;
+			std::unordered_set<std::string> extractedKeys;
+			
+			for (auto& prop : objPat->properties) {
+				auto it = obj.find(prop.key);
+				Value propValue = (it != obj.end()) ? it->second : Value{std::monostate{}};
+				
+				// Use default value if property doesn't exist
+				if (std::holds_alternative<std::monostate>(propValue) && prop.defaultValue) {
+					propValue = evaluate(prop.defaultValue);
+				}
+				
+				destructurePattern(prop.pattern, propValue);
+				extractedKeys.insert(prop.key);
+			}
+			
+			// Handle rest element
+			if (objPat->hasRest) {
+				auto restObj = std::make_shared<Object>();
+				for (auto& [key, val] : obj) {
+					if (extractedKeys.find(key) == extractedKeys.end()) {
+						(*restObj)[key] = val;
+					}
+				}
+				env->define(objPat->restName, Value{restObj});
+			}
+		}
+	}
 
 	void installBuiltins() {
 		stdRoot = std::make_shared<Object>();
