@@ -103,6 +103,7 @@ func_files=(
     "type_system_iterator_test.alang"
     "operator_overload_test.alang"
     "ffi_test.alang"
+    "events_example.alang"
 )
 
 # Counter for passed/failed tests
