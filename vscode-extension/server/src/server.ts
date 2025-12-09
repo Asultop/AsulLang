@@ -316,7 +316,7 @@ connection.onCompletion(
 		const documentSymbols = symbolTable.get(_textDocumentPosition.textDocument.uri);
 		if (documentSymbols) {
 			documentSymbols.forEach((symbol, name) => {
-				let kind = CompletionItemKind.Variable;
+				let kind: CompletionItemKind = CompletionItemKind.Variable;
 				if (symbol.kind === 'function') kind = CompletionItemKind.Function;
 				else if (symbol.kind === 'class') kind = CompletionItemKind.Class;
 				else if (symbol.kind === 'interface') kind = CompletionItemKind.Interface;

@@ -16,6 +16,11 @@ echo ""
 echo "Build directory: $BUILD_DIR"
 echo ""
 
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # Function to install dependencies
 install_dependencies() {
     echo "Installing dependencies..."
@@ -29,19 +34,19 @@ install_dependencies() {
     # Install root dependencies
     if [ -f "package.json" ]; then
         echo "  Installing root dependencies..."
-        npm install --silent 2>&1 | tail -3
+        npm install 2>&1 | grep -E "(added|removed|changed|audited)" || true
     fi
     
     # Install client dependencies
     if [ -f "client/package.json" ]; then
         echo "  Installing client dependencies..."
-        cd client && npm install --silent 2>&1 | tail -3 && cd ..
+        (cd client && npm install 2>&1 | grep -E "(added|removed|changed|audited)" || true)
     fi
     
     # Install server dependencies
     if [ -f "server/package.json" ]; then
         echo "  Installing server dependencies..."
-        cd server && npm install --silent 2>&1 | tail -3 && cd ..
+        (cd server && npm install 2>&1 | grep -E "(added|removed|changed|audited)" || true)
     fi
     
     echo "  ✓ Dependencies installed"
@@ -52,14 +57,8 @@ install_dependencies() {
 compile_typescript() {
     echo "Compiling TypeScript..."
     
-    if ! command_exists tsc; then
-        echo "  ⚠ tsc not found locally, using npx..."
-        npx tsc -b
-    else
-        tsc -b
-    fi
-    
-    if [ $? -eq 0 ]; then
+    # Use npx to ensure we use the local TypeScript compiler
+    if npx tsc -b; then
         echo "  ✓ TypeScript compiled successfully"
         
         # Verify output files exist
@@ -79,22 +78,21 @@ compile_typescript() {
     echo ""
 }
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
 # Function to validate JSON files
 validate_json() {
     echo "Validating JSON files..."
     
     for file in package.json language-configuration.json syntaxes/alang.tmLanguage.json; do
         if [ -f "$file" ]; then
-            if python3 -m json.tool "$file" > /dev/null 2>&1; then
-                echo "  ✓ $file is valid"
+            if command_exists node; then
+                if node -e "JSON.parse(require('fs').readFileSync('$file', 'utf8'))" 2>/dev/null; then
+                    echo "  ✓ $file is valid"
+                else
+                    echo "  ✗ $file is INVALID!"
+                    exit 1
+                fi
             else
-                echo "  ✗ $file is INVALID!"
-                exit 1
+                echo "  ⚠ Cannot validate $file (node not found)"
             fi
         else
             echo "  ✗ $file not found!"
@@ -115,6 +113,10 @@ check_files() {
         "syntaxes/alang.tmLanguage.json"
         "README.md"
         "CHANGELOG.md"
+    )
+    
+    # Icon is optional
+    optional_files=(
         "images/icon.png"
     )
     
@@ -127,16 +129,31 @@ check_files() {
         fi
     done
     
+    for file in "${optional_files[@]}"; do
+        if [ -f "$file" ]; then
+            echo "  ✓ $file exists"
+        else
+            echo "  ⚠ $file is missing (optional)"
+        fi
+    done
+    
     echo ""
 }
 
 # Function to display extension info
 show_info() {
     echo "Extension Information:"
-    echo "  Name: $(grep -o '"name":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)"
-    echo "  Display Name: $(grep -o '"displayName":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)"
-    echo "  Version: $(grep -o '"version":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)"
-    echo "  Publisher: $(grep -o '"publisher":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)"
+    if command_exists node; then
+        NAME=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).name")
+        DISPLAY_NAME=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).displayName")
+        VERSION=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
+        PUBLISHER=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).publisher")
+        
+        echo "  Name: $NAME"
+        echo "  Display Name: $DISPLAY_NAME"
+        echo "  Version: $VERSION"
+        echo "  Publisher: $PUBLISHER"
+    fi
     echo ""
 }
 
@@ -147,35 +164,36 @@ package_extension() {
     # Create build directory if it doesn't exist
     mkdir -p "$BUILD_DIR"
     
-    # Check if vsce is available
-    if ! command_exists vsce; then
-        echo "  ℹ vsce not found globally, installing locally..."
-        npm install --no-save vsce@latest
-        VSCE_CMD="npx vsce"
-    else
-        VSCE_CMD="vsce"
-    fi
+    # Use npx to run vsce
+    VSCE_CMD="npx @vscode/vsce"
     
     # Get version from package.json
-    VERSION=$(grep -o '"version":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)
-    VSIX_NAME="alang-language-support-${VERSION}.vsix"
+    if command_exists node; then
+        VERSION=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
+        NAME=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).name")
+    else
+        echo "  ✗ Node.js not found!"
+        exit 1
+    fi
+    
+    VSIX_NAME="${NAME}-${VERSION}.vsix"
+    OUTPUT_PATH="$BUILD_DIR/$VSIX_NAME"
     
     # Package the extension
     echo "  Creating package: $VSIX_NAME"
-    $VSCE_CMD package -o "$BUILD_DIR/$VSIX_NAME"
     
-    if [ $? -eq 0 ]; then
+    if $VSCE_CMD package --out "$OUTPUT_PATH"; then
         echo ""
         echo "  ✓ Extension packaged successfully!"
         echo "  📦 Package: build/$VSIX_NAME"
-        echo "  📊 Size: $(du -h "$BUILD_DIR/$VSIX_NAME" | cut -f1)"
-        echo ""
         
-        # Create a symlink to latest
-        cd "$BUILD_DIR"
-        ln -sf "$VSIX_NAME" "alang-language-support-latest.vsix"
-        cd "$EXTENSION_DIR"
-        echo "  ✓ Created symlink: build/alang-language-support-latest.vsix"
+        if [ -f "$OUTPUT_PATH" ]; then
+            echo "  📊 Size: $(du -h "$OUTPUT_PATH" | cut -f1)"
+            
+            # Create a symlink to latest
+            (cd "$BUILD_DIR" && ln -sf "$VSIX_NAME" "${NAME}-latest.vsix")
+            echo "  ✓ Created symlink: build/${NAME}-latest.vsix"
+        fi
     else
         echo "  ✗ Packaging failed!"
         exit 1
@@ -201,11 +219,15 @@ show_install_instructions() {
     echo "  4. Navigate to build/ and select the .vsix file"
     echo ""
     echo "Method 2: Using command line"
-    VERSION=$(grep -o '"version":[[:space:]]*"[^"]*"' package.json | head -1 | cut -d'"' -f4)
-    echo "  code --install-extension build/alang-language-support-${VERSION}.vsix"
-    echo ""
-    echo "  Or use the latest symlink:"
-    echo "  code --install-extension build/alang-language-support-latest.vsix"
+    
+    if command_exists node; then
+        VERSION=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
+        NAME=$(node -pe "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).name")
+        echo "  code --install-extension build/${NAME}-${VERSION}.vsix"
+        echo ""
+        echo "  Or use the latest symlink:"
+        echo "  code --install-extension build/${NAME}-latest.vsix"
+    fi
     echo ""
     echo "Method 3: Manual installation (development)"
     echo "  See INSTALL.md for detailed instructions"
@@ -219,7 +241,7 @@ run_tests() {
     # Check if test examples exist
     if [ -d "examples" ]; then
         echo "  Found example files:"
-        ls examples/*.alang 2>/dev/null | while read file; do
+        find examples -name "*.alang" -type f 2>/dev/null | head -10 | while read file; do
             echo "    - $(basename "$file")"
         done
     else
