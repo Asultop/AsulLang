@@ -1128,6 +1128,7 @@ public:
 			}
 			if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(fexpr->body)) fn->body = innerBlock->statements; else fn->body = { fexpr->body };
 			fn->closure = env; // 关闭环境捕获
+			fn->isGenerator = fexpr->isGenerator;
 			return Value{fn};
 		}
 		if (auto nw = std::dynamic_pointer_cast<NewExpr>(expr)) {
@@ -1551,6 +1552,7 @@ public:
 			else fn->body = { f->body };
 			fn->closure = env;
 			fn->isAsync = f->isAsync;
+			fn->isGenerator = f->isGenerator;
 			env->define(f->name, fn);
 			if (f->isExported) env->explicitExports.insert(f->name);
 			return;
@@ -1576,6 +1578,7 @@ public:
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
+				fn->isGenerator = m->isGenerator;
 				
 				if (m->isStatic) {
 					klass->staticMethods[m->name] = fn;
@@ -1632,6 +1635,7 @@ public:
 				if (auto innerBlock = std::dynamic_pointer_cast<BlockStmt>(m->body)) fn->body = innerBlock->statements; else fn->body = { m->body };
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
+				fn->isGenerator = m->isGenerator;
 				klass->methods[m->name] = fn; // 覆盖或新增
 			}
 			return;

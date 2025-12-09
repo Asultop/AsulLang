@@ -94,6 +94,7 @@ struct Function {
 	std::shared_ptr<Environment> closure;
 	bool isBuiltin{false};
 	bool isAsync{false};
+	bool isGenerator{false};
 	std::function<Value(const std::vector<Value>&, std::shared_ptr<Environment>)> builtin;
 };
 
