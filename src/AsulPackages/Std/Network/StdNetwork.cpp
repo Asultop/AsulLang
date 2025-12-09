@@ -295,6 +295,7 @@ static void fetchWithCurl(
 		}
 	}).detach();
 }
+#endif // ASUL_HAS_CURL
 
 void registerStdNetworkPackage(Interpreter& interp) {
 	// Get pointer to async interface (Interpreter implements AsulAsync)
@@ -696,7 +697,8 @@ void registerStdNetworkPackage(Interpreter& interp) {
 
 
 		// fetch(url[, options]) -> Promise<Response-like>
-		// Now with HTTP/2 support via libcurl
+#ifdef ASUL_HAS_CURL
+		// HTTP/2 support available via libcurl
 		{
 			auto fetchFn = std::make_shared<Function>();
 			fetchFn->isBuiltin = true;
@@ -739,6 +741,7 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			};
 			(*netPkg)["fetch"] = Value{fetchFn};
 		}
+#endif // ASUL_HAS_CURL
 
 		// Keep old socket-based fetch as fetchLegacy for backward compatibility
 		{
@@ -957,6 +960,11 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			};
 			(*netPkg)["fetchLegacy"] = Value{fetchLegacyFn};
 		}
+
+#ifndef ASUL_HAS_CURL
+		// When CURL is not available, alias fetch to fetchLegacy
+		(*netPkg)["fetch"] = (*netPkg)["fetchLegacy"];
+#endif
 
 		// Helper for HTTP requests (Simple blocking implementation)
 		auto httpRequest = [](const std::string& method, const std::string& url, const std::string& data = "") -> Value {
