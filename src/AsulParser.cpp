@@ -5,6 +5,56 @@
 
 namespace asul {
 
+// Helper function to check if a token type can be used as a property name
+// Many keywords can be used as property names in member access expressions
+static bool isPropertyNameToken(TokenType type) {
+	switch (type) {
+		case TokenType::Identifier:
+		// Allow keywords as property names (like JavaScript)
+		case TokenType::Catch:
+		case TokenType::Match:
+		case TokenType::Yield:
+		case TokenType::Let:
+		case TokenType::Var:
+		case TokenType::Const:
+		case TokenType::Function:
+		case TokenType::Return:
+		case TokenType::If:
+		case TokenType::Else:
+		case TokenType::While:
+		case TokenType::Do:
+		case TokenType::For:
+		case TokenType::ForEach:
+		case TokenType::In:
+		case TokenType::Break:
+		case TokenType::Continue:
+		case TokenType::Switch:
+		case TokenType::Case:
+		case TokenType::Default:
+		case TokenType::Class:
+		case TokenType::Extends:
+		case TokenType::New:
+		case TokenType::True:
+		case TokenType::False:
+		case TokenType::Null:
+		case TokenType::Await:
+		case TokenType::Async:
+		case TokenType::Go:
+		case TokenType::Try:
+		case TokenType::Finally:
+		case TokenType::Throw:
+		case TokenType::Interface:
+		case TokenType::Import:
+		case TokenType::From:
+		case TokenType::As:
+		case TokenType::Export:
+		case TokenType::Static:
+			return true;
+		default:
+			return false;
+	}
+}
+
 Parser::Parser(const std::vector<Token>& t, const std::string& src)
 	: tokens(t), source(src) {}
 
@@ -959,7 +1009,7 @@ ExprPtr Parser::call() {
 		else if (match({TokenType::QuestionDot})) {
 			// Optional chaining: obj?.prop
 			std::string name; Token nameTok;
-			if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
+			if (isPropertyNameToken(peek().type)) { nameTok = advance(); name = nameTok.lexeme; }
 			else {
 				const Token& tok = peek();
 				std::ostringstream oss;
@@ -971,8 +1021,7 @@ ExprPtr Parser::call() {
 		}
 		else if (match({TokenType::Dot})) {
 			std::string name; Token nameTok;
-			if (check(TokenType::Identifier)) { nameTok = advance(); name = nameTok.lexeme; }
-			else if (check(TokenType::Catch)) { nameTok = advance(); name = nameTok.lexeme; /* allow .catch */ }
+			if (isPropertyNameToken(peek().type)) { nameTok = advance(); name = nameTok.lexeme; }
 			else {
 				const Token& tok = peek();
 				std::ostringstream oss;

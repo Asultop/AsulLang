@@ -1,5 +1,5 @@
 // 正则表达式测试：std.regex
-
+import std.regex;
 println("=== 正则表达式测试 (std.regex) ===");
 
 // 1. test - 测试匹配

@@ -78,8 +78,10 @@ std::vector<std::string> funcFiles = {
     "mathExample.alang",
     "networkExample.alang",
     "incrementExample.alang",
+    "incrementEdgeCases.alang",
     "interfaceExample.alang",
     "interfaceValidationTest.alang",
+    "interfaceUsageGuide.alang",
     "interpolationExample.alang",
     "lambdaExample.alang",
     "overloadTest.alang",
@@ -105,7 +107,10 @@ std::vector<std::string> funcFiles = {
     "fileIOExample.alang",
     "fileIOClassExample.alang",
     "fileIOAdvancedExample.alang",
+    "fileSystem_test.alang",
+    "fs_import_check.alang",
     "dateTimeExample.alang",
+    "dateTime_extended.alang",
     "timezone_test.alang",
     "jsonExample.alang",
     "OSExample.alang",
@@ -125,6 +130,10 @@ std::vector<std::string> funcFiles = {
     "xml_yaml_example.alang",
     "http_test.alang",
     "http_sendfail_test.alang",
+    "http_methods_test.alang",
+    "http_fixes_test.alang",
+    "http_client_enhanced_test.alang",
+    "http_enhanced_integration_test.alang",
     "crypto_example.alang",
     "crypto_hash_demo.alang",
     "stream_example.alang",
@@ -142,7 +151,14 @@ std::vector<std::string> funcFiles = {
     "language_runtime_test.alang",
     "type_system_iterator_test.alang",
     "operator_overload_test.alang",
-    "ffi_test.alang"
+    "ffi_test.alang",
+    "regexExample.alang",
+    "simpleDefault.alang",
+    "enhancedExceptionExample.alang",
+    "destructuring_test.alang",
+    "optional_chaining_test.alang",
+    "pattern_matching_test.alang",
+    "yield_test.alang"
 };
 
 // Run a command and return exit code
@@ -304,12 +320,18 @@ int runFuncTests(const fs::path& baseDir, bool verbose = true) {
     fs::path alangPath = getAlangPath(baseDir);
     fs::path exampleDir = baseDir / "Example";
 
+    // Create test file list with platform-specific files
+    std::vector<std::string> testFiles = funcFiles;
+#ifdef _WIN32
+    testFiles.push_back("ffi_test_windows.alang");
+#endif
+
     int total = 0;
     int passed = 0;
     int failed = 0;
     std::vector<std::string> failedTests;
 
-    for (const auto& file : funcFiles) {
+    for (const auto& file : testFiles) {
         fs::path filePath = exampleDir / file;
         
         if (!fs::exists(filePath)) {
