@@ -2,7 +2,10 @@
 #include "../../../AsulInterpreter.h"
 #include "../../../AsulAsync.h"
 #include <cstring>
+
+#ifdef ASUL_HAS_CURL
 #include <curl/curl.h>
+#endif
 
 #ifdef _WIN32
     // Windows networking
@@ -88,6 +91,7 @@ static std::string getHttpStatusText(int statusCode) {
 	}
 }
 
+#ifdef ASUL_HAS_CURL
 // CURL global initialization helper
 struct CurlGlobalInit {
 	CurlGlobalInit() {
@@ -142,9 +146,11 @@ static void fetchWithCurl(
 			// Set URL
 			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 			
-			// Enable HTTP/2 if requested
+			// Enable HTTP/2 if requested (only for HTTPS)
 			if (useHttp2) {
-				curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+				// Use CURL_HTTP_VERSION_2TLS to only attempt HTTP/2 over TLS
+				// This is more appropriate as HTTP/2 is primarily used with HTTPS
+				curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
 			} else {
 				curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 			}
