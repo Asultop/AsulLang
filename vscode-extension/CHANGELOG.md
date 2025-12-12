@@ -2,6 +2,14 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.6] - 2025-12-12
+
+### Fixed
+- **CI/CD Build Failure**: Fixed Node.js compatibility issue
+  - Updated GitHub Actions workflow from Node.js v18 to v20 LTS
+  - Resolved `ReferenceError: File is not defined` error in undici library
+  - Build process now stable and reliable
+
 ## [0.2.5] - 2025-12-12
 
 ### Changed
