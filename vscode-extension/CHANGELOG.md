@@ -2,6 +2,28 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.2] - 2025-12-12
+
+### Fixed
+- **Color Theme Compatibility**: Fixed theme causing other languages to lose rendering
+  - Removed editor-wide color overrides (`editor.background`, `editor.foreground`)
+  - Theme now only defines ALang-specific token colors
+  - Compatible with all base VSCode themes
+- **String Interpolation Highlighting**: Enhanced template literal interpolation
+  - Added distinct colors for `${}` delimiters (bold blue)
+  - Proper syntax highlighting inside interpolation expressions
+  - All language features work correctly inside `${...}`
+
+### Added
+- **String Interpolation Demo**: New `examples/string-interpolation-demo.alang`
+  - Comprehensive examples of all interpolation patterns
+  - Shows nested expressions, function calls, operators in interpolation
+  - Demonstrates complex interpolation scenarios
+
+### Changed
+- Enhanced TextMate grammar for better interpolation delimiter capture
+- Updated color theme with interpolation-specific scopes
+
 ## [0.2.1] - 2025-12-09
 
 ### Added

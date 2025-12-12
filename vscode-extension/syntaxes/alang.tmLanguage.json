@@ -94,8 +94,15 @@
             },
             {
               "name": "meta.embedded.line.alang",
-              "begin": "\\$\\{",
-              "end": "\\}",
+              "begin": "(\\$)(\\{)",
+              "end": "(\\})",
+              "beginCaptures": {
+                "1": { "name": "punctuation.definition.template-expression.begin.alang" },
+                "2": { "name": "punctuation.definition.template-expression.begin.alang" }
+              },
+              "endCaptures": {
+                "1": { "name": "punctuation.definition.template-expression.end.alang" }
+              },
               "patterns": [
                 { "include": "$self" }
               ]

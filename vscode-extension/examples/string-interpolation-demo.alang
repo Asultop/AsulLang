@@ -1,0 +1,117 @@
+// ============================================
+// String Interpolation Demonstration
+// ============================================
+// This file demonstrates string interpolation highlighting
+
+// Simple interpolation
+let name = "Alice";
+let greeting = `Hello, ${name}!`;
+println(greeting);
+
+// Multiple interpolations
+let age = 25;
+let city = "New York";
+let message = `${name} is ${age} years old and lives in ${city}.`;
+println(message);
+
+// Expression interpolation
+let a = 10;
+let b = 20;
+let result = `The sum of ${a} and ${b} is ${a + b}`;
+println(result);
+
+// Function call interpolation
+function getDate() {
+    return "2025-12-12";
+}
+let today = `Today is ${getDate()}`;
+println(today);
+
+// Object property interpolation
+let user = {
+    name: "Bob",
+    age: 30,
+    email: "bob@example.com"
+};
+let info = `User: ${user.name}, Age: ${user.age}, Email: ${user.email}`;
+println(info);
+
+// Nested interpolation with operations
+let x = 5;
+let y = 3;
+let calculation = `${x} * ${y} = ${x * y}, ${x} + ${y} = ${x + y}`;
+println(calculation);
+
+// Complex expression interpolation
+let numbers = [1, 2, 3, 4, 5];
+let stats = `Array length: ${numbers.length}, Sum: ${numbers.reduce([](a, b) => a + b, 0)}`;
+println(stats);
+
+// Conditional interpolation
+let isActive = true;
+let status = `Status: ${isActive ? "Active" : "Inactive"}`;
+println(status);
+
+// Nullish coalescing in interpolation
+let optional = null;
+let display = `Value: ${optional ?? "default"}`;
+println(display);
+
+// Optional chaining in interpolation
+let data = { nested: { value: 42 } };
+let access = `Nested value: ${data?.nested?.value}`;
+println(access);
+
+// String method interpolation
+let text = "hello world";
+let transformed = `Uppercase: ${text.toUpperCase()}, Length: ${text.length}`;
+println(transformed);
+
+// Array operations in interpolation
+let items = ["apple", "banana", "cherry"];
+let list = `First: ${items[0]}, Last: ${items[items.length - 1]}, Count: ${items.length}`;
+println(list);
+
+// Class method interpolation
+class Calculator {
+    function add(a, b) {
+        return a + b;
+    }
+}
+let calc = new Calculator();
+let sum = `5 + 3 = ${calc.add(5, 3)}`;
+println(sum);
+
+// Mixed interpolation with special operators
+let value1 = 10;
+let value2 = null;
+let mixed = `Value1: ${value1}, Value2: ${value2 ?? 0}, Comparison: ${value1 > 5 ? "greater" : "less"}`;
+println(mixed);
+
+// Multiline template with interpolation
+let multiline = `
+    Name: ${name}
+    Age: ${age}
+    City: ${city}
+    Date: ${getDate()}
+`;
+println(multiline);
+
+// Escape sequences with interpolation
+let escaped = `Line 1\nLine 2: ${name}\tTabbed`;
+println(escaped);
+
+// All features combined
+let complex = `
+╔════════════════════════════════════╗
+║  User Profile                      ║
+╠════════════════════════════════════╣
+║  Name:   ${user.name.padEnd(25)} ║
+║  Age:    ${user.age.toString().padEnd(25)} ║
+║  Email:  ${user.email.padEnd(25)} ║
+║  Status: ${isActive ? "✓ Active" : "✗ Inactive"}     ║
+╚════════════════════════════════════╝
+`;
+println(complex);
+
+println("String interpolation demo complete!");

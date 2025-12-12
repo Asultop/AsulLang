@@ -1,10 +1,6 @@
 {
   "name": "ALang Default",
   "type": "dark",
-  "colors": {
-    "editor.background": "#1e1e1e",
-    "editor.foreground": "#d4d4d4"
-  },
   "tokenColors": [
     {
       "name": "Comment",
@@ -233,10 +229,21 @@
       }
     },
     {
-      "name": "Template Interpolation",
+      "name": "Template Interpolation - Expression Background",
       "scope": "meta.embedded.line.alang",
       "settings": {
         "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "name": "Template Interpolation - Delimiters",
+      "scope": [
+        "punctuation.definition.template-expression.begin.alang",
+        "punctuation.definition.template-expression.end.alang"
+      ],
+      "settings": {
+        "foreground": "#569CD6",
+        "fontStyle": "bold"
       }
     }
   ]
