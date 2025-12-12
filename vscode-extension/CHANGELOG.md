@@ -2,6 +2,14 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.5] - 2025-12-12
+
+### Changed
+- **GitHub Actions Workflow**: Updated to latest action versions
+  - `actions/upload-artifact@v3` → `actions/upload-artifact@v4`
+  - Removed deprecation warnings
+  - All actions now using latest stable versions
+
 ## [0.2.4] - 2025-12-12
 
 ### Added
