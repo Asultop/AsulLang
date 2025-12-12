@@ -1,0 +1,148 @@
+// ============================================
+// Variable Highlighting Demonstration
+// ============================================
+// This file demonstrates variable highlighting with standard scopes
+// Variables should appear in light blue in most themes
+
+// Variable declarations
+let simpleVar = 42;
+var oldStyleVar = "text";
+const constantValue = 3.14;
+
+// Multiple variables
+let x = 10, y = 20, z = 30;
+
+// Object properties (should be highlighted as properties)
+let user = {
+    name: "Alice",
+    age: 25,
+    email: "alice@example.com"
+};
+
+// Accessing object properties
+let userName = user.name;
+let userAge = user.age;
+
+// Variable reassignment
+simpleVar = 100;
+oldStyleVar = "new text";
+
+// Variables in expressions
+let sum = x + y + z;
+let product = x * y;
+let comparison = x > y;
+
+// Variables in function calls
+function greet(name, greeting) {
+    println(greeting + ", " + name + "!");
+}
+
+let personName = "Bob";
+let message = "Hello";
+greet(personName, message);
+
+// Variables in array
+let numbers = [1, 2, 3, 4, 5];
+let firstNumber = numbers[0];
+let lastNumber = numbers[numbers.length - 1];
+
+// Variables in loops
+for (let i = 0; i < 10; i++) {
+    let doubled = i * 2;
+    println(doubled);
+}
+
+// Variables with operators
+let value1 = 10;
+let value2 = 20;
+let result = value1 + value2;
+
+// Variables with special operators
+let optional = null;
+let withDefault = optional ?? 42;
+let chainResult = user?.profile?.avatar;
+
+// Variables in template literals
+let name = "Alice";
+let age = 30;
+let info = `Name: ${name}, Age: ${age}`;
+
+// Class with variables
+class Calculator {
+    function constructor() {
+        this.result = 0;
+    }
+    
+    function add(value) {
+        this.result += value;
+        return this.result;
+    }
+}
+
+let calc = new Calculator();
+let answer = calc.add(5);
+
+// Async variables
+async function fetchData() {
+    let response = await fetch("https://api.example.com");
+    let data = await response.json();
+    return data;
+}
+
+// Destructuring (if supported)
+let arr = [1, 2, 3];
+let first = arr[0];
+let second = arr[1];
+
+// Variables with different types
+let stringVar = "text";
+let numberVar = 123;
+let boolVar = true;
+let nullVar = null;
+let arrayVar = [1, 2, 3];
+let objectVar = { key: "value" };
+
+// Variables in complex expressions
+let complexResult = (value1 + value2) * (x - y) / z;
+let conditionalVar = x > y ? value1 : value2;
+
+// Function-scoped variables
+function testScope() {
+    let innerVar = "inside";
+    var functionVar = "function-scoped";
+    
+    if (true) {
+        let blockVar = "block-scoped";
+        println(blockVar);
+    }
+    
+    return innerVar;
+}
+
+// Arrow function variables
+let multiply = [](a, b) => {
+    let product = a * b;
+    return product;
+};
+
+// Variables with method chaining
+let text = "hello world";
+let upperText = text.toUpperCase();
+let length = text.length;
+
+// All features combined
+let person = {
+    name: "Charlie",
+    age: 28,
+    address: {
+        city: "New York",
+        country: "USA"
+    }
+};
+
+let cityName = person.address.city;
+let fullInfo = `${person.name} lives in ${cityName}`;
+let isAdult = person.age >= 18;
+
+println("Variable highlighting demo complete!");
+println(`Total variables demonstrated: Many!`);

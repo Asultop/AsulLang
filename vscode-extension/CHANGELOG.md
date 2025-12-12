@@ -2,6 +2,35 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.3] - 2025-12-12
+
+### Added
+- **Standard Scope Variable Highlighting**: Variables now highlighted in all themes
+  - Added `variable.other.readwrite` scope for variables (light blue in most themes)
+  - Added `variable.other.property` scope for object properties
+  - Changed `this` keyword to use standard `variable.language.this` scope
+  - **Works in ANY VSCode theme** without requiring custom theme activation
+  - Variables appear in light blue (#9CDCFE) in Dark+ theme
+  - Variables appear in dark blue (#001080) in Light+ theme
+- **Variable Highlighting Demo**: New `examples/variable-highlighting-demo.alang`
+  - Demonstrates all variable patterns and highlighting
+  - Shows declarations, properties, method chaining, etc.
+- **Standard Scopes Documentation**: New `STANDARD-SCOPES.md`
+  - Explains standard vs. language-specific scope strategy
+  - Lists all standard scopes used for ALang
+  - Migration guide for users and developers
+
+### Changed
+- Variables and properties now use standard TextMate scopes instead of `.alang` suffix
+- Core language elements (variables, this) work universally across all themes
+- ALang-specific features (special operators) still use `.alang` suffix for custom theming
+
+### Benefits
+- ✅ Variables highlighted automatically in any theme
+- ✅ No need to activate "ALang Default Dark" theme for basic highlighting
+- ✅ Consistent with how other languages display variables
+- ✅ Custom theme still available for enhanced operator highlighting
+
 ## [0.2.2] - 2025-12-12
 
 ### Fixed
