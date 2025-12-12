@@ -1,0 +1,417 @@
+// ============================================
+// Comprehensive Test File for ALang Extension
+// ============================================
+// This file tests all features: theme compatibility, string interpolation, and LSP
+
+// ===========================================
+// 1. VARIABLE HIGHLIGHTING (Universal - All Themes)
+// ===========================================
+
+// Simple variables - should be light blue in Dark+, dark blue in Light+
+let simpleVar = 42;
+var oldStyleVar = "text";
+const constantValue = 3.14;
+
+// Multiple declarations
+let x = 10, y = 20, z = 30;
+
+// Object properties - should be highlighted
+let user = {
+    name: "Alice",
+    age: 25,
+    email: "alice@example.com"
+};
+
+// Property access - properties should be highlighted
+let userName = user.name;
+let userAge = user.age;
+let userEmail = user.email;
+
+// ===========================================
+// 2. STRING INTERPOLATION (Test Delimiters and Content)
+// ===========================================
+
+let name = "Bob";
+let age = 30;
+
+// Simple interpolation - ${ and } should be bold blue in custom theme
+let greeting = `Hello, ${name}!`;
+let info = `Age: ${age}`;
+
+// Multiple interpolations
+let fullInfo = `Name: ${name}, Age: ${age}`;
+
+// Expression interpolation - operators should be highlighted
+let calculation = `Sum: ${10 + 20}`;
+let comparison = `Greater: ${x > y}`;
+
+// Function call in interpolation
+function getDate() {
+    return "2025-12-12";
+}
+let today = `Today is ${getDate()}`;
+
+// Property access in interpolation
+let userInfo = `User: ${user.name}, Email: ${user.email}`;
+
+// Complex expressions in interpolation
+let complex = `Result: ${x * 2 + y - z / 2}`;
+
+// Conditional in interpolation
+let isActive = true;
+let status = `Status: ${isActive ? "Active" : "Inactive"}`;
+
+// Nullish coalescing in interpolation - ?? should be highlighted
+let optional = null;
+let withDefault = `Value: ${optional ?? "default"}`;
+
+// Optional chaining in interpolation - ?. should be highlighted
+let data = { nested: { value: 42 } };
+let nestedValue = `Nested: ${data?.nested?.value}`;
+
+// Array operations in interpolation
+let numbers = [1, 2, 3, 4, 5];
+let arrayInfo = `Length: ${numbers.length}, First: ${numbers[0]}`;
+
+// Method chaining in interpolation
+let text = "hello world";
+let transformed = `Uppercase: ${text.toUpperCase()}`;
+
+// Multi-line template with interpolation
+let multiline = `
+    Name: ${name}
+    Age: ${age}
+    Date: ${getDate()}
+`;
+
+// Nested expressions
+let nested = `Outer: ${`Inner: ${x}`}`;
+
+// ===========================================
+// 3. FUNCTION DEFINITIONS (Test Go-to-Definition)
+// ===========================================
+
+// Function keyword - 'function' should be highlighted
+function calculateSum(a, b) {
+    return a + b;
+}
+
+// Short function syntax - 'fn' should be highlighted
+fn multiply(a, b) {
+    return a * b;
+}
+
+// Arrow function
+let divide = [](a, b) => {
+    return a / b;
+};
+
+// Function calls - should allow F12 to jump to definition
+let sum = calculateSum(10, 20);
+let product = multiply(5, 6);
+let quotient = divide(100, 10);
+
+// ===========================================
+// 4. CLASS DEFINITIONS (Test Go-to-Definition)
+// ===========================================
+
+// Class definition - 'class' should be highlighted, class name should be teal/cyan
+class Calculator {
+    function constructor() {
+        this.result = 0;
+    }
+    
+    function add(value) {
+        this.result += value;
+        return this.result;
+    }
+    
+    function subtract(value) {
+        this.result -= value;
+        return this.result;
+    }
+}
+
+// Class usage - F12 on Calculator should jump to definition
+let calc = new Calculator();
+let result = calc.add(5);
+
+// ===========================================
+// 5. INTERFACE DEFINITIONS (Test Go-to-Definition)
+// ===========================================
+
+// Interface definition
+interface IShape {
+    function getArea();
+    function getPerimeter();
+}
+
+// Interface match operator - =~= should be pink/bold in custom theme
+class Circle =~= (IShape) {
+    function getArea() {
+        return 3.14 * this.radius * this.radius;
+    }
+    
+    function getPerimeter() {
+        return 2 * 3.14 * this.radius;
+    }
+}
+
+// ===========================================
+// 6. SPECIAL OPERATORS (Test Custom Theme Colors)
+// ===========================================
+
+// Interface match operator - should be pink/bold
+class MyClass =~= (IMyInterface) {}
+
+// Inheritance operator - should be red/bold
+class Child <- (Parent) {}
+
+// Arrow operators - should be red/bold
+let arrow1 = a <- b;
+let arrow2 = c -> d;
+let arrow3 = [](x) => x * 2;
+
+// Nullish operators - should be gold/bold
+let nullish1 = value ?? defaultValue;
+let nullish2 = obj?.property;
+
+// Spread operator - should be blue/bold
+let array = [1, 2, 3];
+let expanded = [...array, 4, 5];
+
+// Decorator operator - should be yellow/bold
+@component
+@injectable
+class DecoratedClass {}
+
+// ===========================================
+// 7. CONTROL FLOW (Test Keyword Highlighting)
+// ===========================================
+
+// If-else - keywords should be purple/bold
+if (x > y) {
+    println("x is greater");
+} else {
+    println("y is greater");
+}
+
+// While loop
+while (x < 100) {
+    x = x + 1;
+}
+
+// For loop
+for (let i = 0; i < 10; i++) {
+    println(i);
+}
+
+// Foreach loop
+foreach (item in array) {
+    println(item);
+}
+
+// Switch-case
+switch (value) {
+    case 1:
+        println("One");
+        break;
+    case 2:
+        println("Two");
+        break;
+    default:
+        println("Other");
+}
+
+// ===========================================
+// 8. ASYNC/AWAIT (Test Keyword Highlighting)
+// ===========================================
+
+// Async function - 'async' and 'await' should be highlighted
+async function fetchData() {
+    let response = await fetch("https://api.example.com");
+    let data = await response.json();
+    return data;
+}
+
+// Go keyword (goroutine-style)
+go processData();
+
+// ===========================================
+// 9. ERROR HANDLING (Test Keyword Highlighting)
+// ===========================================
+
+// Try-catch-finally - keywords should be highlighted
+try {
+    let risky = riskyOperation();
+} catch (error) {
+    println(`Error: ${error}`);
+} finally {
+    cleanup();
+}
+
+// Throw
+throw new Error("Something went wrong");
+
+// ===========================================
+// 10. MODULES (Test Keyword Highlighting)
+// ===========================================
+
+// Import statements - keywords should be highlighted
+import { Component } from "./components";
+import * as Utils from "./utils";
+
+// Export
+export class MyExportedClass {}
+export function myExportedFunction() {}
+
+// ===========================================
+// 11. COMMENTS (Test All Comment Styles)
+// ===========================================
+
+// Double slash comment - should be green/italic
+
+# Hash comment - should be green/italic
+
+/* Block comment
+   Multiple lines
+   Should all be green/italic */
+
+"""
+Triple quote comment
+Multiple lines
+Also green/italic
+"""
+
+'''
+Single triple quote comment
+Also works
+'''
+
+#"""
+Hash triple quote comment
+Also supported
+"""
+
+#'''
+Hash single triple quote comment
+Final style
+'''
+
+// ===========================================
+// 12. LITERALS (Test Number and String Highlighting)
+// ===========================================
+
+// Numbers - should be light green
+let decimal = 123;
+let float = 123.456;
+let scientific = 1.23e10;
+let hex = 0xFF;
+let binary = 0b1010;
+let octal = 0o777;
+
+// Strings - should be orange/brown
+let doubleQuote = "double quoted string";
+let singleQuote = 'single quoted string';
+let template = `template literal`;
+
+// Escape sequences - should be highlighted
+let escaped = "Line 1\nLine 2\tTabbed";
+let unicode = "Unicode: \u0041";
+
+// Booleans - should be blue/bold
+let trueValue = true;
+let falseValue = false;
+
+// Null - should be blue/bold
+let nullValue = null;
+
+// ===========================================
+// 13. SYNTAX ERRORS (Test LSP Diagnostics)
+// ===========================================
+
+// Uncomment these to test error detection:
+// let unclosedString = "this string never ends;
+// let unclosedSingle = 'also never ends;
+
+// ===========================================
+// 14. COMPLEX REAL-WORLD EXAMPLE
+// ===========================================
+
+@component
+class UserManager <- (BaseManager) {
+    function constructor() {
+        this.users = [];
+    }
+    
+    async function fetchUsers() {
+        try {
+            let response = await fetch("/api/users");
+            let data = await response.json();
+            this.users = data?.users ?? [];
+            return `Fetched ${this.users.length} users`;
+        } catch (error) {
+            println(`Error: ${error.message}`);
+            return null;
+        }
+    }
+    
+    function findUser(name) {
+        foreach (user in this.users) {
+            if (user.name =~= name) {
+                return user;
+            }
+        }
+        return null;
+    }
+    
+    function getUserInfo(userId) {
+        let user = this.findUser(userId);
+        if (user?.name) {
+            return `User: ${user.name}, Email: ${user.email ?? "No email"}`;
+        }
+        return "User not found";
+    }
+}
+
+// Usage
+let manager = new UserManager();
+go manager.fetchUsers();
+
+let userInfo = manager.getUserInfo(123);
+println(userInfo);
+
+// ===========================================
+// 15. TESTING INSTRUCTIONS
+// ===========================================
+
+/*
+To test this file:
+
+1. THEME COMPATIBILITY:
+   - Open this file in VSCode
+   - Try different themes: Dark+, Light+, Monokai, Solarized
+   - Variables should be highlighted in all themes
+   - Functions, classes should use theme's colors
+   
+2. STRING INTERPOLATION:
+   - With custom theme: ${ and } should be bold blue
+   - Without custom theme: should still be highlighted
+   - Expressions inside ${} should use proper syntax highlighting
+   
+3. LSP FEATURES:
+   - Go-to-Definition: Press F12 on any function/class/variable usage
+   - Auto-complete: Type 'le' and see 'let' suggestion
+   - Diagnostics: Uncomment error lines to see error highlights
+   
+4. CUSTOM THEME (Optional):
+   - Activate "ALang Default Dark" theme
+   - Special operators should have custom colors:
+     * =~= → pink
+     * <- -> => → red
+     * ?. ?? → gold
+     * ... → blue
+     * @ → yellow
+*/
+
+println("Comprehensive test complete!");

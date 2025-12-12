@@ -2,7 +2,7 @@
   "name": "alang-language-support",
   "displayName": "ALang Language Support",
   "description": "Syntax highlighting and language support for ALang scripting language",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "publisher": "asultop",
   "icon": "images/icon.png",
   "engines": {
