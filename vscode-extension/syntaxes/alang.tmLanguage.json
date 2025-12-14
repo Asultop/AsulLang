@@ -171,15 +171,15 @@
           "match": "\\b(let|var|const)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b",
           "captures": {
             "1": { "name": "storage.type.alang" },
-            "2": { "name": "variable.other.readwrite" }
+            "2": { "name": "variable.other.readwrite variable.other.readwrite.alang" }
           }
         },
         {
-          "name": "variable.other.readwrite",
+          "name": "variable.other.readwrite variable.other.readwrite.alang",
           "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?!\\s*\\()"
         },
         {
-          "name": "variable.other.property",
+          "name": "variable.other.property variable.other.property.alang",
           "match": "(?<=\\.)([a-zA-Z_][a-zA-Z0-9_]*)\\b"
         }
       ]

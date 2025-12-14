@@ -2,6 +2,27 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.3.1] - 2025-12-14
+
+### Fixed - Critical Bug Fixes
+
+- **Fixed Theme Breaking Other Languages**: Theme variable scopes now use `.alang` suffix
+  - Changed `variable.other.readwrite` → `variable.other.readwrite.alang`
+  - Changed `variable.other.property` → `variable.other.property.alang`
+  - C++, JavaScript, Python, and all other languages no longer affected by ALang themes
+  - Tested on Mac environment - no more C++ highlighter issues
+  
+- **Fixed String Interpolation Rendering**: Template literal `${}` expressions now properly highlighted
+  - Removed theme override for `meta.embedded.line.alang` scope
+  - Interior of `${}` now uses full ALang syntax highlighting (keywords, operators, etc.)
+  - Delimiters `${` and `}` remain highlighted in bold blue
+  - Complex expressions inside interpolation now work correctly
+
+### Technical Details
+- Grammar updated to use dual scopes for variables (standard + `.alang` suffix)
+- Themes updated to only target `.alang` suffix scopes
+- String interpolation uses recursive `$self` pattern for full syntax support
+
 ## [0.3.0] - 2025-12-14
 
 ### Major Change - Theme Architecture Redesigned

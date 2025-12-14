@@ -5,8 +5,8 @@
     {
       "name": "ALang - Variables (User-Defined)",
       "scope": [
-        "variable.other.readwrite",
-        "variable.other.property"
+        "variable.other.readwrite.alang",
+        "variable.other.property.alang"
       ],
       "settings": {
         "foreground": "#001080"
@@ -238,13 +238,7 @@
         "foreground": "#EE0000"
       }
     },
-    {
-      "name": "ALang - Template Interpolation Expression",
-      "scope": "meta.embedded.line.alang",
-      "settings": {
-        "foreground": "#001080"
-      }
-    },
+
     {
       "name": "ALang - Template Interpolation Delimiters ${ }",
       "scope": [
