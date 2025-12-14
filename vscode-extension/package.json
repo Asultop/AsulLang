@@ -2,7 +2,7 @@
   "name": "alang-language-support",
   "displayName": "ALang Language Support",
   "description": "Syntax highlighting and language support for ALang scripting language",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "publisher": "asultop",
   "icon": "images/icon.png",
   "engines": {
@@ -57,9 +57,14 @@
     ],
     "themes": [
       {
-        "label": "ALang Default Dark",
+        "label": "ALang for Dark+",
         "uiTheme": "vs-dark",
-        "path": "./themes/alang-color-theme.json"
+        "path": "./themes/alang-dark-plus.json"
+      },
+      {
+        "label": "ALang for Light+",
+        "uiTheme": "vs",
+        "path": "./themes/alang-light-plus.json"
       }
     ],
     "configuration": {

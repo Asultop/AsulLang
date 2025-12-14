@@ -1,9 +1,19 @@
 {
-  "name": "ALang Default",
+  "name": "ALang for Dark+",
   "type": "dark",
   "tokenColors": [
     {
-      "name": "Comment",
+      "name": "ALang - Variables (User-Defined)",
+      "scope": [
+        "variable.other.readwrite",
+        "variable.other.property"
+      ],
+      "settings": {
+        "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "name": "ALang - Comment",
       "scope": [
         "comment.line.double-slash.alang",
         "comment.line.number-sign.alang",
@@ -16,7 +26,7 @@
       }
     },
     {
-      "name": "String",
+      "name": "ALang - String",
       "scope": [
         "string.quoted.double.alang",
         "string.quoted.single.alang",
@@ -27,14 +37,14 @@
       }
     },
     {
-      "name": "Number",
+      "name": "ALang - Number",
       "scope": "constant.numeric.alang",
       "settings": {
         "foreground": "#B5CEA8"
       }
     },
     {
-      "name": "Keyword Control",
+      "name": "ALang - Keyword Control",
       "scope": [
         "keyword.control.alang",
         "keyword.control.async.alang"
@@ -45,7 +55,7 @@
       }
     },
     {
-      "name": "Storage Type",
+      "name": "ALang - Storage Type",
       "scope": [
         "storage.type.alang",
         "storage.type.function.alang",
@@ -57,14 +67,14 @@
       }
     },
     {
-      "name": "Keyword Other",
+      "name": "ALang - Keyword Other",
       "scope": "keyword.other.alang",
       "settings": {
         "foreground": "#C586C0"
       }
     },
     {
-      "name": "Boolean",
+      "name": "ALang - Boolean",
       "scope": "constant.language.boolean.alang",
       "settings": {
         "foreground": "#569CD6",
@@ -72,7 +82,7 @@
       }
     },
     {
-      "name": "Null",
+      "name": "ALang - Null",
       "scope": "constant.language.null.alang",
       "settings": {
         "foreground": "#569CD6",
@@ -80,22 +90,22 @@
       }
     },
     {
-      "name": "This",
-      "scope": "variable.language.this.alang",
+      "name": "ALang - This",
+      "scope": "variable.language.this",
       "settings": {
         "foreground": "#569CD6",
         "fontStyle": "italic"
       }
     },
     {
-      "name": "Function Name",
+      "name": "ALang - Function Name",
       "scope": "entity.name.function.alang",
       "settings": {
         "foreground": "#DCDCAA"
       }
     },
     {
-      "name": "Class Name",
+      "name": "ALang - Class Name",
       "scope": [
         "entity.name.type.class.alang",
         "entity.name.type.interface.alang",
@@ -106,7 +116,7 @@
       }
     },
     {
-      "name": "Interface Match Operator",
+      "name": "ALang - Interface Match Operator =~=",
       "scope": "keyword.operator.interface-match.alang",
       "settings": {
         "foreground": "#FF79C6",
@@ -114,7 +124,7 @@
       }
     },
     {
-      "name": "Arrow Operators",
+      "name": "ALang - Arrow Operators <- -> =>",
       "scope": "keyword.operator.arrow.alang",
       "settings": {
         "foreground": "#FF6B6B",
@@ -122,7 +132,7 @@
       }
     },
     {
-      "name": "Nullish Operators",
+      "name": "ALang - Nullish Operators ?. ??",
       "scope": "keyword.operator.nullish.alang",
       "settings": {
         "foreground": "#FFD700",
@@ -130,49 +140,7 @@
       }
     },
     {
-      "name": "Logical Operators",
-      "scope": "keyword.operator.logical.alang",
-      "settings": {
-        "foreground": "#D19A66"
-      }
-    },
-    {
-      "name": "Comparison Operators",
-      "scope": "keyword.operator.comparison.alang",
-      "settings": {
-        "foreground": "#D19A66"
-      }
-    },
-    {
-      "name": "Assignment Operators",
-      "scope": "keyword.operator.assignment.alang",
-      "settings": {
-        "foreground": "#D4D4D4"
-      }
-    },
-    {
-      "name": "Arithmetic Operators",
-      "scope": "keyword.operator.arithmetic.alang",
-      "settings": {
-        "foreground": "#D4D4D4"
-      }
-    },
-    {
-      "name": "Bitwise Operators",
-      "scope": "keyword.operator.bitwise.alang",
-      "settings": {
-        "foreground": "#C678DD"
-      }
-    },
-    {
-      "name": "Increment Operators",
-      "scope": "keyword.operator.increment.alang",
-      "settings": {
-        "foreground": "#D19A66"
-      }
-    },
-    {
-      "name": "Spread Operator",
+      "name": "ALang - Spread Operator ...",
       "scope": "keyword.operator.spread.alang",
       "settings": {
         "foreground": "#61AFEF",
@@ -180,7 +148,7 @@
       }
     },
     {
-      "name": "Decorator Operator",
+      "name": "ALang - Decorator Operator @",
       "scope": "keyword.operator.decorator.alang",
       "settings": {
         "foreground": "#E5C07B",
@@ -188,7 +156,49 @@
       }
     },
     {
-      "name": "New Operator",
+      "name": "ALang - Logical Operators",
+      "scope": "keyword.operator.logical.alang",
+      "settings": {
+        "foreground": "#D19A66"
+      }
+    },
+    {
+      "name": "ALang - Comparison Operators",
+      "scope": "keyword.operator.comparison.alang",
+      "settings": {
+        "foreground": "#D19A66"
+      }
+    },
+    {
+      "name": "ALang - Assignment Operators",
+      "scope": "keyword.operator.assignment.alang",
+      "settings": {
+        "foreground": "#D4D4D4"
+      }
+    },
+    {
+      "name": "ALang - Arithmetic Operators",
+      "scope": "keyword.operator.arithmetic.alang",
+      "settings": {
+        "foreground": "#D4D4D4"
+      }
+    },
+    {
+      "name": "ALang - Bitwise Operators",
+      "scope": "keyword.operator.bitwise.alang",
+      "settings": {
+        "foreground": "#C678DD"
+      }
+    },
+    {
+      "name": "ALang - Increment Operators",
+      "scope": "keyword.operator.increment.alang",
+      "settings": {
+        "foreground": "#D19A66"
+      }
+    },
+    {
+      "name": "ALang - New Operator",
       "scope": "keyword.operator.new.alang",
       "settings": {
         "foreground": "#C586C0",
@@ -196,7 +206,7 @@
       }
     },
     {
-      "name": "Punctuation",
+      "name": "ALang - Punctuation",
       "scope": [
         "punctuation.separator.comma.alang",
         "punctuation.terminator.statement.alang",
@@ -208,7 +218,7 @@
       }
     },
     {
-      "name": "Brackets",
+      "name": "ALang - Brackets",
       "scope": [
         "punctuation.section.block.begin.alang",
         "punctuation.section.block.end.alang",
@@ -222,21 +232,21 @@
       }
     },
     {
-      "name": "Escape Sequences",
+      "name": "ALang - Escape Sequences",
       "scope": "constant.character.escape.alang",
       "settings": {
         "foreground": "#D7BA7D"
       }
     },
     {
-      "name": "Template Interpolation - Expression Background",
+      "name": "ALang - Template Interpolation Expression",
       "scope": "meta.embedded.line.alang",
       "settings": {
         "foreground": "#9CDCFE"
       }
     },
     {
-      "name": "Template Interpolation - Delimiters",
+      "name": "ALang - Template Interpolation Delimiters ${ }",
       "scope": [
         "punctuation.definition.template-expression.begin.alang",
         "punctuation.definition.template-expression.end.alang"

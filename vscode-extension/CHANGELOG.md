@@ -2,6 +2,46 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.3.0] - 2025-12-14
+
+### Major Change - Theme Architecture Redesigned
+
+- **Breaking Change**: Replaced standalone custom theme with Dark+/Light+ based themes
+  - Old theme "ALang Default Dark" has been removed
+  - New themes: "ALang for Dark+" and "ALang for Light+"
+  - Users need to reselect their theme after updating
+
+### Added
+- **ALang for Dark+ Theme**: Extends VSCode's Dark+ theme with ALang-specific enhancements
+  - Variables rendered in light blue (#9CDCFE) as requested
+  - Special operators with bold, distinctive colors
+  - All other languages retain Dark+ styling
+  
+- **ALang for Light+ Theme**: Extends VSCode's Light+ theme with ALang-specific enhancements  
+  - Variables rendered in dark blue (#001080) for readability on light backgrounds
+  - Special operators with bold, adapted colors for light background
+  - All other languages retain Light+ styling
+
+### Improved
+- **No Language Conflicts**: Themes only define ALang-specific scopes
+  - JavaScript, Python, Markdown, and all other languages use base theme colors
+  - Zero risk of breaking syntax highlighting for other languages
+  
+- **User-Defined Variables**: Light blue rendering in dark theme, dark blue in light theme
+  - Variables stand out clearly without custom theme activation
+  - Consistent with other language variable highlighting
+  
+- **Base Theme Extension**: Proper VSCode theme architecture
+  - Extends existing themes instead of replacing them
+  - Familiar UI and syntax highlighting for non-ALang files
+  - Users can choose dark or light based on preference
+
+### Technical Details
+- Theme type properly set (dark/light)
+- Only ALang-specific token colors defined
+- Standard TextMate scopes ensure compatibility
+- No UI color overrides (uses base theme UI)
+
 ## [0.2.7] - 2025-12-14
 
 ### Fixed
