@@ -15,6 +15,25 @@
     { "include": "#punctuation" }
   ],
   "repository": {
+    "interpolation": {
+      "patterns": [
+        {
+          "name": "meta.embedded.line.alang",
+          "begin": "(\\$)(\\{)",
+          "end": "(\\})",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.template-expression.begin.alang" },
+            "2": { "name": "punctuation.definition.template-expression.begin.alang" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.template-expression.end.alang" }
+          },
+          "patterns": [
+            { "include": "$self" }
+          ]
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {
@@ -67,6 +86,7 @@
           "begin": "\"",
           "end": "\"",
           "patterns": [
+            { "include": "#interpolation" },
             {
               "name": "constant.character.escape.alang",
               "match": "\\\\([\"\\\\/bfnrt]|u[0-9a-fA-F]{4})"
@@ -78,6 +98,7 @@
           "begin": "'",
           "end": "'",
           "patterns": [
+            { "include": "#interpolation" },
             {
               "name": "constant.character.escape.alang",
               "match": "\\\\(['\\\\/bfnrt]|u[0-9a-fA-F]{4})"
@@ -93,21 +114,7 @@
               "name": "constant.character.escape.alang",
               "match": "\\\\([`\\\\/bfnrt]|u[0-9a-fA-F]{4})"
             },
-            {
-              "name": "meta.embedded.line.alang",
-              "begin": "(\\$)(\\{)",
-              "end": "(\\})",
-              "beginCaptures": {
-                "1": { "name": "punctuation.definition.template-expression.begin.alang" },
-                "2": { "name": "punctuation.definition.template-expression.begin.alang" }
-              },
-              "endCaptures": {
-                "1": { "name": "punctuation.definition.template-expression.end.alang" }
-              },
-              "patterns": [
-                { "include": "$self" }
-              ]
-            }
+            { "include": "#interpolation" }
           ]
         }
       ]
@@ -159,7 +166,7 @@
           "match": "\\bnull\\b"
         },
         {
-          "name": "variable.language.this",
+          "name": "variable.language variable.language.this.alang",
           "match": "\\bthis\\b"
         }
       ]

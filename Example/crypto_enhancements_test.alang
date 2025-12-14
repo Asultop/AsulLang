@@ -140,7 +140,6 @@ println("  Signature verification:", signatureValid);
 // Step 4: Bob decrypts the message with his private key
 let decryptedMessage = rsa.decrypt(encryptedForBob, bobKeys.privateKey);
 println("  Decrypted message:", decryptedMessage);
-
 if (signatureValid == true && decryptedMessage == secretMessage) {
     println("  ✓ Secure message exchange successful");
 } else {

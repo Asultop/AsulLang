@@ -1,6 +1,8 @@
 {
+  "$schema": "vscode://schemas/color-theme",
   "name": "ALang for Dark+",
   "type": "dark",
+  "include": "./base/dark_plus.json",
   "tokenColors": [
     {
       "name": "ALang - Variables (User-Defined)",
@@ -91,7 +93,7 @@
     },
     {
       "name": "ALang - This",
-      "scope": "variable.language.this",
+      "scope": "variable.language.this.alang",
       "settings": {
         "foreground": "#569CD6",
         "fontStyle": "italic"
