@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 
 import * as path from 'path';
+import * as fs from 'fs';
 import { workspace, ExtensionContext } from 'vscode';
 
 import {
@@ -16,24 +17,36 @@ import {
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
-	// The server is implemented in node
-	const serverModule = context.asAbsolutePath(
-		path.join('server', 'out', 'server.js')
+	// Prefer a native C++ LSP server (stdio) when available.
+	const cfg = workspace.getConfiguration('alangLanguageServer');
+	const configuredPath = cfg.get<string>('serverPath');
+	const bundledServer = context.asAbsolutePath(
+		path.join('bin', process.platform === 'win32' ? 'alang-lsp.exe' : 'alang-lsp')
 	);
-	
-	// The debug options for the server
-	const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+	const serverCommand = (configuredPath && configuredPath.trim().length > 0)
+		? configuredPath
+		: (fs.existsSync(bundledServer) ? bundledServer : undefined);
 
-	// If the extension is launched in debug mode then the debug server options are used
-	// Otherwise the run options are used
-	const serverOptions: ServerOptions = {
-		run: { module: serverModule, transport: TransportKind.ipc },
-		debug: {
-			module: serverModule,
-			transport: TransportKind.ipc,
-			options: debugOptions
+	const serverOptions: ServerOptions = serverCommand
+		? {
+			run: { command: serverCommand, transport: TransportKind.stdio },
+			debug: { command: serverCommand, transport: TransportKind.stdio }
 		}
-	};
+		: (() => {
+			// Fallback to the Node.js implementation if the native binary isn't present.
+			const serverModule = context.asAbsolutePath(
+				path.join('server', 'out', 'server.js')
+			);
+			const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+			return {
+				run: { module: serverModule, transport: TransportKind.ipc },
+				debug: {
+					module: serverModule,
+					transport: TransportKind.ipc,
+					options: debugOptions
+				}
+			};
+		})();
 
 	// Options to control the language client
 	const clientOptions: LanguageClientOptions = {
@@ -41,7 +54,7 @@ export function activate(context: ExtensionContext) {
 		documentSelector: [{ scheme: 'file', language: 'alang' }],
 		synchronize: {
 			// Notify the server about file changes to '.alang files contained in the workspace
-			fileEvents: workspace.createFileSystemWatcher('**/.alang')
+			fileEvents: workspace.createFileSystemWatcher('**/*.alang')
 		}
 	};
 

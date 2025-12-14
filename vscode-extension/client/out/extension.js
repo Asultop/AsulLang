@@ -40,31 +40,43 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
 const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 const vscode_1 = require("vscode");
 const node_1 = require("vscode-languageclient/node");
 let client;
 function activate(context) {
-    // The server is implemented in node
-    const serverModule = context.asAbsolutePath(path.join('server', 'out', 'server.js'));
-    // The debug options for the server
-    const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
-    // If the extension is launched in debug mode then the debug server options are used
-    // Otherwise the run options are used
-    const serverOptions = {
-        run: { module: serverModule, transport: node_1.TransportKind.ipc },
-        debug: {
-            module: serverModule,
-            transport: node_1.TransportKind.ipc,
-            options: debugOptions
+    // Prefer a native C++ LSP server (stdio) when available.
+    const cfg = vscode_1.workspace.getConfiguration('alangLanguageServer');
+    const configuredPath = cfg.get('serverPath');
+    const bundledServer = context.asAbsolutePath(path.join('bin', process.platform === 'win32' ? 'alang-lsp.exe' : 'alang-lsp'));
+    const serverCommand = (configuredPath && configuredPath.trim().length > 0)
+        ? configuredPath
+        : (fs.existsSync(bundledServer) ? bundledServer : undefined);
+    const serverOptions = serverCommand
+        ? {
+            run: { command: serverCommand, transport: node_1.TransportKind.stdio },
+            debug: { command: serverCommand, transport: node_1.TransportKind.stdio }
         }
-    };
+        : (() => {
+            // Fallback to the Node.js implementation if the native binary isn't present.
+            const serverModule = context.asAbsolutePath(path.join('server', 'out', 'server.js'));
+            const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+            return {
+                run: { module: serverModule, transport: node_1.TransportKind.ipc },
+                debug: {
+                    module: serverModule,
+                    transport: node_1.TransportKind.ipc,
+                    options: debugOptions
+                }
+            };
+        })();
     // Options to control the language client
     const clientOptions = {
         // Register the server for ALang documents
         documentSelector: [{ scheme: 'file', language: 'alang' }],
         synchronize: {
             // Notify the server about file changes to '.alang files contained in the workspace
-            fileEvents: vscode_1.workspace.createFileSystemWatcher('**/.alang')
+            fileEvents: vscode_1.workspace.createFileSystemWatcher('**/*.alang')
         }
     };
     // Create the language client and start the client.

@@ -2,6 +2,31 @@
 
 This directory contains the Language Server Protocol (LSP) implementation for ALang, providing advanced IDE features.
 
+## Native C++ language server (alang-lsp)
+
+This repo also includes a native C++ LSP server executable named `alang-lsp`.
+
+- Build target: `alang-lsp` (CMake)
+- Default output (non-Windows): `vscode-extension/bin/alang-lsp`
+- Transport: stdio (JSON-RPC with `Content-Length` framing)
+
+The VS Code client will:
+
+1. Use `alangLanguageServer.serverPath` if configured
+2. Else use the bundled `vscode-extension/bin/alang-lsp` if present
+3. Else fall back to the Node.js server in `server/out/server.js`
+
+### Build (macOS/Linux)
+
+From the repo root:
+
+```bash
+cmake -S . -B build
+cmake --build build --target alang-lsp -j
+```
+
+Note: the produced binary is architecture-specific. If you run VS Code as Apple Silicon (`arm64`), make sure you build an `arm64` binary (or a universal binary) accordingly.
+
 ## Features
 
 ### Syntax Checking (Diagnostics)

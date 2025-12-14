@@ -71,6 +71,12 @@
       "type": "object",
       "title": "ALang",
       "properties": {
+        "alangLanguageServer.serverPath": {
+          "scope": "window",
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the native C++ ALang language server executable (alang-lsp). If empty, the extension will use its bundled binary when available, otherwise it falls back to the Node.js server."
+        },
         "alangLanguageServer.maxNumberOfProblems": {
           "scope": "resource",
           "type": "number",
