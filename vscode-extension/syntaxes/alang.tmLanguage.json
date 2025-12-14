@@ -29,6 +29,26 @@
             "1": { "name": "punctuation.definition.template-expression.end.alang" }
           },
           "patterns": [
+            { "include": "#interpolation-curly" },
+            { "include": "$self" }
+          ]
+        }
+      ]
+    },
+    "interpolation-curly": {
+      "patterns": [
+        {
+          "name": "meta.block.alang",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.section.block.begin.alang" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.section.block.end.alang" }
+          },
+          "patterns": [
+            { "include": "#interpolation-curly" },
             { "include": "$self" }
           ]
         }

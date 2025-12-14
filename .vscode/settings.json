@@ -1,6 +1,6 @@
 {
     "files.associations": {
-        "*.alang": "javascript",
+        "*.alang": "alang",
         "functional": "cpp",
         "xstring": "cpp",
         "variant": "cpp",
