@@ -6,7 +6,6 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/src/**
-**/node_modules/**
 server/src/**
 client/src/**
 *.ts
