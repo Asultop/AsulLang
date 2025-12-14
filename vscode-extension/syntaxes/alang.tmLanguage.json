@@ -231,47 +231,47 @@
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.interface-match.alang",
+          "name": "keyword.operator.comparison keyword.operator.interface-match.alang",
           "match": "=~="
         },
         {
-          "name": "keyword.operator.arrow.alang",
+          "name": "keyword.operator.arrow keyword.operator.arrow.alang",
           "match": "(<-|->|=>)"
         },
         {
-          "name": "keyword.operator.nullish.alang",
+          "name": "keyword.operator.logical keyword.operator.nullish.alang",
           "match": "(\\?\\?=?|\\?\\.|\\?)"
         },
         {
-          "name": "keyword.operator.logical.alang",
+          "name": "keyword.operator.logical keyword.operator.logical.alang",
           "match": "(&&=?|\\|\\|=?|!==?|===?)"
         },
         {
-          "name": "keyword.operator.comparison.alang",
+          "name": "keyword.operator.comparison keyword.operator.comparison.alang",
           "match": "(<=|>=|<|>)"
         },
         {
-          "name": "keyword.operator.assignment.alang",
+          "name": "keyword.operator.assignment keyword.operator.assignment.alang",
           "match": "(\\+=|-=|\\*=|/=|%=|<<=|>>=|&=|\\|=|\\^=|=)"
         },
         {
-          "name": "keyword.operator.increment.alang",
+          "name": "keyword.operator.increment keyword.operator.increment.alang",
           "match": "(\\+\\+|--)"
         },
         {
-          "name": "keyword.operator.arithmetic.alang",
+          "name": "keyword.operator.arithmetic keyword.operator.arithmetic.alang",
           "match": "(\\+|-|\\*|/|%)"
         },
         {
-          "name": "keyword.operator.bitwise.alang",
+          "name": "keyword.operator.bitwise keyword.operator.bitwise.alang",
           "match": "(<<|>>|&|\\||\\^|~)"
         },
         {
-          "name": "keyword.operator.spread.alang",
+          "name": "keyword.operator.spread keyword.operator.spread.alang",
           "match": "\\.\\.\\."
         },
         {
-          "name": "keyword.operator.decorator.alang",
+          "name": "storage.modifier keyword.operator.decorator.alang",
           "match": "@"
         }
       ]

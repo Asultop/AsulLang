@@ -2,6 +2,30 @@
 
 All notable changes to the "alang-language-support" extension will be documented in this file.
 
+## [0.2.7] - 2025-12-14
+
+### Fixed
+- **Special Operator Highlighting**: Special operators now visible in all VSCode themes (not just custom theme)
+  - Operators now use dual scopes: standard TextMate scopes + ALang-specific scopes
+  - Special operators (=~=, <-, =>, ?., ??, ..., @) now properly colored in Dark+, Light+, and other themes
+  - `=~=` uses `keyword.operator.comparison` (gets operator color in all themes)
+  - `<-`, `->`, `=>` use `keyword.operator.arrow` (recognized by many themes)
+  - `?.`, `??` use `keyword.operator.logical` (gets logical operator color)
+  - `...` uses `keyword.operator.spread` (recognized in modern themes)
+  - `@` uses `storage.modifier` (gets decorator/modifier color)
+
+### Changed
+- **Activation Events**: Removed redundant `activationEvents` from package.json
+  - VSCode 1.75.0+ auto-generates activation events from language contributions
+  - Eliminates extension warning in VSCode
+- **Engine Requirement**: Updated from ^1.60.0 to ^1.75.0
+  - Aligns with automatic activation event generation feature
+
+### Improved
+- **Theme Compatibility**: Operators get appropriate colors in any VSCode theme
+- **Enhanced Colors**: Custom "ALang Default Dark" theme still provides enhanced, distinctive colors for special operators
+- **Better Standards**: Using standard TextMate scope conventions for maximum compatibility
+
 ## [0.2.6] - 2025-12-12
 
 ### Fixed

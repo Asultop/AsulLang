@@ -2,11 +2,11 @@
   "name": "alang-language-support",
   "displayName": "ALang Language Support",
   "description": "Syntax highlighting and language support for ALang scripting language",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "asultop",
   "icon": "images/icon.png",
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Programming Languages"
@@ -15,9 +15,6 @@
     "type": "git",
     "url": "https://github.com/Asultop/AsulLang"
   },
-  "activationEvents": [
-    "onLanguage:alang"
-  ],
   "main": "./client/out/extension",
   "scripts": {
     "vscode:prepublish": "npm run compile",
