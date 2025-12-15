@@ -130,10 +130,3 @@ void registerStdStringPackage(Interpreter& interp) {
 }
 
 } // namespace asul
-
-PackageMeta getStdStringPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.string";
-    pkg.exports = { "toUpperCase", "toLowerCase", "trim", "replaceAll", "repeat", "localeCompare" };
-    return pkg;
-}

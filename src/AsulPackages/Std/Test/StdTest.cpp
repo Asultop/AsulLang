@@ -147,19 +147,4 @@ void registerStdTestPackage(Interpreter& interp) {
 		(*testPkg)["printSummary"] = Value{printSummaryFn};
 	});
 }
-
-PackageMeta getStdTestPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.test";
-    pkg.exports = { "assert", "assertEqual", "assertNotEqual", "getStats", "resetStats", "pass", "fail", "printSummary" };
-    return pkg;
-}
-
-} // namespace asul
-
-PackageMeta getStdTestPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.test";
-    pkg.exports = { "assert", "assertEqual", "assertNotEqual", "getStats", "resetStats", "pass", "fail", "printSummary" };
-    return pkg;
 }

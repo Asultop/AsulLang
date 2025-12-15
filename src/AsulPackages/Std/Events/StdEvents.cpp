@@ -291,15 +291,3 @@ PackageMeta getStdEventsPackageMeta() {
 }
 
 } // namespace asul
-
-PackageMeta getStdEventsPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.events";
-    
-    ClassMeta asulObjClass;
-    asulObjClass.name = "AsulObject";
-    asulObjClass.methods = { {"on"}, {"off"}, {"emit"}, {"receive"} };
-    pkg.classes.push_back(asulObjClass);
-
-    return pkg;
-}

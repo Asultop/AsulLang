@@ -355,40 +355,6 @@ void registerStdTimePackage(Interpreter& interp) {
 	});
 }
 
-PackageMeta getStdTimePackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.time";
-    pkg.exports = { "Duration", "Date", "nowEpochMillis", "nowEpochSeconds", "nowISO", "now", "dateFromEpoch", "parse" };
-    
-    ClassMeta dateClass;
-    dateClass.name = "Date";
-    dateClass.methods = { "constructor", "toISO", "getYear", "getMonth", "getDay", "getHour", "getMinute", "getSecond", "getMillisecond", "getEpochMillis", "format", "__add__", "__sub__" };
-    pkg.classes.push_back(dateClass);
 
-    ClassMeta durationClass;
-    durationClass.name = "Duration";
-    durationClass.methods = { "constructor" };
-    pkg.classes.push_back(durationClass);
-
-    return pkg;
-}
 
 } // namespace asul
-
-PackageMeta getStdTimePackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.time";
-    pkg.exports = { "Duration", "Date", "nowEpochMillis", "nowEpochSeconds", "nowISO", "now", "dateFromEpoch", "parse" };
-
-    ClassMeta dateClass;
-    dateClass.name = "Date";
-    dateClass.methods = { {"constructor"}, {"toISO"}, {"getYear"}, {"getMonth"}, {"getDay"}, {"getHour"}, {"getMinute"}, {"getSecond"}, {"getMillisecond"}, {"getEpochMillis"} };
-    pkg.classes.push_back(dateClass);
-
-    ClassMeta durationClass;
-    durationClass.name = "Duration";
-    durationClass.methods = { {"constructor"}, {"toMillis"}, {"toSeconds"}, {"toMinutes"}, {"toHours"}, {"toDays"} };
-    pkg.classes.push_back(durationClass);
-
-    return pkg;
-}

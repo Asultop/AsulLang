@@ -1,8 +1,7 @@
-#pragma once
-#include "../../PackageMeta.h"
-
+#ifndef STD_FFI_H
+#define STD_FFI_H
 namespace asul {
     class Interpreter;
     void registerStdFfiPackage(Interpreter& interp);
-    PackageMeta getStdFfiPackageMeta();
 }
+#endif // STD_FFI_H

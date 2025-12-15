@@ -94,17 +94,4 @@ void registerStdUrlPackage(Interpreter& interp) {
     });
 }
 
-PackageMeta getStdUrlPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.url";
-    pkg.exports = { "URL" };
-    
-    ClassMeta urlClass;
-    urlClass.name = "URL";
-    urlClass.methods = { "constructor", "parseQuery" };
-    pkg.classes.push_back(urlClass);
-
-    return pkg;
-}
-
 } // namespace asul
