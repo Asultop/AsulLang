@@ -447,6 +447,31 @@ public:
         addBuiltin("isBoolean", 1);
         addBuiltin("isNull", 1);
         addBuiltin("sleep", 1);
+        addBuiltin("setTimeout", -1);
+        addBuiltin("setInterval", -1);
+        addBuiltin("clearTimeout", 1);
+        addBuiltin("clearInterval", 1);
+        addBuiltin("parseInt", -1);
+        addBuiltin("parseFloat", 1);
+        addBuiltin("isNaN", 1);
+        addBuiltin("isFinite", 1);
+        addBuiltin("encodeURI", 1);
+        addBuiltin("decodeURI", 1);
+        addBuiltin("encodeURIComponent", 1);
+        addBuiltin("decodeURIComponent", 1);
+        addBuiltin("assert", -1);
+        addBuiltin("type", 1);
+        addBuiltin("str", 1);
+        addBuiltin("chr", 1);
+        addBuiltin("ord", 1);
+        addBuiltin("min", -1);
+        addBuiltin("max", -1);
+        addBuiltin("abs", 1);
+        addBuiltin("floor", 1);
+        addBuiltin("ceil", 1);
+        addBuiltin("round", 1);
+        addBuiltin("sqrt", 1);
+        addBuiltin("pow", 2);
         
         // Add 'this' as a special symbol in global scope (will be available everywhere)
         defineSymbol("this", {{0,0},{0,0}}, "keyword");
@@ -461,7 +486,7 @@ public:
             {"map", 1}, {"filter", 1}, {"reduce", 1}, {"forEach", 1},
             {"find", 1}, {"findIndex", 1}, {"join", 0}, {"slice", 0},
             {"splice", 2}, {"includes", 1}, {"indexOf", 1},
-            {"reverse", 0}, {"sort", 0}, {"length", -1},
+            {"reverse", 0}, {"sort", 0}, {"length", -1}, {"len", 0},
             {"flat", -1}, {"flatMap", 1}, {"some", 1}, {"every", 1}
         };
         builtInTypes["Array"] = arrayType;
@@ -477,6 +502,24 @@ public:
             {"charCodeAt", 1}, {"len", 0}
         };
         builtInTypes["String"] = stringType;
+
+        // Number
+        TypeDef numberType;
+        numberType.name = "Number";
+        numberType.methods = {
+            {"toFixed", 0}, {"toPrecision", 0}, {"toExponential", 0},
+            {"toString", 0}, {"valueOf", 0}
+        };
+        builtInTypes["Number"] = numberType;
+
+        // Object  
+        TypeDef objectType;
+        objectType.name = "Object";
+        objectType.methods = {
+            {"keys", 0}, {"values", 0}, {"entries", 0},
+            {"hasOwnProperty", 1}, {"toString", 0}
+        };
+        builtInTypes["Object"] = objectType;
 
         // Initialize package exports
         packageExports["std.array"] = {"flat", "flatMap", "unique", "chunk", "groupBy", "zip", "diff"};
@@ -738,7 +781,13 @@ private:
                     const auto& methods = builtInTypes[type].methods;
                     auto it = methods.find(prop->name);
                     if (it == methods.end()) {
-                        Range r = toRange(prop->line, prop->column, prop->length);
+                        // Use proper position - if prop has valid position, use it; otherwise use call position
+                        Range r;
+                        if (prop->line > 0 && prop->column > 0) {
+                            r = toRange(prop->line, prop->column, prop->name.length());
+                        } else {
+                            r = toRange(e->line, e->column, e->length);
+                        }
                         data.diagnostics.push_back(makeDiagnostic(r, 1, "类型 '" + type + "' 没有方法 '" + prop->name + "'"));
                     } else if (it->second >= 0) {
                         // Check parameter count for methods with known param counts
@@ -766,31 +815,9 @@ private:
             }
         } else if (auto e = std::dynamic_pointer_cast<asul::GetPropExpr>(expr)) {
             visitExpr(e->object);
-            std::string type = inferType(e->object);
-            if (builtInTypes.count(type)) {
-                const auto& methods = builtInTypes[type].methods;
-                auto it = methods.find(e->name);
-                if (it == methods.end()) {
-                    Range r = toRange(e->line, e->column, e->length);
-                    // Check if this is being called as a function (next expr in parent would be CallExpr)
-                    // For now, we'll show warning for properties, error for methods
-                    // Since we don't have parent context easily, we use a heuristic:
-                    // If member name looks like a method (common method names), show error
-                    bool looksLikeMethod = false;
-                    for (const auto& [name, params] : methods) {
-                        if (params >= 0) { // has parameters, so it's likely a method
-                            looksLikeMethod = true;
-                            break;
-                        }
-                    }
-                    
-                    // Show warning for potential member variables, error for methods
-                    int severity = 2; // Warning by default
-                    std::string msg = "类型 '" + type + "' 可能没有成员变量 '" + e->name + "'";
-                    
-                    data.diagnostics.push_back(makeDiagnostic(r, severity, msg));
-                }
-            }
+            // For GetPropExpr accessed as property (not method call), we're lenient
+            // We don't report warnings for unknown members since they could be dynamic properties
+            // Method calls are checked separately in CallExpr handler above
         } else if (auto e = std::dynamic_pointer_cast<asul::BinaryExpr>(expr)) {
             visitExpr(e->left);
             visitExpr(e->right);
