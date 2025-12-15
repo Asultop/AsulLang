@@ -104,3 +104,10 @@ void registerStdPathPackage(Interpreter& interp) {
 }
 
 } // namespace asul
+
+PackageMeta getStdPathPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.path";
+    pkg.exports = { "join", "resolve", "dirname", "basename", "extname", "isAbsolute", "normalize", "relative", "sep" };
+    return pkg;
+}

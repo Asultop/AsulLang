@@ -199,3 +199,10 @@ void registerStdOsPackage(Interpreter& interp) {
 }
 
 } // namespace asul
+
+PackageMeta getStdOsPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.os";
+    pkg.exports = { "system", "getenv", "setenv", "signal", "kill", "raise", "getpid", "popen", "platform" };
+    return pkg;
+}

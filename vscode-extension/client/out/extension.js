@@ -77,20 +77,25 @@ function isUsableNativeServer(serverPath) {
 async function activate(context) {
     // window.showInformationMessage('ALang Extension Activating...');
     const out = vscode_1.window.createOutputChannel('ALang Language Support');
-    out.appendLine('[client] activate()');
-    out.appendLine(`[client] platform=${process.platform} arch=${process.arch}`);
-    out.appendLine(`[client] extensionPath=${context.extensionPath}`);
+    function log(msg) {
+        const now = new Date();
+        const timeStr = now.toISOString().replace('T', ' ').replace('Z', '');
+        out.appendLine(`[${timeStr}] ${msg}`);
+    }
+    log('activate()');
+    log(`platform=${process.platform} arch=${process.arch}`);
+    log(`extensionPath=${context.extensionPath}`);
     out.show(true);
     // Prefer a native C++ LSP server (stdio) when available.
     const cfg = vscode_1.workspace.getConfiguration('alangLanguageServer');
     const configuredPath = cfg.get('serverPath');
     const bundledServer = context.asAbsolutePath(path.join('bin', process.platform === 'win32' ? 'alang-lsp.exe' : 'alang-lsp'));
-    out.appendLine(`[client] configured serverPath=${configuredPath ?? ''}`);
-    out.appendLine(`[client] bundled server path=${bundledServer}`);
+    log(`configured serverPath=${configuredPath ?? ''}`);
+    log(`bundled server path=${bundledServer}`);
     const serverCommand = (configuredPath && configuredPath.trim().length > 0)
         ? configuredPath
         : (isUsableNativeServer(bundledServer) ? bundledServer : undefined);
-    out.appendLine(`[client] selected server=${serverCommand ?? '(node fallback)'} `);
+    log(`selected server=${serverCommand ?? '(node fallback)'} `);
     const serverOptions = serverCommand
         ? {
             run: { command: serverCommand, transport: node_1.TransportKind.stdio },

@@ -49,4 +49,11 @@ void registerStdUuidPackage(Interpreter& interp) {
     });
 }
 
+PackageMeta getStdUuidPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.uuid";
+    pkg.exports = { "v4" };
+    return pkg;
+}
+
 } // namespace asul

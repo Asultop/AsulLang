@@ -50,9 +50,15 @@ function isUsableNativeServer(serverPath: string): boolean {
 export async function activate(context: ExtensionContext) {
 	// window.showInformationMessage('ALang Extension Activating...');
 	const out = window.createOutputChannel('ALang Language Support');
-	out.appendLine('[client] activate()');
-	out.appendLine(`[client] platform=${process.platform} arch=${process.arch}`);
-	out.appendLine(`[client] extensionPath=${context.extensionPath}`);
+	function log(msg: string) {
+		const now = new Date();
+		const timeStr = now.toISOString().replace('T', ' ').replace('Z', '');
+		out.appendLine(`[${timeStr}] ${msg}`);
+	}
+
+	log('activate()');
+	log(`platform=${process.platform} arch=${process.arch}`);
+	log(`extensionPath=${context.extensionPath}`);
 	out.show(true);
 
 	// Prefer a native C++ LSP server (stdio) when available.
@@ -61,12 +67,12 @@ export async function activate(context: ExtensionContext) {
 	const bundledServer = context.asAbsolutePath(
 		path.join('bin', process.platform === 'win32' ? 'alang-lsp.exe' : 'alang-lsp')
 	);
-	out.appendLine(`[client] configured serverPath=${configuredPath ?? ''}`);
-	out.appendLine(`[client] bundled server path=${bundledServer}`);
+	log(`configured serverPath=${configuredPath ?? ''}`);
+	log(`bundled server path=${bundledServer}`);
 	const serverCommand = (configuredPath && configuredPath.trim().length > 0)
 		? configuredPath
 		: (isUsableNativeServer(bundledServer) ? bundledServer : undefined);
-	out.appendLine(`[client] selected server=${serverCommand ?? '(node fallback)'} `);
+	log(`selected server=${serverCommand ?? '(node fallback)'} `);
 
 	const serverOptions: ServerOptions = serverCommand
 		? {

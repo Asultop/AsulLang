@@ -1172,4 +1172,31 @@ void registerStdNetworkPackage(Interpreter& interp) {
 	});
 }
 
+PackageMeta getStdNetworkPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.network";
+    pkg.exports = { "parseHeaders", "fetch", "get", "post", "put", "delete", "patch", "head", "request", "http" };
+    pkg.classes.push_back({"Socket", {"constructor", "bind", "listen", "connect", "accept", "write", "read", "close"}});
+    pkg.classes.push_back({"URL", {"constructor", "parseQuery"}});
+    return pkg;
+}
+
 } // namespace asul
+
+PackageMeta getStdNetworkPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.network";
+    pkg.exports = { "parseHeaders", "fetch", "get", "post", "put", "delete", "patch", "head", "request", "http" };
+    
+    ClassMeta socketClass;
+    socketClass.name = "Socket";
+    socketClass.methods = { {"constructor"}, {"bind"}, {"listen"}, {"connect"}, {"accept"}, {"read"}, {"write"}, {"close"} };
+    pkg.classes.push_back(socketClass);
+
+    ClassMeta urlClass;
+    urlClass.name = "URL";
+    urlClass.methods = { {"constructor"}, {"parseQuery"} };
+    pkg.classes.push_back(urlClass);
+
+    return pkg;
+}

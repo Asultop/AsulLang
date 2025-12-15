@@ -234,6 +234,7 @@ static void printErrorWithContext(const std::string& src, const std::string& msg
 }
 
 void ALangEngine::execute(const std::string& code) {
+	std::cout << "DEBUG: ALangEngine::execute called with code length " << code.size() << std::endl;
 	try {
 		Lexer lx(code);
 		auto tokens = lx.scanTokens();

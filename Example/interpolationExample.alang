@@ -12,7 +12,7 @@ println("${a}");
 println("A:${a}B");
 
 // 以对象字面量为起始的复杂表达式（现已完全支持）
-println("A:${ {k: a}.k }");
+println("A:${{k: a}.k }");
 
 // 更复杂的插值示例：函数调用、数组下标、内联对象/数组、计算属性、嵌套对象、await、lambda 调用
 function double(x) {
@@ -20,7 +20,6 @@ function double(x) {
 }
 let arr = [10, 20, 30];
 let k1 = "k1";
-
 println("函数调用:${double(a + b.x)}, 数组下标:${arr[1]}, 内联对象:${{ k: a, y: 2 }.k}, 内联数组下标:${{ arr: [1,2,3,4] }.arr[2]}");
 println("计算属性:${{ [k1]: a }.k1}");
 println("嵌套对象:${{ o: { p: { q: 5 } } }.o.p.q}");

@@ -240,6 +240,11 @@ public:
 				if (!env->assign(asg->name, v)) throw std::runtime_error("Undefined variable '" + asg->name + "' at line " + std::to_string(asg->line));
 				return v;
 			}
+			if (auto dasg = std::dynamic_pointer_cast<DestructuringAssignExpr>(expr)) {
+				Value v = evaluate(dasg->value);
+				destructurePattern(dasg->pattern, v);
+				return v;
+			}
 		if (auto arr = std::dynamic_pointer_cast<ArrayLiteralExpr>(expr)) {
 			auto av = std::make_shared<Array>();
 			av->reserve(arr->elements.size());
@@ -1641,6 +1646,41 @@ public:
 				fn->isAsync = m->isAsync;
 				fn->isGenerator = m->isGenerator;
 				
+				// Apply decorators
+				Value methodVal = Value{fn};
+				for (auto it = m->decorators.rbegin(); it != m->decorators.rend(); ++it) {
+					Value decoratorFunc = evaluate(*it);
+					if (!std::holds_alternative<std::shared_ptr<Function>>(decoratorFunc)) {
+						throw std::runtime_error("Decorator must be a function");
+					}
+					auto decFn = std::get<std::shared_ptr<Function>>(decoratorFunc);
+					std::vector<Value> args = {methodVal};
+					
+					if (decFn->isBuiltin) {
+						methodVal = decFn->builtin(args, decFn->closure);
+					} else {
+						auto callEnv = std::make_shared<Environment>(decFn->closure);
+						for (size_t i = 0; i < decFn->params.size() && i < args.size(); ++i) {
+							callEnv->define(decFn->params[i], args[i]);
+						}
+						try {
+							auto prevEnv = env;
+							env = callEnv;
+							for (auto& s : decFn->body) execute(s);
+							env = prevEnv;
+							methodVal = Value{std::monostate{}}; 
+						} catch (const ReturnSignal& ret) {
+							methodVal = ret.value;
+						}
+					}
+				}
+				
+				if (std::holds_alternative<std::shared_ptr<Function>>(methodVal)) {
+					fn = std::get<std::shared_ptr<Function>>(methodVal);
+				} else if (!m->decorators.empty() && !std::holds_alternative<std::monostate>(methodVal)) {
+					throw std::runtime_error("Method decorator must return a function");
+				}
+
 				if (m->isStatic) {
 					klass->staticMethods[m->name] = fn;
 				} else {

@@ -1,3 +1,4 @@
+import std.collections.*;
 // 内置函数与方法：len（长度计算）/ push（数组添加）简明示例
 println("== 内置功能：len / push ==");
 

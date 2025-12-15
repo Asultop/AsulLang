@@ -282,4 +282,24 @@ void registerStdEventsPackage(Interpreter& interp) {
     });
 }
 
+PackageMeta getStdEventsPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.events";
+    pkg.exports = { "connect" };
+    pkg.classes.push_back({"AsulObject", {"constructor", "emit", "receive"}});
+    return pkg;
+}
+
 } // namespace asul
+
+PackageMeta getStdEventsPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.events";
+    
+    ClassMeta asulObjClass;
+    asulObjClass.name = "AsulObject";
+    asulObjClass.methods = { {"on"}, {"off"}, {"emit"}, {"receive"} };
+    pkg.classes.push_back(asulObjClass);
+
+    return pkg;
+}

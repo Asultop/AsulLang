@@ -1,0 +1,44 @@
+./alang ../Example/quote_edit_apply.alang
+-- quote edit + apply demo --
+original src: let x = 5; x + 10
+original apply: 15
+after edit apply: 105
+b = 100 , b.type() = number
+
+ quoteType = number
+❯ ./alang ../Example/quote_complex.alang
+== quote 进阶示例 ==
+1) 条件替换后结果: 1
+2) 常量折叠后结果: 16
+Hello
+3) 片段拼接执行结果: null
+43
+4) 函数生成与调用结果: null
+== quote 进阶示例结束 ==
+❯ ./alang ../Example/quoteExample.alang
+== quote 基础示例 ==
+源代码: let x = 5; x + 10
+token 数量: 8
+
+-- 原始 tokens --
+0: Let lexeme='let' @1:1 len=3
+1: Identifier lexeme='x' @1:5 len=1
+2: Equal lexeme='=' @1:7 len=1
+3: Number lexeme='5' @1:9 len=1
+4: Semicolon lexeme=';' @1:10 len=1
+5: Identifier lexeme='x' @1:12 len=1
+6: Plus lexeme='+' @1:14 len=1
+7: Number lexeme='10' @1:16 len=2
+
+-- 修改 Plus -> Minus 后 tokens --
+0: Let lexeme='let'
+1: Identifier lexeme='x'
+2: Equal lexeme='='
+3: Number lexeme='5'
+4: Semicolon lexeme=';'
+5: Identifier lexeme='x'
+6: Minus lexeme='-'
+7: Number lexeme='10'
+
+apply 执行结果: -5
+== quote 基础示例结束 ==

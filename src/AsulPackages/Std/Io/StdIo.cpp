@@ -673,3 +673,26 @@ void registerStdIoPackage(Interpreter& interp) {
 }
 
 } // namespace asul
+
+PackageMeta getStdIoPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.io";
+    pkg.exports = { "stdin", "stdout", "stderr", "mkdir", "rmdir", "stat", "copy", "move", "chmod", "walk", "writeFile", "appendFile", "readFile" };
+
+    ClassMeta fileStreamClass;
+    fileStreamClass.name = "FileStream";
+    fileStreamClass.methods = { {"constructor"}, {"read"}, {"write"}, {"eof"}, {"close"} };
+    pkg.classes.push_back(fileStreamClass);
+
+    ClassMeta fileClass;
+    fileClass.name = "File";
+    fileClass.methods = { {"read"}, {"write"}, {"append"}, {"exists"}, {"delete"}, {"rename"}, {"stat"}, {"copy"} };
+    pkg.classes.push_back(fileClass);
+
+    ClassMeta dirClass;
+    dirClass.name = "Dir";
+    dirClass.methods = { {"list"}, {"exists"}, {"create"}, {"delete"}, {"rename"}, {"walk"} };
+    pkg.classes.push_back(dirClass);
+
+    return pkg;
+}

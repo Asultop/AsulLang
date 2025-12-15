@@ -10,16 +10,27 @@
 
 namespace asul {
 
+struct ParseError {
+	int line;
+	int column;
+	int length;
+	std::string message;
+};
+
 // ----------- Parser -----------
 class Parser {
 public:
 	explicit Parser(const std::vector<Token>& t, const std::string& src);
 	std::vector<StmtPtr> parse();
+	const std::vector<ParseError>& getErrors() const { return errors; }
 
 private:
 	const std::vector<Token>& tokens;
 	size_t current{0};
 	const std::string& source;
+	std::vector<ParseError> errors;
+
+	void synchronize();
 
 	bool isAtEnd() const;
 	const Token& peek() const;
@@ -28,6 +39,8 @@ private:
 	bool check(TokenType type) const;
 	bool match(std::initializer_list<TokenType> types);
 	const Token& consume(TokenType type, const char* message);
+	[[noreturn]] void error(const char* message);
+	[[noreturn]] void error(const Token& token, const char* message);
 
 	std::string getLineText(int line) const;
 	std::vector<Token> parseQualifiedIdentifiers(const char* message);
