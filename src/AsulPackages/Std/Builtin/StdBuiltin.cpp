@@ -13,13 +13,13 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto lenFn = std::make_shared<Function>();
 	lenFn->isBuiltin = true;
 	lenFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-		if (args.size() != 1) throw std::runtime_error("len expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("len 需要1个参数");
 		const Value& v = args[0];
 		if (auto s = std::get_if<std::string>(&v)) return Value{ static_cast<double>(s->size()) };
 		if (auto a = std::get_if<std::shared_ptr<Array>>(&v)) return Value{ static_cast<double>((*a) ? (*a)->size() : 0) };
 		if (auto o = std::get_if<std::shared_ptr<Object>>(&v)) return Value{ static_cast<double>((*o) ? (*o)->size() : 0) };
 		if (std::holds_alternative<std::monostate>(v)) return Value{ 0.0 };
-		throw std::runtime_error("len: unsupported type: " + typeOf(v));
+		throw std::runtime_error("len: 不支持的类型: " + typeOf(v));
 	};
 	globals->define("len", lenFn);
 
@@ -27,10 +27,10 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto pushFn = std::make_shared<Function>();
 	pushFn->isBuiltin = true;
 	pushFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-		if (args.empty()) throw std::runtime_error("push expects at least 1 argument");
+		if (args.empty()) throw std::runtime_error("push 至少需要1个参数");
 		const Value& target = args[0];
 		auto parr = std::get_if<std::shared_ptr<Array>>(&target);
-		if (!parr || !(*parr)) throw std::runtime_error("push: first argument must be array");
+		if (!parr || !(*parr)) throw std::runtime_error("push: 第一个参数必须是数组");
 		auto& vec = **parr;
 		for (size_t i=1;i<args.size();++i) vec.push_back(args[i]);
 		return Value{ static_cast<double>(vec.size()) };
@@ -41,7 +41,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto deprecatedFn = std::make_shared<Function>();
 	deprecatedFn->isBuiltin = true;
 	deprecatedFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("deprecated expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("deprecated 需要1个参数");
 		return args[0];
 	};
 	globals->define("deprecated", deprecatedFn);
@@ -50,7 +50,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto typeFn = std::make_shared<Function>();
 	typeFn->isBuiltin = true;
 	typeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> clos) -> Value {
-		if (args.size() != 1) throw std::runtime_error("typeof expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("typeof 需要1个参数");
 		const Value& v = args[0];
 		if (auto ps = std::get_if<std::string>(&v)) return Value{ *ps };
 		if (auto po = std::get_if<std::shared_ptr<Object>>(&v)) {
@@ -82,8 +82,8 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 			auto quoteFn = std::make_shared<Function>();
 			quoteFn->isBuiltin = true;
 			quoteFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-				if (args.size() != 1) throw std::runtime_error("quote expects 1 argument (string)");
-				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("quote expects a string");
+				if (args.size() != 1) throw std::runtime_error("quote 需要1个字符串参数");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("quote 需要字符串参数");
 				std::string src = std::get<std::string>(args[0]);
 				Lexer lx(src);
 				auto toks = lx.scanTokens();
@@ -181,7 +181,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 						// 读取 tokens 数组
 						auto it = self->find("tokens");
 						if (it == self->end() || !std::holds_alternative<std::shared_ptr<Array>>(it->second))
-							throw std::runtime_error("quote.apply: missing tokens array");
+							throw std::runtime_error("quote.apply: 缺少 tokens 数组");
 						auto arrPtr = std::get<std::shared_ptr<Array>>(it->second);
 						if (!arrPtr) return Value{std::monostate{}};
 						// 将 tokens 重建为源码
@@ -232,8 +232,8 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 			auto evalFn = std::make_shared<Function>();
 			evalFn->isBuiltin = true;
 			evalFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-				if (args.size() != 1) throw std::runtime_error("eval expects 1 argument (string)");
-				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("eval expects a string");
+				if (args.size() != 1) throw std::runtime_error("eval 需要1个字符串参数");
+				if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("eval 需要字符串参数");
 				std::string code = std::get<std::string>(args[0]);
 				// Try full parse first; on failure (e.g., missing semicolons), fallback to single-expression snippet
 				std::vector<StmtPtr> stmts;
@@ -303,7 +303,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 			auto sleepFn = std::make_shared<Function>();
 			sleepFn->isBuiltin = true;
 			sleepFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value{
-				if (args.size() != 1) throw std::runtime_error("sleep expects 1 argument (ms)");
+				if (args.size() != 1) throw std::runtime_error("sleep 需要1个毫秒数参数");
 				double ms = getNumber(args[0], "sleep ms");
 				auto p = std::make_shared<PromiseState>();
 				p->loopPtr = interpPtr; // 指向当前解释器以便派发回调
@@ -346,7 +346,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
 				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-						throw std::runtime_error("Promise.all expects an array of promises");
+						throw std::runtime_error("Promise.all 需要一个 Promise 数组");
 					}
 					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 					auto resultPromise = std::make_shared<PromiseState>();
@@ -429,7 +429,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
 				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-						throw std::runtime_error("Promise.race expects an array of promises");
+						throw std::runtime_error("Promise.race 需要一个 Promise 数组");
 					}
 					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 					auto resultPromise = std::make_shared<PromiseState>();
@@ -504,7 +504,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
 				fn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 					if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-						throw std::runtime_error("Promise.any expects an array of promises");
+						throw std::runtime_error("Promise.any 需要一个 Promise 数组");
 					}
 					auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 					auto resultPromise = std::make_shared<PromiseState>();
@@ -592,9 +592,9 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isTypeFn = std::make_shared<Function>();
 	isTypeFn->isBuiltin = true;
 	isTypeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 2) throw std::runtime_error("isType expects 2 arguments (value, type)");
+		if (args.size() != 2) throw std::runtime_error("isType 需要2个参数（值和类型）");
 		if (!std::holds_alternative<std::string>(args[1])) {
-			throw std::runtime_error("isType: second argument must be a type string");
+			throw std::runtime_error("isType: 第二个参数必须是类型字符串");
 		}
 		
 		const Value& val = args[0];
@@ -624,7 +624,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isArrayFn = std::make_shared<Function>();
 	isArrayFn->isBuiltin = true;
 	isArrayFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isArray expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isArray 需要1个参数");
 		return Value{std::holds_alternative<std::shared_ptr<Array>>(args[0])};
 	};
 	globals->define("isArray", isArrayFn);
@@ -633,7 +633,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isObjectFn = std::make_shared<Function>();
 	isObjectFn->isBuiltin = true;
 	isObjectFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isObject expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isObject 需要1个参数");
 		if (!std::holds_alternative<std::shared_ptr<Object>>(args[0])) return Value{false};
 		// Make sure it's not a special object type
 		auto obj = std::get<std::shared_ptr<Object>>(args[0]);
@@ -652,7 +652,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isFunctionFn = std::make_shared<Function>();
 	isFunctionFn->isBuiltin = true;
 	isFunctionFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isFunction expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isFunction 需要1个参数");
 		return Value{std::holds_alternative<std::shared_ptr<Function>>(args[0])};
 	};
 	globals->define("isFunction", isFunctionFn);
@@ -661,7 +661,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isPromiseFn = std::make_shared<Function>();
 	isPromiseFn->isBuiltin = true;
 	isPromiseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isPromise expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isPromise 需要1个参数");
 		return Value{std::holds_alternative<std::shared_ptr<PromiseState>>(args[0])};
 	};
 	globals->define("isPromise", isPromiseFn);
@@ -670,7 +670,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isNumberFn = std::make_shared<Function>();
 	isNumberFn->isBuiltin = true;
 	isNumberFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isNumber expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isNumber 需要1个参数");
 		return Value{std::holds_alternative<double>(args[0])};
 	};
 	globals->define("isNumber", isNumberFn);
@@ -679,7 +679,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isStringFn = std::make_shared<Function>();
 	isStringFn->isBuiltin = true;
 	isStringFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isString expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isString 需要1个参数");
 		return Value{std::holds_alternative<std::string>(args[0])};
 	};
 	globals->define("isString", isStringFn);
@@ -688,7 +688,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isBooleanFn = std::make_shared<Function>();
 	isBooleanFn->isBuiltin = true;
 	isBooleanFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isBoolean expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isBoolean 需要1个参数");
 		return Value{std::holds_alternative<bool>(args[0])};
 	};
 	globals->define("isBoolean", isBooleanFn);
@@ -697,7 +697,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto isNullFn = std::make_shared<Function>();
 	isNullFn->isBuiltin = true;
 	isNullFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("isNull expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("isNull 需要1个参数");
 		return Value{std::holds_alternative<std::monostate>(args[0])};
 	};
 	globals->define("isNull", isNullFn);
@@ -708,7 +708,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto hasIteratorFn = std::make_shared<Function>();
 	hasIteratorFn->isBuiltin = true;
 	hasIteratorFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("hasIterator expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("hasIterator 需要1个参数");
 		
 		// Arrays, strings, and objects are all iterable by default
 		if (std::holds_alternative<std::shared_ptr<Array>>(args[0])) return Value{true};
@@ -735,7 +735,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	auto getIteratorFn = std::make_shared<Function>();
 	getIteratorFn->isBuiltin = true;
 	getIteratorFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-		if (args.size() != 1) throw std::runtime_error("getIterator expects 1 argument");
+		if (args.size() != 1) throw std::runtime_error("getIterator 需要1个参数");
 		
 		const Value& target = args[0];
 		
@@ -853,7 +853,7 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 			return Value{iterObj};
 		}
 		
-		throw std::runtime_error("getIterator: value is not iterable");
+		throw std::runtime_error("getIterator: 值不可迭代");
 	};
 	globals->define("getIterator", getIteratorFn);
 

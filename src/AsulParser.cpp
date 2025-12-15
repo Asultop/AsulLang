@@ -92,6 +92,12 @@ std::vector<StmtPtr> Parser::parse() {
 			synchronize();
 		}
 	}
+	// If there were parse errors, throw an exception
+	if (!errors.empty()) {
+		std::ostringstream oss;
+		oss << "[Parse] " << errors[0].message << " at line " << errors[0].line << ", column " << errors[0].column;
+		throw std::runtime_error(oss.str());
+	}
 	return stmts;
 }
 

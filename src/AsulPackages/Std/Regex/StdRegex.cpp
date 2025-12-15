@@ -147,4 +147,17 @@ void registerStdRegexPackage(Interpreter& interp) {
 	});
 }
 
+PackageMeta getStdRegexPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.regex";
+    pkg.exports = { "Regex" };
+
+    ClassMeta regexClass;
+    regexClass.name = "Regex";
+    regexClass.methods = { {"constructor"}, {"match"}, {"test"}, {"replace"} };
+    pkg.classes.push_back(regexClass);
+
+    return pkg;
+}
+
 } // namespace asul

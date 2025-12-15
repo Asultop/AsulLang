@@ -157,7 +157,7 @@ void registerStdIoPackage(Interpreter& interp) {
 				auto readFileFn = std::make_shared<Function>();
 				readFileFn->isBuiltin = true;
 				readFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					if (args.size() != 1) throw std::runtime_error("readFile expects 1 argument (path string)");
+					if (args.size() != 1) throw std::runtime_error("readFile 需要1个参数 (path string)");
 					if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("readFile path must be string");
 					std::string path = std::get<std::string>(args[0]);
 					std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -172,7 +172,7 @@ void registerStdIoPackage(Interpreter& interp) {
 				auto writeFileFn = std::make_shared<Function>();
 				writeFileFn->isBuiltin = true;
 				writeFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					if (args.size() != 2) throw std::runtime_error("writeFile expects 2 arguments (path, data)");
+					if (args.size() != 2) throw std::runtime_error("writeFile 需要2个参数 (path, data)");
 					if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("writeFile path must be string");
 					std::string path = std::get<std::string>(args[0]);
 					std::string data = toString(args[1]);
@@ -186,7 +186,7 @@ void registerStdIoPackage(Interpreter& interp) {
 				auto appendFileFn = std::make_shared<Function>();
 				appendFileFn->isBuiltin = true;
 				appendFileFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-					if (args.size() != 2) throw std::runtime_error("appendFile expects 2 arguments (path, data)");
+					if (args.size() != 2) throw std::runtime_error("appendFile 需要2个参数 (path, data)");
 					if (!std::holds_alternative<std::string>(args[0])) throw std::runtime_error("appendFile path must be string");
 					std::string path = std::get<std::string>(args[0]);
 					std::string data = toString(args[1]);
@@ -477,7 +477,7 @@ void registerStdIoPackage(Interpreter& interp) {
 
 					// write(data)
 					auto fsWrite = std::make_shared<Function>(); fsWrite->isBuiltin = true; fsWrite->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-						if (args.size() != 1) throw std::runtime_error("FileStream.write expects 1 argument");
+						if (args.size() != 1) throw std::runtime_error("FileStream.write 需要1个参数");
 						Value thisVal = closure->get("this"); 
 						auto inst = std::dynamic_pointer_cast<InstanceExt>(std::get<std::shared_ptr<Instance>>(thisVal));
 						if (!inst || !inst->nativeHandle) throw std::runtime_error("FileStream: invalid handle");
@@ -672,8 +672,6 @@ void registerStdIoPackage(Interpreter& interp) {
 	interp.importPackageSymbols("std.io");
 }
 
-} // namespace asul
-
 PackageMeta getStdIoPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.io";
@@ -696,3 +694,5 @@ PackageMeta getStdIoPackageMeta() {
 
     return pkg;
 }
+
+} // namespace asul

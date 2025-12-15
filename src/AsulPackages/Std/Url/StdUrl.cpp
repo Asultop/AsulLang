@@ -14,7 +14,7 @@ void registerStdUrlPackage(Interpreter& interp) {
         auto urlCtor = std::make_shared<Function>();
         urlCtor->isBuiltin = true;
         urlCtor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-            if (args.size() != 1) throw std::runtime_error("URL constructor expects 1 argument (string)");
+            if (args.size() != 1) throw std::runtime_error("URL 构造函数需要 1 个参数 (string)");
             std::string u = toString(args[0]);
             std::string protocol; std::string host; int port = -1; std::string path = "/"; std::string query;
             size_t schemePos = u.find("://");
@@ -92,6 +92,19 @@ void registerStdUrlPackage(Interpreter& interp) {
 
         (*pkg)["URL"] = Value{ urlClass };
     });
+}
+
+PackageMeta getStdUrlPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.url";
+    pkg.exports = { "URL" };
+    
+    ClassMeta urlClass;
+    urlClass.name = "URL";
+    urlClass.methods = { {"constructor"}, {"parseQuery"} };
+    pkg.classes.push_back(urlClass);
+
+    return pkg;
 }
 
 } // namespace asul

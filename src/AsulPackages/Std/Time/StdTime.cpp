@@ -52,7 +52,7 @@ void registerStdTimePackage(Interpreter& interp) {
 			auto ctor = std::make_shared<Function>();
 			ctor->isBuiltin = true;
 			ctor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("Date.constructor expects 1 argument (epochMillis)");
+				if (args.size() != 1) throw std::runtime_error("Date.constructor 需要1个纪元毫秒数参数");
 				double ms = getNumber(args[0], "Date.constructor epochMillis");
 				Value thisVal = closure->get("this");
 				auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
@@ -85,7 +85,7 @@ void registerStdTimePackage(Interpreter& interp) {
 			dateClass->methods["constructor"] = ctor;
 			// toISO()
 			auto toIsoM = std::make_shared<Function>(); toIsoM->isBuiltin = true; toIsoM->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (!args.empty()) throw std::runtime_error("Date.toISO expects 0 arguments");
+				if (!args.empty()) throw std::runtime_error("Date.toISO 不需要参数");
 				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 				return inst->fields["iso"];
 			}; dateClass->methods["toISO"] = toIsoM;
@@ -108,7 +108,7 @@ void registerStdTimePackage(Interpreter& interp) {
 			// format(fmt, [timezone])
 			auto formatFn = std::make_shared<Function>(); formatFn->isBuiltin = true;
 			formatFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() < 1 || args.size() > 2) throw std::runtime_error("Date.format expects 1 or 2 arguments (format string, [timezone])");
+				if (args.size() < 1 || args.size() > 2) throw std::runtime_error("Date.format 需要1或2个参数（格式字符串，可选时区）");
 				std::string fmt = toString(args[0]);
 				std::string tzName;
 				if (args.size() == 2) tzName = toString(args[1]);
@@ -159,7 +159,7 @@ void registerStdTimePackage(Interpreter& interp) {
 			durationClass->name = "Duration";
 			auto durCtor = std::make_shared<Function>(); durCtor->isBuiltin = true;
 			durCtor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("Duration constructor expects 1 argument (milliseconds)");
+				if (args.size() != 1) throw std::runtime_error("Duration 构造函数需要1个毫秒数参数");
 				double ms = getNumber(args[0], "Duration milliseconds");
 				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 				inst->fields["milliseconds"] = Value{ms};
@@ -194,7 +194,7 @@ void registerStdTimePackage(Interpreter& interp) {
 			// __sub__(other)
 			auto subFn = std::make_shared<Function>(); subFn->isBuiltin = true;
 			subFn->builtin = [dateClass, durationClass](const std::vector<Value>& args, std::shared_ptr<Environment> closure)->Value {
-				if (args.size() != 1) throw std::runtime_error("Date - expects 1 argument");
+				if (args.size() != 1) throw std::runtime_error("Date - 需要1个参数");
 				Value other = args[0];
 				Value thisVal = closure->get("this"); auto inst = std::get<std::shared_ptr<Instance>>(thisVal);
 				double ms = getNumber(inst->fields["epochMillis"], "epochMillis");
@@ -219,7 +219,7 @@ void registerStdTimePackage(Interpreter& interp) {
 						return Value{newInst};
 					}
 				}
-				throw std::runtime_error("Date - supports Duration or Date");
+				throw std::runtime_error("Date - 仅支持 Duration 或 Date");
 			};
 			dateClass->methods["__sub__"] = subFn;
 
@@ -228,21 +228,21 @@ void registerStdTimePackage(Interpreter& interp) {
 
 		// nowEpochMillis()
 		auto nowMsFn = std::make_shared<Function>(); nowMsFn->isBuiltin = true; nowMsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (!args.empty()) throw std::runtime_error("nowEpochMillis expects 0 arguments");
+			if (!args.empty()) throw std::runtime_error("nowEpochMillis 不需要参数");
 			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 			return Value{ static_cast<double>(ms) };
 		}; (*timePkg)["nowEpochMillis"] = Value{ nowMsFn };
 
 		// nowEpochSeconds()
 		auto nowSecFn = std::make_shared<Function>(); nowSecFn->isBuiltin = true; nowSecFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (!args.empty()) throw std::runtime_error("nowEpochSeconds expects 0 arguments");
+			if (!args.empty()) throw std::runtime_error("nowEpochSeconds 不需要参数");
 			using namespace std::chrono; auto secs = duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 			return Value{ static_cast<double>(secs) };
 		}; (*timePkg)["nowEpochSeconds"] = Value{ nowSecFn };
 
 		// nowISO() convenience
 		auto nowIsoFn = std::make_shared<Function>(); nowIsoFn->isBuiltin = true; nowIsoFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (!args.empty()) throw std::runtime_error("nowISO expects 0 arguments");
+			if (!args.empty()) throw std::runtime_error("nowISO 不需要参数");
 			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 			auto tt = system_clock::to_time_t(system_clock::now()); std::tm tmUTC{};
 #ifdef _WIN32
@@ -257,11 +257,11 @@ void registerStdTimePackage(Interpreter& interp) {
 
 		// now() -> Date instance
 		auto nowFn = std::make_shared<Function>(); nowFn->isBuiltin = true; nowFn->builtin = [&interp](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (!args.empty()) throw std::runtime_error("now expects 0 arguments");
+			if (!args.empty()) throw std::runtime_error("now 不需要参数");
 			using namespace std::chrono; auto ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 			
 			auto timePkgLocal = interp.ensurePackage("std.time");
-			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("未找到 Date 类");
 			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
 			auto inst = std::make_shared<Instance>(); inst->klass = dateClass;
 			auto ctor = dateClass->methods["constructor"];
@@ -272,15 +272,15 @@ void registerStdTimePackage(Interpreter& interp) {
 
 		// dateFromEpoch(ms) -> Date instance
 		auto dateFromEpochFn = std::make_shared<Function>(); dateFromEpochFn->isBuiltin = true; dateFromEpochFn->builtin = [&interp](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (args.size() != 1) throw std::runtime_error("dateFromEpoch expects 1 argument (epochMillis)");
+			if (args.size() != 1) throw std::runtime_error("dateFromEpoch 需要1个纪元毫秒数参数");
 			double ms = getNumber(args[0], "dateFromEpoch epochMillis");
 			// get Date class
 			auto timePkgLocal = interp.ensurePackage("std.time");
-			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("未找到 Date 类");
 			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
 			auto inst = std::make_shared<Instance>(); inst->klass = dateClass;
 			// manual invoke constructor logic (reuse ctor builtin)
-			auto ctorIt = dateClass->methods.find("constructor"); if (ctorIt == dateClass->methods.end()) throw std::runtime_error("Date.constructor missing");
+			auto ctorIt = dateClass->methods.find("constructor"); if (ctorIt == dateClass->methods.end()) throw std::runtime_error("Date.constructor 缺失");
 			auto closureEnv = std::make_shared<Environment>(); closureEnv->define("this", Value{inst});
 			ctorIt->second->builtin({ Value{ ms } }, closureEnv);
 			return Value{ inst };
@@ -289,7 +289,7 @@ void registerStdTimePackage(Interpreter& interp) {
 		// parse(dateStr, fmt, [timezone])
 		auto parseFn = std::make_shared<Function>(); parseFn->isBuiltin = true;
 		parseFn->builtin = [&interp](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-			if (args.size() < 2 || args.size() > 3) throw std::runtime_error("parse expects 2 or 3 arguments (dateString, formatString, [timezone])");
+			if (args.size() < 2 || args.size() > 3) throw std::runtime_error("parse 需要2或3个参数（日期字符串、格式字符串、可选时区）");
 			std::string dateStr = toString(args[0]);
 			std::string fmt = toString(args[1]);
 			std::string tzName;
@@ -303,7 +303,7 @@ void registerStdTimePackage(Interpreter& interp) {
 #else
 			char* res = strptime(dateStr.c_str(), fmt.c_str(), &tmVal);
 #endif
-			if (res == nullptr) throw std::runtime_error("Date parse failed");
+			if (res == nullptr) throw std::runtime_error("日期解析失败");
 			
 			double ms = 0;
 			
@@ -314,7 +314,7 @@ void registerStdTimePackage(Interpreter& interp) {
 #else
 				time_t tt = timegm(&tmVal);
 #endif
-				if (tt == -1) throw std::runtime_error("Date parse failed (timegm)");
+				if (tt == -1) throw std::runtime_error("日期解析失败 (timegm)");
 				ms = (double)tt * 1000.0;
 			} else {
 				std::lock_guard<std::mutex> lock(tzMutex);
@@ -337,12 +337,12 @@ void registerStdTimePackage(Interpreter& interp) {
 				tzset();
 #endif
 				
-				if (tt == -1) throw std::runtime_error("Date parse failed (mktime)");
+				if (tt == -1) throw std::runtime_error("日期解析失败 (mktime)");
 				ms = (double)tt * 1000.0;
 			}
 			
 			auto timePkgLocal = interp.ensurePackage("std.time");
-			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("Date class not found");
+			auto it = timePkgLocal->find("Date"); if (it == timePkgLocal->end() || !std::holds_alternative<std::shared_ptr<ClassInfo>>(it->second)) throw std::runtime_error("未找到 Date 类");
 			auto dateClass = std::get<std::shared_ptr<ClassInfo>>(it->second);
 
 			auto newInst = std::make_shared<Instance>(); newInst->klass = dateClass;
@@ -355,6 +355,22 @@ void registerStdTimePackage(Interpreter& interp) {
 	});
 }
 
+PackageMeta getStdTimePackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.time";
+    pkg.exports = { "Duration", "Date", "nowEpochMillis", "nowEpochSeconds", "nowISO", "now", "dateFromEpoch", "parse" };
+    
+    ClassMeta dateClass;
+    dateClass.name = "Date";
+    dateClass.methods = { {"constructor"}, {"toISO"}, {"getYear"}, {"getMonth"}, {"getDay"}, {"getHour"}, {"getMinute"}, {"getSecond"}, {"getMillisecond"}, {"getEpochMillis"}, {"format"}, {"__add__"}, {"__sub__"} };
+    pkg.classes.push_back(dateClass);
 
+    ClassMeta durationClass;
+    durationClass.name = "Duration";
+    durationClass.methods = { {"constructor"} };
+    pkg.classes.push_back(durationClass);
+
+    return pkg;
+}
 
 } // namespace asul

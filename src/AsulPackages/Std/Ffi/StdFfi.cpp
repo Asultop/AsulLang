@@ -53,14 +53,14 @@ void registerStdFfiPackage(Interpreter& interp) {
             void* libHandle = reinterpret_cast<void*>(handle);
             if (!libHandle) {
                 DWORD error = GetLastError();
-                throw std::runtime_error("dlopen failed: Error code " + std::to_string(error));
+                throw std::runtime_error("dlopen 失败: Error code " + std::to_string(error));
             }
 #else
             // Unix/Linux/macOS: Use dlopen
             void* libHandle = dlopen(path.c_str(), mode);
             if (!libHandle) {
                 const char* error = dlerror();
-                throw std::runtime_error(std::string("dlopen failed: ") + (error ? error : "unknown error"));
+                throw std::runtime_error(std::string("dlopen 失败: ") + (error ? error : "unknown error"));
             }
 #endif
             
@@ -96,7 +96,7 @@ void registerStdFfiPackage(Interpreter& interp) {
             void* symPtr = reinterpret_cast<void*>(funcPtr);
             if (!symPtr) {
                 DWORD error = GetLastError();
-                throw std::runtime_error("dlsym failed: Symbol '" + symbol + "' not found (Error " + std::to_string(error) + ")");
+                throw std::runtime_error("dlsym 失败: Symbol '" + symbol + "' not found (Error " + std::to_string(error) + ")");
             }
 #else
             // Unix/Linux/macOS: Use dlsym
@@ -104,7 +104,7 @@ void registerStdFfiPackage(Interpreter& interp) {
             void* symPtr = dlsym(libHandle, symbol.c_str());
             const char* error = dlerror();
             if (error) {
-                throw std::runtime_error(std::string("dlsym failed: ") + error);
+                throw std::runtime_error(std::string("dlsym 失败: ") + error);
             }
 #endif
             
@@ -321,6 +321,13 @@ void registerStdFfiPackage(Interpreter& interp) {
         (*pkg)["RTLD_GLOBAL"] = Value{static_cast<double>(RTLD_GLOBAL)};
         (*pkg)["RTLD_LOCAL"] = Value{static_cast<double>(RTLD_LOCAL)};
     });
+}
+
+PackageMeta getStdFfiPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.ffi";
+    pkg.exports = { "dlopen", "dlsym", "dlclose", "call", "RTLD_LAZY", "RTLD_NOW", "RTLD_GLOBAL", "RTLD_LOCAL" };
+    return pkg;
 }
 
 } // namespace asul

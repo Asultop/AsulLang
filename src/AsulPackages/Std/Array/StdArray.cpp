@@ -16,13 +16,13 @@ void registerStdArrayPackage(Interpreter& interp) {
 		flatFn->isBuiltin = true;
 		flatFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-				throw std::runtime_error("flat expects array as first argument");
+				throw std::runtime_error("flat 第一个参数必须是数组");
 			}
 			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 			int depth = 1;
 			if (args.size() >= 2) {
 				if (!std::holds_alternative<double>(args[1])) {
-					throw std::runtime_error("flat depth must be a number");
+					throw std::runtime_error("flat 深度参数必须是数字");
 				}
 				depth = static_cast<int>(std::get<double>(args[1]));
 			}
@@ -49,13 +49,13 @@ void registerStdArrayPackage(Interpreter& interp) {
 		flatMapFn->isBuiltin = true;
 		flatMapFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment> env) -> Value {
 			if (args.size() < 2) {
-				throw std::runtime_error("flatMap expects array and function arguments");
+				throw std::runtime_error("flatMap 需要数组和函数两个参数");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-				throw std::runtime_error("flatMap expects array as first argument");
+				throw std::runtime_error("flatMap 第一个参数必须是数组");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Function>>(args[1])) {
-				throw std::runtime_error("flatMap expects function as second argument");
+				throw std::runtime_error("flatMap 第二个参数必须是函数");
 			}
 			
 			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
@@ -95,7 +95,7 @@ void registerStdArrayPackage(Interpreter& interp) {
 		uniqueFn->isBuiltin = true;
 		uniqueFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.empty() || !std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-				throw std::runtime_error("unique expects array argument");
+				throw std::runtime_error("unique 需要数组参数");
 			}
 			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 			auto out = std::make_shared<Array>();
@@ -121,18 +121,18 @@ void registerStdArrayPackage(Interpreter& interp) {
 		chunkFn->isBuiltin = true;
 		chunkFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() < 2) {
-				throw std::runtime_error("chunk expects array and size arguments");
+				throw std::runtime_error("chunk 需要数组和大小两个参数");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-				throw std::runtime_error("chunk expects array as first argument");
+				throw std::runtime_error("chunk 第一个参数必须是数组");
 			}
 			if (!std::holds_alternative<double>(args[1])) {
-				throw std::runtime_error("chunk size must be a number");
+				throw std::runtime_error("chunk 大小参数必须是数字");
 			}
 			
 			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 			double sizeD = std::get<double>(args[1]);
-			if (sizeD <= 0) throw std::runtime_error("chunk size must be positive");
+			if (sizeD <= 0) throw std::runtime_error("chunk 大小必须为正数");
 			size_t chunkSize = static_cast<size_t>(sizeD);
 			
 			auto out = std::make_shared<Array>();
@@ -152,13 +152,13 @@ void registerStdArrayPackage(Interpreter& interp) {
 		groupByFn->isBuiltin = true;
 		groupByFn->builtin = [interpPtr](const std::vector<Value>& args, std::shared_ptr<Environment> env) -> Value {
 			if (args.size() < 2) {
-				throw std::runtime_error("groupBy expects array and function arguments");
+				throw std::runtime_error("groupBy 需要数组和函数两个参数");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) {
-				throw std::runtime_error("groupBy expects array as first argument");
+				throw std::runtime_error("groupBy 第一个参数必须是数组");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Function>>(args[1])) {
-				throw std::runtime_error("groupBy expects function as second argument");
+				throw std::runtime_error("groupBy 第二个参数必须是函数");
 			}
 			
 			auto arr = std::get<std::shared_ptr<Array>>(args[0]);
@@ -195,13 +195,13 @@ void registerStdArrayPackage(Interpreter& interp) {
 		zipFn->isBuiltin = true;
 		zipFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.empty()) {
-				throw std::runtime_error("zip expects at least one array argument");
+				throw std::runtime_error("zip 至少需要一个数组参数");
 			}
 			
 			std::vector<std::shared_ptr<Array>> arrays;
 			for (const auto& arg : args) {
 				if (!std::holds_alternative<std::shared_ptr<Array>>(arg)) {
-					throw std::runtime_error("zip expects array arguments");
+					throw std::runtime_error("zip 所有参数必须是数组");
 				}
 				arrays.push_back(std::get<std::shared_ptr<Array>>(arg));
 			}
@@ -228,11 +228,11 @@ void registerStdArrayPackage(Interpreter& interp) {
 		diffFn->isBuiltin = true;
 		diffFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() < 2) {
-				throw std::runtime_error("diff expects two array arguments");
+				throw std::runtime_error("diff 需要两个数组参数");
 			}
 			if (!std::holds_alternative<std::shared_ptr<Array>>(args[0]) ||
 			    !std::holds_alternative<std::shared_ptr<Array>>(args[1])) {
-				throw std::runtime_error("diff expects array arguments");
+				throw std::runtime_error("diff 所有参数必须是数组");
 			}
 			
 			auto arr1 = std::get<std::shared_ptr<Array>>(args[0]);

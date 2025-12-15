@@ -13,7 +13,7 @@ void registerStdStringPackage(Interpreter& interp) {
 		toUpperCaseFn->isBuiltin = true;
 		toUpperCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("toUpperCase expects 1 string argument");
+				throw std::runtime_error("toUpperCase 需要 1 个字符串参数");
 			}
 			std::string input = std::get<std::string>(args[0]);
 			std::transform(input.begin(), input.end(), input.begin(), ::toupper);
@@ -26,7 +26,7 @@ void registerStdStringPackage(Interpreter& interp) {
 		toLowerCaseFn->isBuiltin = true;
 		toLowerCaseFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("toLowerCase expects 1 string argument");
+				throw std::runtime_error("toLowerCase 需要 1 个字符串参数");
 			}
 			std::string input = std::get<std::string>(args[0]);
 			std::transform(input.begin(), input.end(), input.begin(), ::tolower);
@@ -39,7 +39,7 @@ void registerStdStringPackage(Interpreter& interp) {
 		trimFn->isBuiltin = true;
 		trimFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 1 || !std::holds_alternative<std::string>(args[0])) {
-				throw std::runtime_error("trim expects 1 string argument");
+				throw std::runtime_error("trim 需要 1 个字符串参数");
 			}
 			std::string input = std::get<std::string>(args[0]);
 			auto start = input.find_first_not_of(" \t\n\r");
@@ -57,7 +57,7 @@ void registerStdStringPackage(Interpreter& interp) {
 		replaceAllFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 3 || !std::holds_alternative<std::string>(args[0]) ||
 			    !std::holds_alternative<std::string>(args[1]) || !std::holds_alternative<std::string>(args[2])) {
-				throw std::runtime_error("replaceAll expects 3 string arguments (str, search, replacement)");
+				throw std::runtime_error("replaceAll 需要 3 个字符串参数 (str, search, replacement)");
 			}
 			std::string str = std::get<std::string>(args[0]);
 			std::string search = std::get<std::string>(args[1]);
@@ -86,13 +86,13 @@ void registerStdStringPackage(Interpreter& interp) {
 		repeatFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 2 || !std::holds_alternative<std::string>(args[0]) ||
 			    !std::holds_alternative<double>(args[1])) {
-				throw std::runtime_error("repeat expects (string, number) arguments");
+				throw std::runtime_error("repeat 需要 (string, number) 参数");
 			}
 			std::string str = std::get<std::string>(args[0]);
 			int count = static_cast<int>(std::get<double>(args[1]));
 			
 			if (count < 0) {
-				throw std::runtime_error("repeat count must be non-negative");
+				throw std::runtime_error("repeat count 必须非负");
 			}
 			if (count == 0 || str.empty()) {
 				return Value{std::string("")};
@@ -113,7 +113,7 @@ void registerStdStringPackage(Interpreter& interp) {
 		localeCompareFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
 			if (args.size() != 2 || !std::holds_alternative<std::string>(args[0]) ||
 			    !std::holds_alternative<std::string>(args[1])) {
-				throw std::runtime_error("localeCompare expects 2 string arguments");
+				throw std::runtime_error("localeCompare 需要 2 个字符串参数");
 			}
 			std::string str1 = std::get<std::string>(args[0]);
 			std::string str2 = std::get<std::string>(args[1]);
@@ -127,6 +127,13 @@ void registerStdStringPackage(Interpreter& interp) {
 		};
 		(*stringPkg)["localeCompare"] = Value{localeCompareFn};
 	});
+}
+
+PackageMeta getStdStringPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.string";
+    pkg.exports = { "toUpperCase", "toLowerCase", "trim", "replaceAll", "repeat", "localeCompare" };
+    return pkg;
 }
 
 } // namespace asul

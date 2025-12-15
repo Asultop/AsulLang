@@ -15,7 +15,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// base64.encode(str)
 	auto b64enc = std::make_shared<Function>(); b64enc->isBuiltin = true;
 	b64enc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("base64.encode expects string");
+		if (args.empty()) throw std::runtime_error("base64.encode 需要字符串参数");
 		std::string in = toString(args[0]);
 		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 		std::string out;
@@ -37,7 +37,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// base64.decode(str)
 	auto b64dec = std::make_shared<Function>(); b64dec->isBuiltin = true;
 	b64dec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("base64.decode expects string");
+		if (args.empty()) throw std::runtime_error("base64.decode 需要字符串参数");
 		std::string in = toString(args[0]);
 		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 		std::vector<int> T(256, -1);
@@ -65,7 +65,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// base64url.encode(str)
 	auto b64urlenc = std::make_shared<Function>(); b64urlenc->isBuiltin = true;
 	b64urlenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("base64url.encode expects string");
+		if (args.empty()) throw std::runtime_error("base64url.encode 需要字符串参数");
 		std::string in = toString(args[0]);
 		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 		std::string out;
@@ -87,7 +87,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// base64url.decode(str)
 	auto b64urldec = std::make_shared<Function>(); b64urldec->isBuiltin = true;
 	b64urldec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("base64url.decode expects string");
+		if (args.empty()) throw std::runtime_error("base64url.decode 需要字符串参数");
 		std::string in = toString(args[0]);
 		static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 		std::vector<int> T(256, -1);
@@ -111,8 +111,8 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// bytesToString(arr): convert array of numeric byte values to a string
 	auto bytesToStringFn = std::make_shared<Function>(); bytesToStringFn->isBuiltin = true;
 	bytesToStringFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.size() != 1) throw std::runtime_error("bytesToString expects 1 argument (array)");
-		if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("bytesToString argument must be array");
+		if (args.size() != 1) throw std::runtime_error("bytesToString 需要1个数组参数");
+		if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("bytesToString 参数必须是数组");
 		auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 		if (!arr) return Value{std::string("")};
 		std::string out;
@@ -133,7 +133,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// hex.encode(str)
 	auto hexenc = std::make_shared<Function>(); hexenc->isBuiltin = true;
 	hexenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("hex.encode expects string");
+		if (args.empty()) throw std::runtime_error("hex.encode 需要字符串参数");
 		std::string in = toString(args[0]);
 		std::ostringstream oss;
 		for (unsigned char c : in) oss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
@@ -144,9 +144,9 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// hex.decode(str)
 	auto hexdec = std::make_shared<Function>(); hexdec->isBuiltin = true;
 	hexdec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("hex.decode expects string");
+		if (args.empty()) throw std::runtime_error("hex.decode 需要字符串参数");
 		std::string in = toString(args[0]);
-		if (in.size() % 2 != 0) throw std::runtime_error("Invalid hex string length");
+		if (in.size() % 2 != 0) throw std::runtime_error("十六进制字符串长度无效");
 		std::string out;
 		for (size_t i=0; i<in.size(); i+=2) {
 			std::string byteStr = in.substr(i, 2);
@@ -160,9 +160,9 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// hex.toBytes(hexStr) - convert hex string to byte array
 	auto hexToBytes = std::make_shared<Function>(); hexToBytes->isBuiltin = true;
 	hexToBytes->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("hex.toBytes expects string");
+		if (args.empty()) throw std::runtime_error("hex.toBytes 需要字符串参数");
 		std::string in = toString(args[0]);
-		if (in.size() % 2 != 0) throw std::runtime_error("Invalid hex string length");
+		if (in.size() % 2 != 0) throw std::runtime_error("十六进制字符串长度无效");
 		auto arr = std::make_shared<Array>();
 		for (size_t i=0; i<in.size(); i+=2) {
 			std::string byteStr = in.substr(i, 2);
@@ -176,8 +176,8 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// hex.fromBytes(arr) - convert byte array to hex string
 	auto hexFromBytes = std::make_shared<Function>(); hexFromBytes->isBuiltin = true;
 	hexFromBytes->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.size() != 1) throw std::runtime_error("hex.fromBytes expects 1 argument (array)");
-		if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("hex.fromBytes argument must be array");
+		if (args.size() != 1) throw std::runtime_error("hex.fromBytes 需要1个数组参数");
+		if (!std::holds_alternative<std::shared_ptr<Array>>(args[0])) throw std::runtime_error("hex.fromBytes 参数必须是数组");
 		auto arr = std::get<std::shared_ptr<Array>>(args[0]);
 		if (!arr) return Value{std::string("")};
 		std::ostringstream oss;
@@ -197,7 +197,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// url.encode(str)
 	auto urlenc = std::make_shared<Function>(); urlenc->isBuiltin = true;
 	urlenc->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("url.encode expects string");
+		if (args.empty()) throw std::runtime_error("url.encode 需要字符串参数");
 		std::string in = toString(args[0]);
 		std::ostringstream oss;
 		for (unsigned char c : in) {
@@ -211,7 +211,7 @@ void registerStdEncodingPackage(Interpreter& interp) {
 	// url.decode(str)
 	auto urldec = std::make_shared<Function>(); urldec->isBuiltin = true;
 	urldec->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-		if (args.empty()) throw std::runtime_error("url.decode expects string");
+		if (args.empty()) throw std::runtime_error("url.decode 需要字符串参数");
 		std::string in = toString(args[0]);
 		std::string out;
 		for (size_t i=0; i<in.size(); ++i) {

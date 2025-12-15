@@ -270,7 +270,7 @@ void registerStdEventsPackage(Interpreter& interp) {
             } else if (std::holds_alternative<std::shared_ptr<Function>>(args[3])) {
                 slotCallback = args[3];
             } else {
-                throw std::runtime_error("connect: slot must be a string (method name) or a function");
+                throw std::runtime_error("connect: 槽必须是字符串 (method name) or a function");
             }
             
             // Add the slot to the signal
@@ -282,5 +282,17 @@ void registerStdEventsPackage(Interpreter& interp) {
     });
 }
 
+PackageMeta getStdEventsPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.events";
+    pkg.exports = { "connect" };
+    
+    ClassMeta asulObjClass;
+    asulObjClass.name = "AsulObject";
+    asulObjClass.methods = { {"on"}, {"off"}, {"emit"}, {"receive"} };
+    pkg.classes.push_back(asulObjClass);
+
+    return pkg;
+}
 
 } // namespace asul

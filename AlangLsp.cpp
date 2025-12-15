@@ -421,16 +421,61 @@ class SemanticAnalyzer {
     };
     std::map<std::string, TypeDef> builtInTypes;
     std::map<std::string, std::vector<std::string>> packageExports;
+    std::map<std::string, std::string> constructorToType; // Function name -> Type name (e.g., "stack" -> "Stack")
 
 public:
     SemanticAnalyzer(std::string u) : uri(std::move(u)) {
         currentScope = std::make_shared<Scope>();
         initBuiltins();
-        // Add some builtins
+        // Add common builtins
         addBuiltin("print", -1);
         addBuiltin("println", -1);
         addBuiltin("len", 1);
         addBuiltin("range", -1);
+        addBuiltin("push", -1);
+        addBuiltin("pop", -1);
+        addBuiltin("shift", -1);
+        addBuiltin("unshift", -1);
+        addBuiltin("slice", -1);
+        addBuiltin("typeof", 1);
+        addBuiltin("eval", 1);
+        addBuiltin("quote", 1);
+        addBuiltin("isArray", 1);
+        addBuiltin("isObject", 1);
+        addBuiltin("isFunction", 1);
+        addBuiltin("isString", 1);
+        addBuiltin("isNumber", 1);
+        addBuiltin("isBoolean", 1);
+        addBuiltin("isNull", 1);
+        addBuiltin("sleep", 1);
+        addBuiltin("setTimeout", -1);
+        addBuiltin("setInterval", -1);
+        addBuiltin("clearTimeout", 1);
+        addBuiltin("clearInterval", 1);
+        addBuiltin("parseInt", -1);
+        addBuiltin("parseFloat", 1);
+        addBuiltin("isNaN", 1);
+        addBuiltin("isFinite", 1);
+        addBuiltin("encodeURI", 1);
+        addBuiltin("decodeURI", 1);
+        addBuiltin("encodeURIComponent", 1);
+        addBuiltin("decodeURIComponent", 1);
+        addBuiltin("assert", -1);
+        addBuiltin("type", 1);
+        addBuiltin("str", 1);
+        addBuiltin("chr", 1);
+        addBuiltin("ord", 1);
+        addBuiltin("min", -1);
+        addBuiltin("max", -1);
+        addBuiltin("abs", 1);
+        addBuiltin("floor", 1);
+        addBuiltin("ceil", 1);
+        addBuiltin("round", 1);
+        addBuiltin("sqrt", 1);
+        addBuiltin("pow", 2);
+        
+        // Add 'this' as a special symbol in global scope (will be available everywhere)
+        defineSymbol("this", {{0,0},{0,0}}, "keyword");
     }
 
     void initBuiltins() {
@@ -442,7 +487,7 @@ public:
             {"map", 1}, {"filter", 1}, {"reduce", 1}, {"forEach", 1},
             {"find", 1}, {"findIndex", 1}, {"join", 0}, {"slice", 0},
             {"splice", 2}, {"includes", 1}, {"indexOf", 1},
-            {"reverse", 0}, {"sort", 0}, {"length", -1},
+            {"reverse", 0}, {"sort", 0}, {"length", -1}, {"len", 0},
             {"flat", -1}, {"flatMap", 1}, {"some", 1}, {"every", 1}
         };
         builtInTypes["Array"] = arrayType;
@@ -459,11 +504,44 @@ public:
         };
         builtInTypes["String"] = stringType;
 
+        // Number
+        TypeDef numberType;
+        numberType.name = "Number";
+        numberType.methods = {
+            {"toFixed", 0}, {"toPrecision", 0}, {"toExponential", 0},
+            {"toString", 0}, {"valueOf", 0}
+        };
+        builtInTypes["Number"] = numberType;
+
+        // Object  
+        TypeDef objectType;
+        objectType.name = "Object";
+        objectType.methods = {
+            {"keys", 0}, {"values", 0}, {"entries", 0},
+            {"hasOwnProperty", 1}, {"toString", 0}
+        };
+        builtInTypes["Object"] = objectType;
+
         // Initialize package exports
         packageExports["std.array"] = {"flat", "flatMap", "unique", "chunk", "groupBy", "zip", "diff"};
         packageExports["std.collections"] = {
             "Map", "map", "Set", "set", "Deque", "deque", 
             "Stack", "stack", "PriorityQueue", "priorityQueue", "binarySearch"
+        };
+        packageExports["std.crypto"] = {
+            "randomUUID", "getRandomValues", "md5", "sha1", "sha256", "sha512",
+            "hmac", "pbkdf2", "aes", "rsa", "ecdsa", "hash", "hashObject"
+        };
+        packageExports["std.encoding"] = {
+            "base64", "base64url", "hex", "url", "bytesToString",
+            "encode", "decode", "toBytes", "fromBytes"
+        };
+        packageExports["std.builtin"] = {
+            "len", "push", "pop", "shift", "unshift", "slice",
+            "typeof", "eval", "quote", "isArray", "isObject", "isFunction",
+            "isString", "isNumber", "isBoolean", "isNull", "sleep",
+            "setTimeout", "setInterval", "clearTimeout", "clearInterval",
+            "Promise"
         };
 
         // Map
@@ -518,6 +596,22 @@ public:
                 td.name = cls.name;
 				for (const auto& m : cls.methods) td.methods[m.name] = m.minParams;
                 builtInTypes[cls.name] = td;
+            }
+        }
+        
+        // Map constructor functions to their types
+        constructorToType["map"] = "Map";
+        constructorToType["set"] = "Set";
+        constructorToType["stack"] = "Stack";
+        constructorToType["deque"] = "Deque";
+        constructorToType["priorityQueue"] = "PriorityQueue";
+        // Add more as needed from package metadata
+        for (const auto& pkg : packages) {
+            for (const auto& cls : pkg.classes) {
+                // Lowercase class name often used as constructor
+                std::string lowerName = cls.name;
+                for (auto& c : lowerName) c = std::tolower(c);
+                constructorToType[lowerName] = cls.name;
             }
         }
     }
@@ -590,8 +684,17 @@ private:
             auto sym = resolve(e->name);
             if (sym) return sym->typeName;
         }
-        // Simple chain inference for array methods that return arrays
+        // Handle CallExpr - check for constructor functions and method chains
         if (auto e = std::dynamic_pointer_cast<asul::CallExpr>(expr)) {
+            // Check if it's a simple function call (constructor)
+            if (auto v = std::dynamic_pointer_cast<asul::VariableExpr>(e->callee)) {
+                // Check if this is a known constructor function
+                auto it = constructorToType.find(v->name);
+                if (it != constructorToType.end()) {
+                    return it->second;
+                }
+            }
+            // Check for method calls on objects
             if (auto prop = std::dynamic_pointer_cast<asul::GetPropExpr>(e->callee)) {
                 std::string objType = inferType(prop->object);
                 if (objType == "Array") {
@@ -606,6 +709,27 @@ private:
         return "Any";
     }
 
+    void visitPattern(const asul::PatternPtr& pattern) {
+        if (!pattern) return;
+        if (auto p = std::dynamic_pointer_cast<asul::IdentifierPattern>(pattern)) {
+            defineSymbol(p->name, {{0,0},{0,0}}, "var");
+        } else if (auto p = std::dynamic_pointer_cast<asul::ArrayPattern>(pattern)) {
+            for (const auto& elem : p->elements) {
+                visitPattern(elem);
+            }
+            if (p->hasRest && !p->restName.empty()) {
+                defineSymbol(p->restName, {{0,0},{0,0}}, "var");
+            }
+        } else if (auto p = std::dynamic_pointer_cast<asul::ObjectPattern>(pattern)) {
+            for (const auto& prop : p->properties) {
+                visitPattern(prop.pattern);
+            }
+            if (p->hasRest && !p->restName.empty()) {
+                defineSymbol(p->restName, {{0,0},{0,0}}, "var");
+            }
+        }
+    }
+
     void visitStmt(const asul::StmtPtr& stmt) {
         if (!stmt) return;
         if (auto s = std::dynamic_pointer_cast<asul::VarDecl>(stmt)) {
@@ -615,6 +739,19 @@ private:
                 type = inferType(s->init);
             }
             defineSymbol(s->name, toRange(s->line, s->column, s->length), "var", 0, 0, type);
+        } else if (auto s = std::dynamic_pointer_cast<asul::VarDeclDestructuring>(stmt)) {
+            // Handle destructuring assignment like let [a,b,c] = [1,2,3]
+            if (s->init) {
+                visitExpr(s->init);
+            }
+            visitPattern(s->pattern);
+        } else if (auto s = std::dynamic_pointer_cast<asul::DecoratorStmt>(stmt)) {
+            // Handle decorator like @logger function test() {}
+            for (const auto& decorator : s->decorators) {
+                visitExpr(decorator);
+            }
+            // Visit the decorated target (function or class)
+            visitStmt(s->target);
         } else if (auto s = std::dynamic_pointer_cast<asul::FunctionStmt>(stmt)) {
             defineSymbol(s->name, toRange(s->line, s->column, s->length), "func", s->params.size(), s->params.size());
             enterScope();
@@ -693,6 +830,11 @@ private:
     void visitExpr(const asul::ExprPtr& expr) {
         if (!expr) return;
         if (auto e = std::dynamic_pointer_cast<asul::VariableExpr>(expr)) {
+            // Skip 'this' keyword - it's a special built-in identifier
+            if (e->name == "this") {
+                return;
+            }
+            
             auto sym = resolve(e->name);
             Range r = toRange(e->line, e->column, e->length);
             if (!sym) {
@@ -705,7 +847,36 @@ private:
                 data.references.push_back(ref);
             }
         } else if (auto e = std::dynamic_pointer_cast<asul::CallExpr>(expr)) {
-            visitExpr(e->callee);
+            // Check if calling a method on an object
+            if (auto prop = std::dynamic_pointer_cast<asul::GetPropExpr>(e->callee)) {
+                visitExpr(prop->object);
+                std::string type = inferType(prop->object);
+                
+                if (builtInTypes.count(type)) {
+                    const auto& methods = builtInTypes[type].methods;
+                    auto it = methods.find(prop->name);
+                    if (it == methods.end()) {
+                        // Use proper position - if prop has valid position, use it; otherwise use call position
+                        Range r;
+                        if (prop->line > 0 && prop->column > 0) {
+                            r = toRange(prop->line, prop->column, prop->name.length());
+                        } else {
+                            r = toRange(e->line, e->column, e->length);
+                        }
+                        data.diagnostics.push_back(makeDiagnostic(r, 1, "类型 '" + type + "' 没有方法 '" + prop->name + "'"));
+                    } else if (it->second >= 0) {
+                        // Check parameter count for methods with known param counts
+                        int expectedParams = it->second;
+                        if (expectedParams > 0 && (int)e->args.size() < expectedParams) {
+                            Range r = toRange(e->line, e->column, e->length);
+                            data.diagnostics.push_back(makeDiagnostic(r, 2, "方法 '" + prop->name + "' 参数不足。期望至少 " + std::to_string(expectedParams) + " 个"));
+                        }
+                    }
+                }
+            } else {
+                visitExpr(e->callee);
+            }
+            
             for (const auto& arg : e->args) visitExpr(arg);
             
             if (auto v = std::dynamic_pointer_cast<asul::VariableExpr>(e->callee)) {
@@ -719,14 +890,9 @@ private:
             }
         } else if (auto e = std::dynamic_pointer_cast<asul::GetPropExpr>(expr)) {
             visitExpr(e->object);
-            std::string type = inferType(e->object);
-            if (builtInTypes.count(type)) {
-                const auto& methods = builtInTypes[type].methods;
-                if (methods.find(e->name) == methods.end()) {
-                    Range r = toRange(e->line, e->column, e->length);
-                    data.diagnostics.push_back(makeDiagnostic(r, 1, "类型 '" + type + "' 没有成员 '" + e->name + "'"));
-                }
-            }
+            // For GetPropExpr accessed as property (not method call), we're lenient
+            // We don't report warnings for unknown members since they could be dynamic properties
+            // Method calls are checked separately in CallExpr handler above
         } else if (auto e = std::dynamic_pointer_cast<asul::BinaryExpr>(expr)) {
             visitExpr(e->left);
             visitExpr(e->right);

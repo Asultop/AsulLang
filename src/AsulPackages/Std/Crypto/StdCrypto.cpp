@@ -48,7 +48,7 @@ void registerStdCryptoPackage(Interpreter& interp) {
         // crypto.getRandomValues(n) -> Array<number 0..255>
         auto grvFn = std::make_shared<Function>(); grvFn->isBuiltin = true;
         grvFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-            if (args.size() < 1) throw std::runtime_error("getRandomValues expects length argument");
+            if (args.size() < 1) throw std::runtime_error("getRandomValues 需要长度参数");
             int n = static_cast<int>(Interpreter::getNumber(args[0], "getRandomValues length"));
             if (n < 0) n = 0;
             std::random_device rd;
@@ -68,15 +68,15 @@ void registerStdCryptoPackage(Interpreter& interp) {
 #ifdef ASUL_HAS_OPENSSL
         auto digestHex = [hexOut](const std::string& algo, const std::string& data)->std::string {
             const EVP_MD* md = EVP_get_digestbyname(algo.c_str());
-            if (!md) throw std::runtime_error("OpenSSL: unknown digest algo '" + algo + "'");
+            if (!md) throw std::runtime_error("OpenSSL: 未知的摘要算法 '" + algo + "'");
             EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-            if (!ctx) throw std::runtime_error("OpenSSL: EVP_MD_CTX_new failed");
+            if (!ctx) throw std::runtime_error("OpenSSL: EVP_MD_CTX_new 失败");
             unsigned char out[EVP_MAX_MD_SIZE]; unsigned int outLen = 0;
             std::string hex;
             try {
-                if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) throw std::runtime_error("OpenSSL: DigestInit failed");
-                if (EVP_DigestUpdate(ctx, data.data(), data.size()) != 1) throw std::runtime_error("OpenSSL: DigestUpdate failed");
-                if (EVP_DigestFinal_ex(ctx, out, &outLen) != 1) throw std::runtime_error("OpenSSL: DigestFinal failed");
+                if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) throw std::runtime_error("OpenSSL: DigestInit 失败");
+                if (EVP_DigestUpdate(ctx, data.data(), data.size()) != 1) throw std::runtime_error("OpenSSL: DigestUpdate 失败");
+                if (EVP_DigestFinal_ex(ctx, out, &outLen) != 1) throw std::runtime_error("OpenSSL: DigestFinal 失败");
                 hex = hexOut(out, outLen);
             } catch(...) {
                 EVP_MD_CTX_free(ctx);
@@ -89,21 +89,21 @@ void registerStdCryptoPackage(Interpreter& interp) {
         auto md5Fn = std::make_shared<Function>(); md5Fn->isBuiltin = true;
         md5Fn->builtin = [digestHex](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
             if (args.size() < 1 || !std::holds_alternative<std::string>(args[0]))
-                throw std::runtime_error("md5 expects a string argument");
+                throw std::runtime_error("md5 需要字符串参数");
             return Value{ digestHex("MD5", std::get<std::string>(args[0])) };
         }; (*pkg)["md5"] = Value{ md5Fn };
 
         auto sha1Fn = std::make_shared<Function>(); sha1Fn->isBuiltin = true;
         sha1Fn->builtin = [digestHex](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
             if (args.size() < 1 || !std::holds_alternative<std::string>(args[0]))
-                throw std::runtime_error("sha1 expects a string argument");
+                throw std::runtime_error("sha1 需要字符串参数");
             return Value{ digestHex("SHA1", std::get<std::string>(args[0])) };
         }; (*pkg)["sha1"] = Value{ sha1Fn };
 
         auto sha256Fn = std::make_shared<Function>(); sha256Fn->isBuiltin = true;
         sha256Fn->builtin = [digestHex](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
             if (args.size() < 1 || !std::holds_alternative<std::string>(args[0]))
-                throw std::runtime_error("sha256 expects a string argument");
+                throw std::runtime_error("sha256 需要字符串参数");
             return Value{ digestHex("SHA256", std::get<std::string>(args[0])) };
         }; (*pkg)["sha256"] = Value{ sha256Fn };
 #else
@@ -126,20 +126,20 @@ void registerStdCryptoPackage(Interpreter& interp) {
         auto aesObj = std::make_shared<Object>();
         auto aesEncryptFn = std::make_shared<Function>(); aesEncryptFn->isBuiltin = true;
         aesEncryptFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-            if (args.size() < 3) throw std::runtime_error("aes.encrypt expects (plaintext, key, iv)");
+            if (args.size() < 3) throw std::runtime_error("aes.encrypt 需要明文、密钥、初始向量三个参数");
             if (!std::holds_alternative<std::string>(args[0]) || !std::holds_alternative<std::string>(args[1]) || 
                 !std::holds_alternative<std::string>(args[2])) {
-                throw std::runtime_error("aes.encrypt expects all string arguments");
+                throw std::runtime_error("aes.encrypt 所有参数必须是字符串");
             }
             std::string plaintext = std::get<std::string>(args[0]);
             std::string key = std::get<std::string>(args[1]);
             std::string iv = std::get<std::string>(args[2]);
             
-            if (key.size() != 32) throw std::runtime_error("AES-256 key must be 32 bytes");
-            if (iv.size() != 16) throw std::runtime_error("AES IV must be 16 bytes");
+            if (key.size() != 32) throw std::runtime_error("AES-256 密钥必须是32字节");
+            if (iv.size() != 16) throw std::runtime_error("AES 初始向量必须是16字节");
             
             EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            if (!ctx) throw std::runtime_error("Failed to create cipher context");
+            if (!ctx) throw std::runtime_error("创建加密上下文失败");
             
             std::vector<unsigned char> ciphertext(plaintext.size() + AES_BLOCK_SIZE);
             int len = 0, ciphertext_len = 0;
@@ -148,17 +148,17 @@ void registerStdCryptoPackage(Interpreter& interp) {
                 if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, 
                     reinterpret_cast<const unsigned char*>(key.data()),
                     reinterpret_cast<const unsigned char*>(iv.data())) != 1) {
-                    throw std::runtime_error("EVP_EncryptInit_ex failed");
+                    throw std::runtime_error("EVP_EncryptInit_ex 失败");
                 }
                 
                 if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
                     reinterpret_cast<const unsigned char*>(plaintext.data()), plaintext.size()) != 1) {
-                    throw std::runtime_error("EVP_EncryptUpdate failed");
+                    throw std::runtime_error("EVP_EncryptUpdate 失败");
                 }
                 ciphertext_len = len;
                 
                 if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-                    throw std::runtime_error("EVP_EncryptFinal_ex failed");
+                    throw std::runtime_error("EVP_EncryptFinal_ex 失败");
                 }
                 ciphertext_len += len;
                 
@@ -188,17 +188,17 @@ void registerStdCryptoPackage(Interpreter& interp) {
         // aes.decrypt(ciphertext: base64 string, key: string, iv: string) -> string
         auto aesDecryptFn = std::make_shared<Function>(); aesDecryptFn->isBuiltin = true;
         aesDecryptFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
-            if (args.size() < 3) throw std::runtime_error("aes.decrypt expects (ciphertext, key, iv)");
+            if (args.size() < 3) throw std::runtime_error("aes.decrypt 需要密文、密钥、初始向量三个参数");
             if (!std::holds_alternative<std::string>(args[0]) || !std::holds_alternative<std::string>(args[1]) || 
                 !std::holds_alternative<std::string>(args[2])) {
-                throw std::runtime_error("aes.decrypt expects all string arguments");
+                throw std::runtime_error("aes.decrypt 所有参数必须是字符串");
             }
             std::string ciphertext_b64 = std::get<std::string>(args[0]);
             std::string key = std::get<std::string>(args[1]);
             std::string iv = std::get<std::string>(args[2]);
             
-            if (key.size() != 32) throw std::runtime_error("AES-256 key must be 32 bytes");
-            if (iv.size() != 16) throw std::runtime_error("AES IV must be 16 bytes");
+            if (key.size() != 32) throw std::runtime_error("AES-256 密钥必须是32字节");
+            if (iv.size() != 16) throw std::runtime_error("AES 初始向量必须是16字节");
             
             // Decode base64
             BIO* b64 = BIO_new(BIO_f_base64());
@@ -213,7 +213,7 @@ void registerStdCryptoPackage(Interpreter& interp) {
             if (decoded_len < 0) throw std::runtime_error("Base64 decode failed");
             
             EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            if (!ctx) throw std::runtime_error("Failed to create cipher context");
+            if (!ctx) throw std::runtime_error("创建加密上下文失败");
             
             std::vector<unsigned char> plaintext(decoded_len + AES_BLOCK_SIZE);
             int len = 0, plaintext_len = 0;
@@ -222,17 +222,17 @@ void registerStdCryptoPackage(Interpreter& interp) {
                 if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr,
                     reinterpret_cast<const unsigned char*>(key.data()),
                     reinterpret_cast<const unsigned char*>(iv.data())) != 1) {
-                    throw std::runtime_error("EVP_DecryptInit_ex failed");
+                    throw std::runtime_error("EVP_DecryptInit_ex 失败");
                 }
                 
                 if (EVP_DecryptUpdate(ctx, plaintext.data(), &len,
                     ciphertext.data(), decoded_len) != 1) {
-                    throw std::runtime_error("EVP_DecryptUpdate failed");
+                    throw std::runtime_error("EVP_DecryptUpdate 失败");
                 }
                 plaintext_len = len;
                 
                 if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-                    throw std::runtime_error("EVP_DecryptFinal_ex failed");
+                    throw std::runtime_error("EVP_DecryptFinal_ex 失败");
                 }
                 plaintext_len += len;
                 
