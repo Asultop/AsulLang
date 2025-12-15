@@ -421,6 +421,7 @@ class SemanticAnalyzer {
     };
     std::map<std::string, TypeDef> builtInTypes;
     std::map<std::string, std::vector<std::string>> packageExports;
+    std::map<std::string, std::string> constructorToType; // Function name -> Type name (e.g., "stack" -> "Stack")
 
 public:
     SemanticAnalyzer(std::string u) : uri(std::move(u)) {
@@ -527,6 +528,20 @@ public:
             "Map", "map", "Set", "set", "Deque", "deque", 
             "Stack", "stack", "PriorityQueue", "priorityQueue", "binarySearch"
         };
+        packageExports["std.crypto"] = {
+            "randomUUID", "getRandomValues", "md5", "sha1", "sha256", "sha512",
+            "hmac", "pbkdf2", "aes", "rsa", "ecdsa", "hash", "hashObject"
+        };
+        packageExports["std.encoding"] = {
+            "base64", "base64url", "hex", "url", "bytesToString"
+        };
+        packageExports["std.builtin"] = {
+            "len", "push", "pop", "shift", "unshift", "slice",
+            "typeof", "eval", "quote", "isArray", "isObject", "isFunction",
+            "isString", "isNumber", "isBoolean", "isNull", "sleep",
+            "setTimeout", "setInterval", "clearTimeout", "clearInterval",
+            "Promise"
+        };
 
         // Map
         TypeDef mapType;
@@ -580,6 +595,22 @@ public:
                 td.name = cls.name;
 				for (const auto& m : cls.methods) td.methods[m.name] = m.minParams;
                 builtInTypes[cls.name] = td;
+            }
+        }
+        
+        // Map constructor functions to their types
+        constructorToType["map"] = "Map";
+        constructorToType["set"] = "Set";
+        constructorToType["stack"] = "Stack";
+        constructorToType["deque"] = "Deque";
+        constructorToType["priorityQueue"] = "PriorityQueue";
+        // Add more as needed from package metadata
+        for (const auto& pkg : packages) {
+            for (const auto& cls : pkg.classes) {
+                // Lowercase class name often used as constructor
+                std::string lowerName = cls.name;
+                for (auto& c : lowerName) c = std::tolower(c);
+                constructorToType[lowerName] = cls.name;
             }
         }
     }
@@ -652,8 +683,17 @@ private:
             auto sym = resolve(e->name);
             if (sym) return sym->typeName;
         }
-        // Simple chain inference for array methods that return arrays
+        // Handle CallExpr - check for constructor functions and method chains
         if (auto e = std::dynamic_pointer_cast<asul::CallExpr>(expr)) {
+            // Check if it's a simple function call (constructor)
+            if (auto v = std::dynamic_pointer_cast<asul::VariableExpr>(e->callee)) {
+                // Check if this is a known constructor function
+                auto it = constructorToType.find(v->name);
+                if (it != constructorToType.end()) {
+                    return it->second;
+                }
+            }
+            // Check for method calls on objects
             if (auto prop = std::dynamic_pointer_cast<asul::GetPropExpr>(e->callee)) {
                 std::string objType = inferType(prop->object);
                 if (objType == "Array") {
