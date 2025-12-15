@@ -27,10 +27,10 @@ void registerStdTestPackage(Interpreter& interp) {
 		auto assertFn = std::make_shared<Function>();
 		assertFn->isBuiltin = true;
 		assertFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.empty()) throw std::runtime_error("assert expects at least 1 argument");
+			if (args.empty()) throw std::runtime_error("assert 需要至少 1 个参数");
 			bool condition = isTruthy(args[0]);
 			if (!condition) {
-				std::string message = args.size() > 1 ? toString(args[1]) : "Assertion failed";
+				std::string message = args.size() > 1 ? toString(args[1]) : "断言失败";
 				throw std::runtime_error(message);
 			}
 			return Value{std::monostate{}};
@@ -41,12 +41,12 @@ void registerStdTestPackage(Interpreter& interp) {
 		auto assertEqualFn = std::make_shared<Function>();
 		assertEqualFn->isBuiltin = true;
 		assertEqualFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() < 2) throw std::runtime_error("assertEqual expects (actual, expected) arguments");
+			if (args.size() < 2) throw std::runtime_error("assertEqual 需要 (actual, expected) 参数");
 			std::string actual = toString(args[0]);
 			std::string expected = toString(args[1]);
 			if (actual != expected) {
 				std::ostringstream oss;
-				oss << "Expected " << expected << " but got " << actual;
+				oss << "期望 " << expected << " 但得到 " << actual;
 				if (args.size() > 2) {
 					oss << " - " << toString(args[2]);
 				}
@@ -60,12 +60,12 @@ void registerStdTestPackage(Interpreter& interp) {
 		auto assertNotEqualFn = std::make_shared<Function>();
 		assertNotEqualFn->isBuiltin = true;
 		assertNotEqualFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() < 2) throw std::runtime_error("assertNotEqual expects (actual, expected) arguments");
+			if (args.size() < 2) throw std::runtime_error("assertNotEqual 需要 (actual, expected) 参数");
 			std::string actual = toString(args[0]);
 			std::string expected = toString(args[1]);
 			if (actual == expected) {
 				std::ostringstream oss;
-				oss << "Expected values to be different, but both are " << actual;
+				oss << "期望值不同，但都是 " << actual;
 				if (args.size() > 2) {
 					oss << " - " << toString(args[2]);
 				}

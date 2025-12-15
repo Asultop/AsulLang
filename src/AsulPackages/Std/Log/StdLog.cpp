@@ -46,7 +46,7 @@ void registerStdLogPackage(Interpreter& interp) {
 		auto setLevelFn = std::make_shared<Function>();
 		setLevelFn->isBuiltin = true;
 		setLevelFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() < 1) throw std::runtime_error("setLevel expects level argument (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR)");
+			if (args.size() < 1) throw std::runtime_error("setLevel 需要日志级别参数 (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR)");
 			int level = static_cast<int>(getNumber(args[0], "setLevel level"));
 			if (level < 0) level = 0;
 			if (level > 3) level = 3;
@@ -67,7 +67,7 @@ void registerStdLogPackage(Interpreter& interp) {
 		auto setColorsFn = std::make_shared<Function>();
 		setColorsFn->isBuiltin = true;
 		setColorsFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() < 1) throw std::runtime_error("setColors expects boolean argument");
+			if (args.size() < 1) throw std::runtime_error("setColors 需要布尔类型参数");
 			colorsEnabled = isTruthy(args[0]);
 			return Value{std::monostate{}};
 		};
@@ -137,7 +137,7 @@ void registerStdLogPackage(Interpreter& interp) {
 		auto jsonFn = std::make_shared<Function>();
 		jsonFn->isBuiltin = true;
 		jsonFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
-			if (args.size() < 2) throw std::runtime_error("json expects (level, object) arguments");
+			if (args.size() < 2) throw std::runtime_error("json 需要 (level, object) 参数");
 			int level = static_cast<int>(getNumber(args[0], "json level"));
 			if (level < globalLogLevel) return Value{std::monostate{}};
 			
