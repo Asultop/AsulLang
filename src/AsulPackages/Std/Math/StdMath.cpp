@@ -149,8 +149,6 @@ void registerStdMathPackage(Interpreter& interp) {
 	});
 }
 
-} // namespace asul
-
 PackageMeta getStdMathPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.math";
@@ -161,3 +159,5 @@ PackageMeta getStdMathPackageMeta() {
     };
     return pkg;
 }
+
+} // namespace asul

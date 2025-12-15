@@ -147,8 +147,6 @@ void registerStdRegexPackage(Interpreter& interp) {
 	});
 }
 
-} // namespace asul
-
 PackageMeta getStdRegexPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.regex";
@@ -161,3 +159,5 @@ PackageMeta getStdRegexPackageMeta() {
 
     return pkg;
 }
+
+} // namespace asul

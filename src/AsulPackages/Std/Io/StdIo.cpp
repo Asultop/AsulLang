@@ -672,8 +672,6 @@ void registerStdIoPackage(Interpreter& interp) {
 	interp.importPackageSymbols("std.io");
 }
 
-} // namespace asul
-
 PackageMeta getStdIoPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.io";
@@ -696,3 +694,5 @@ PackageMeta getStdIoPackageMeta() {
 
     return pkg;
 }
+
+} // namespace asul

@@ -167,10 +167,3 @@ PackageMeta getStdLogPackageMeta() {
 }
 
 } // namespace asul
-
-PackageMeta getStdLogPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.log";
-    pkg.exports = { "setLevel", "getLevel", "setColors", "debug", "info", "warn", "error", "json", "DEBUG", "INFO", "WARN", "ERROR", "FATAL" };
-    return pkg;
-}

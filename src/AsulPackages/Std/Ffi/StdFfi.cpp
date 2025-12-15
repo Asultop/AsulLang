@@ -331,10 +331,3 @@ PackageMeta getStdFfiPackageMeta() {
 }
 
 } // namespace asul
-
-PackageMeta getStdFfiPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.ffi";
-    pkg.exports = { "dlopen", "dlsym", "dlclose", "call", "RTLD_LAZY", "RTLD_NOW", "RTLD_GLOBAL", "RTLD_LOCAL" };
-    return pkg;
-}

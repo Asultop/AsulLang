@@ -156,10 +156,3 @@ PackageMeta getStdTestPackageMeta() {
 }
 
 } // namespace asul
-
-PackageMeta getStdTestPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.test";
-    pkg.exports = { "assert", "assertEqual", "assertNotEqual", "getStats", "resetStats", "pass", "fail", "printSummary" };
-    return pkg;
-}

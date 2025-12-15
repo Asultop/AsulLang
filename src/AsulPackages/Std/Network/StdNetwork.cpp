@@ -1176,17 +1176,6 @@ PackageMeta getStdNetworkPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.network";
     pkg.exports = { "parseHeaders", "fetch", "get", "post", "put", "delete", "patch", "head", "request", "http" };
-    pkg.classes.push_back({"Socket", {"constructor", "bind", "listen", "connect", "accept", "write", "read", "close"}});
-    pkg.classes.push_back({"URL", {"constructor", "parseQuery"}});
-    return pkg;
-}
-
-} // namespace asul
-
-PackageMeta getStdNetworkPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.network";
-    pkg.exports = { "parseHeaders", "fetch", "get", "post", "put", "delete", "patch", "head", "request", "http" };
     
     ClassMeta socketClass;
     socketClass.name = "Socket";
@@ -1200,3 +1189,5 @@ PackageMeta getStdNetworkPackageMeta() {
 
     return pkg;
 }
+
+} // namespace asul

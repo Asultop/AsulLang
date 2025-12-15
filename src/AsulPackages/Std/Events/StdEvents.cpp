@@ -290,8 +290,6 @@ PackageMeta getStdEventsPackageMeta() {
     return pkg;
 }
 
-} // namespace asul
-
 PackageMeta getStdEventsPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.events";
@@ -303,3 +301,5 @@ PackageMeta getStdEventsPackageMeta() {
 
     return pkg;
 }
+
+} // namespace asul
