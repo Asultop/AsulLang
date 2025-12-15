@@ -426,11 +426,30 @@ public:
     SemanticAnalyzer(std::string u) : uri(std::move(u)) {
         currentScope = std::make_shared<Scope>();
         initBuiltins();
-        // Add some builtins
+        // Add common builtins
         addBuiltin("print", -1);
         addBuiltin("println", -1);
         addBuiltin("len", 1);
         addBuiltin("range", -1);
+        addBuiltin("push", -1);
+        addBuiltin("pop", -1);
+        addBuiltin("shift", -1);
+        addBuiltin("unshift", -1);
+        addBuiltin("slice", -1);
+        addBuiltin("typeof", 1);
+        addBuiltin("eval", 1);
+        addBuiltin("quote", 1);
+        addBuiltin("isArray", 1);
+        addBuiltin("isObject", 1);
+        addBuiltin("isFunction", 1);
+        addBuiltin("isString", 1);
+        addBuiltin("isNumber", 1);
+        addBuiltin("isBoolean", 1);
+        addBuiltin("isNull", 1);
+        addBuiltin("sleep", 1);
+        
+        // Add 'this' as a special symbol in global scope (will be available everywhere)
+        defineSymbol("this", {{0,0},{0,0}}, "keyword");
     }
 
     void initBuiltins() {
@@ -693,6 +712,11 @@ private:
     void visitExpr(const asul::ExprPtr& expr) {
         if (!expr) return;
         if (auto e = std::dynamic_pointer_cast<asul::VariableExpr>(expr)) {
+            // Skip 'this' keyword - it's a special built-in identifier
+            if (e->name == "this") {
+                return;
+            }
+            
             auto sym = resolve(e->name);
             Range r = toRange(e->line, e->column, e->length);
             if (!sym) {
@@ -705,7 +729,30 @@ private:
                 data.references.push_back(ref);
             }
         } else if (auto e = std::dynamic_pointer_cast<asul::CallExpr>(expr)) {
-            visitExpr(e->callee);
+            // Check if calling a method on an object
+            if (auto prop = std::dynamic_pointer_cast<asul::GetPropExpr>(e->callee)) {
+                visitExpr(prop->object);
+                std::string type = inferType(prop->object);
+                
+                if (builtInTypes.count(type)) {
+                    const auto& methods = builtInTypes[type].methods;
+                    auto it = methods.find(prop->name);
+                    if (it == methods.end()) {
+                        Range r = toRange(prop->line, prop->column, prop->length);
+                        data.diagnostics.push_back(makeDiagnostic(r, 1, "类型 '" + type + "' 没有方法 '" + prop->name + "'"));
+                    } else if (it->second >= 0) {
+                        // Check parameter count for methods with known param counts
+                        int expectedParams = it->second;
+                        if (expectedParams > 0 && (int)e->args.size() < expectedParams) {
+                            Range r = toRange(e->line, e->column, e->length);
+                            data.diagnostics.push_back(makeDiagnostic(r, 2, "方法 '" + prop->name + "' 参数不足。期望至少 " + std::to_string(expectedParams) + " 个"));
+                        }
+                    }
+                }
+            } else {
+                visitExpr(e->callee);
+            }
+            
             for (const auto& arg : e->args) visitExpr(arg);
             
             if (auto v = std::dynamic_pointer_cast<asul::VariableExpr>(e->callee)) {
@@ -722,9 +769,26 @@ private:
             std::string type = inferType(e->object);
             if (builtInTypes.count(type)) {
                 const auto& methods = builtInTypes[type].methods;
-                if (methods.find(e->name) == methods.end()) {
+                auto it = methods.find(e->name);
+                if (it == methods.end()) {
                     Range r = toRange(e->line, e->column, e->length);
-                    data.diagnostics.push_back(makeDiagnostic(r, 1, "类型 '" + type + "' 没有成员 '" + e->name + "'"));
+                    // Check if this is being called as a function (next expr in parent would be CallExpr)
+                    // For now, we'll show warning for properties, error for methods
+                    // Since we don't have parent context easily, we use a heuristic:
+                    // If member name looks like a method (common method names), show error
+                    bool looksLikeMethod = false;
+                    for (const auto& [name, params] : methods) {
+                        if (params >= 0) { // has parameters, so it's likely a method
+                            looksLikeMethod = true;
+                            break;
+                        }
+                    }
+                    
+                    // Show warning for potential member variables, error for methods
+                    int severity = 2; // Warning by default
+                    std::string msg = "类型 '" + type + "' 可能没有成员变量 '" + e->name + "'";
+                    
+                    data.diagnostics.push_back(makeDiagnostic(r, severity, msg));
                 }
             }
         } else if (auto e = std::dynamic_pointer_cast<asul::BinaryExpr>(expr)) {
