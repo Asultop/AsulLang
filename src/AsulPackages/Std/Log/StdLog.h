@@ -1,8 +1,8 @@
-#ifndef STD_LOG_H
-#define STD_LOG_H
+#pragma once
 #include "../../../AsulInterpreter.h"
+#include "../../PackageMeta.h"
 
 namespace asul {
 	void registerStdLogPackage(Interpreter& interp);
+    PackageMeta getStdLogPackageMeta();
 }
-#endif // STD_LOG_H
