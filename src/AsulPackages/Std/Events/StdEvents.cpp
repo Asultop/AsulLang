@@ -286,13 +286,6 @@ PackageMeta getStdEventsPackageMeta() {
     PackageMeta pkg;
     pkg.name = "std.events";
     pkg.exports = { "connect" };
-    pkg.classes.push_back({"AsulObject", {"constructor", "emit", "receive"}});
-    return pkg;
-}
-
-PackageMeta getStdEventsPackageMeta() {
-    PackageMeta pkg;
-    pkg.name = "std.events";
     
     ClassMeta asulObjClass;
     asulObjClass.name = "AsulObject";

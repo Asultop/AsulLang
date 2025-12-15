@@ -101,7 +101,7 @@ PackageMeta getStdUrlPackageMeta() {
     
     ClassMeta urlClass;
     urlClass.name = "URL";
-    urlClass.methods = { "constructor", "parseQuery" };
+    urlClass.methods = { {"constructor"}, {"parseQuery"} };
     pkg.classes.push_back(urlClass);
 
     return pkg;
