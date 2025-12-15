@@ -533,7 +533,8 @@ public:
             "hmac", "pbkdf2", "aes", "rsa", "ecdsa", "hash", "hashObject"
         };
         packageExports["std.encoding"] = {
-            "base64", "base64url", "hex", "url", "bytesToString"
+            "base64", "base64url", "hex", "url", "bytesToString",
+            "encode", "decode", "toBytes", "fromBytes"
         };
         packageExports["std.builtin"] = {
             "len", "push", "pop", "shift", "unshift", "slice",
@@ -708,6 +709,27 @@ private:
         return "Any";
     }
 
+    void visitPattern(const asul::PatternPtr& pattern) {
+        if (!pattern) return;
+        if (auto p = std::dynamic_pointer_cast<asul::IdentifierPattern>(pattern)) {
+            defineSymbol(p->name, {{0,0},{0,0}}, "var");
+        } else if (auto p = std::dynamic_pointer_cast<asul::ArrayPattern>(pattern)) {
+            for (const auto& elem : p->elements) {
+                visitPattern(elem);
+            }
+            if (p->hasRest && !p->restName.empty()) {
+                defineSymbol(p->restName, {{0,0},{0,0}}, "var");
+            }
+        } else if (auto p = std::dynamic_pointer_cast<asul::ObjectPattern>(pattern)) {
+            for (const auto& prop : p->properties) {
+                visitPattern(prop.pattern);
+            }
+            if (p->hasRest && !p->restName.empty()) {
+                defineSymbol(p->restName, {{0,0},{0,0}}, "var");
+            }
+        }
+    }
+
     void visitStmt(const asul::StmtPtr& stmt) {
         if (!stmt) return;
         if (auto s = std::dynamic_pointer_cast<asul::VarDecl>(stmt)) {
@@ -717,6 +739,19 @@ private:
                 type = inferType(s->init);
             }
             defineSymbol(s->name, toRange(s->line, s->column, s->length), "var", 0, 0, type);
+        } else if (auto s = std::dynamic_pointer_cast<asul::VarDeclDestructuring>(stmt)) {
+            // Handle destructuring assignment like let [a,b,c] = [1,2,3]
+            if (s->init) {
+                visitExpr(s->init);
+            }
+            visitPattern(s->pattern);
+        } else if (auto s = std::dynamic_pointer_cast<asul::DecoratorStmt>(stmt)) {
+            // Handle decorator like @logger function test() {}
+            for (const auto& decorator : s->decorators) {
+                visitExpr(decorator);
+            }
+            // Visit the decorated target (function or class)
+            visitStmt(s->target);
         } else if (auto s = std::dynamic_pointer_cast<asul::FunctionStmt>(stmt)) {
             defineSymbol(s->name, toRange(s->line, s->column, s->length), "func", s->params.size(), s->params.size());
             enterScope();
