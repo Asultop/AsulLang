@@ -25,6 +25,7 @@
 namespace console {
 
 int runConsole(int argc, char* argv[]) {
+    std::cout << "DEBUG: runConsole argc=" << argc << std::endl;
     const char* VERSION = "ALang 0.1.0";
 
     bool showHelp = false;

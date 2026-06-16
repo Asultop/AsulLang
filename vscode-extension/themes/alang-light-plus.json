@@ -1,0 +1,256 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "ALang for Light+",
+  "type": "light",
+  "include": "./base/light_plus.json",
+  "tokenColors": [
+    {
+      "name": "ALang - Variables (User-Defined)",
+      "scope": [
+        "variable.other.readwrite.alang",
+        "variable.other.property.alang"
+      ],
+      "settings": {
+        "foreground": "#001080"
+      }
+    },
+    {
+      "name": "ALang - Comment",
+      "scope": [
+        "comment.line.double-slash.alang",
+        "comment.line.number-sign.alang",
+        "comment.block.alang",
+        "comment.block.triple-quote.alang"
+      ],
+      "settings": {
+        "foreground": "#008000",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "ALang - String",
+      "scope": [
+        "string.quoted.double.alang",
+        "string.quoted.single.alang",
+        "string.template.alang"
+      ],
+      "settings": {
+        "foreground": "#A31515"
+      }
+    },
+    {
+      "name": "ALang - Number",
+      "scope": "constant.numeric.alang",
+      "settings": {
+        "foreground": "#098658"
+      }
+    },
+    {
+      "name": "ALang - Keyword Control",
+      "scope": [
+        "keyword.control.alang",
+        "keyword.control.async.alang"
+      ],
+      "settings": {
+        "foreground": "#AF00DB",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Storage Type",
+      "scope": [
+        "storage.type.alang",
+        "storage.type.function.alang",
+        "storage.type.class.alang"
+      ],
+      "settings": {
+        "foreground": "#0000FF",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Keyword Other",
+      "scope": "keyword.other.alang",
+      "settings": {
+        "foreground": "#AF00DB"
+      }
+    },
+    {
+      "name": "ALang - Boolean",
+      "scope": "constant.language.boolean.alang",
+      "settings": {
+        "foreground": "#0000FF",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Null",
+      "scope": "constant.language.null.alang",
+      "settings": {
+        "foreground": "#0000FF",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - This",
+      "scope": "variable.language.this.alang",
+      "settings": {
+        "foreground": "#0000FF",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "ALang - Function Name",
+      "scope": "entity.name.function.alang",
+      "settings": {
+        "foreground": "#795E26"
+      }
+    },
+    {
+      "name": "ALang - Class Name",
+      "scope": [
+        "entity.name.type.class.alang",
+        "entity.name.type.interface.alang",
+        "entity.name.type.alang"
+      ],
+      "settings": {
+        "foreground": "#267F99"
+      }
+    },
+    {
+      "name": "ALang - Interface Match Operator =~=",
+      "scope": "keyword.operator.interface-match.alang",
+      "settings": {
+        "foreground": "#C800A8",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Arrow Operators <- -> =>",
+      "scope": "keyword.operator.arrow.alang",
+      "settings": {
+        "foreground": "#A00000",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Nullish Operators ?. ??",
+      "scope": "keyword.operator.nullish.alang",
+      "settings": {
+        "foreground": "#CC8800",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Spread Operator ...",
+      "scope": "keyword.operator.spread.alang",
+      "settings": {
+        "foreground": "#0070C0",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Decorator Operator @",
+      "scope": "keyword.operator.decorator.alang",
+      "settings": {
+        "foreground": "#CC7700",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Logical Operators",
+      "scope": "keyword.operator.logical.alang",
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - Comparison Operators",
+      "scope": "keyword.operator.comparison.alang",
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - Assignment Operators",
+      "scope": "keyword.operator.assignment.alang",
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - Arithmetic Operators",
+      "scope": "keyword.operator.arithmetic.alang",
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - Bitwise Operators",
+      "scope": "keyword.operator.bitwise.alang",
+      "settings": {
+        "foreground": "#A31515"
+      }
+    },
+    {
+      "name": "ALang - Increment Operators",
+      "scope": "keyword.operator.increment.alang",
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - New Operator",
+      "scope": "keyword.operator.new.alang",
+      "settings": {
+        "foreground": "#AF00DB",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "ALang - Punctuation",
+      "scope": [
+        "punctuation.separator.comma.alang",
+        "punctuation.terminator.statement.alang",
+        "punctuation.accessor.alang",
+        "punctuation.separator.colon.alang"
+      ],
+      "settings": {
+        "foreground": "#000000"
+      }
+    },
+    {
+      "name": "ALang - Brackets",
+      "scope": [
+        "punctuation.section.block.begin.alang",
+        "punctuation.section.block.end.alang",
+        "punctuation.section.brackets.begin.alang",
+        "punctuation.section.brackets.end.alang",
+        "punctuation.section.parens.begin.alang",
+        "punctuation.section.parens.end.alang"
+      ],
+      "settings": {
+        "foreground": "#CC8800"
+      }
+    },
+    {
+      "name": "ALang - Escape Sequences",
+      "scope": "constant.character.escape.alang",
+      "settings": {
+        "foreground": "#EE0000"
+      }
+    },
+
+    {
+      "name": "ALang - Template Interpolation Delimiters ${ }",
+      "scope": [
+        "punctuation.definition.template-expression.begin.alang",
+        "punctuation.definition.template-expression.end.alang"
+      ],
+      "settings": {
+        "foreground": "#0000FF",
+        "fontStyle": "bold"
+      }
+    }
+  ]
+}

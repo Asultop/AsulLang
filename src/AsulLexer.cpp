@@ -52,39 +52,15 @@ void Lexer::string() {
 		while (le < source.size() && source[le] != '\n' && source[le] != '\r') le++;
 		std::string lineStr = source.substr(ls, le - ls);
 		std::ostringstream oss;
-		oss << "Unterminated string at line " << startLine << ", column " << col << ", length " << len << "\n";
+		oss << "未终止的字符串，位于行 " << startLine << ", 列 " << col << ", 长度 " << len << "\n";
 		oss << lineStr << "\n" << std::string(col > 1 ? col - 1 : 0, ' ') << std::string(std::max(1, len), '^');
 		throw std::runtime_error(oss.str());
 	}
 	advance(); // closing quote
 	std::string raw = source.substr(start + 1, current - start - 2);
-	// Unescape common sequences: \n, \t, \r, \\, \", \' and \0
-	auto unescape = [](const std::string& in)->std::string{
-		std::string out; out.reserve(in.size());
-		for (size_t i=0; i<in.size(); ++i) {
-			char c = in[i];
-			if (c == '\\' && i + 1 < in.size()) {
-				char n = in[++i];
-				switch (n) {
-				case 'n': out.push_back('\n'); break;
-				case 't': out.push_back('\t'); break;
-				case 'r': out.push_back('\r'); break;
-				case '\\': out.push_back('\\'); break;
-				case '"': out.push_back('"'); break;
-				case '\'': out.push_back('\''); break;
-				case '0': out.push_back('\0'); break;
-				default: out.push_back(n); break; // unknown escapes: keep the char
-				}
-			} else {
-				out.push_back(c);
-			}
-		}
-		return out;
-	};
-	std::string value = unescape(raw);
 	int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
 	int len = static_cast<int>(current - start); // include quotes
-	tokens.push_back(Token{TokenType::String, value, line, col, len});
+	tokens.push_back(Token{TokenType::String, raw, line, col, len});
 }
 
 void Lexer::number() {
@@ -99,7 +75,7 @@ void Lexer::number() {
 }
 
 void Lexer::identifier() {
-	while (std::isalnum(peek()) || peek() == '_') advance();
+	while (std::isalnum(peek()) || peek() == '_' || (static_cast<unsigned char>(peek()) >= 0x80)) advance();
 	std::string text = source.substr(start, current - start);
 	static const std::unordered_map<std::string, TokenType> keywords{
 		{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
@@ -306,7 +282,7 @@ void Lexer::scanToken() {
 	case '"': string(); break;
 	default:
 		if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1); int len = static_cast<int>(current - start); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len}); }
-		else if (std::isalpha(c) || c == '_') identifier();
+		else if (std::isalpha(c) || c == '_' || (static_cast<unsigned char>(c) >= 0x80)) identifier();
 		else {
 			size_t pos = current - 1;
 			size_t ls = lineStart;

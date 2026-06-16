@@ -1,4 +1,5 @@
 // Deque/Stack/Set examples
+import std.collections.*;
 let d = deque();
 d.push(1,2,3);
 println("deque size after push:", d.size());

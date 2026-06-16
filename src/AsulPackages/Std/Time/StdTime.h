@@ -1,6 +1,5 @@
 #ifndef STD_TIME_H
 #define STD_TIME_H
-
 namespace asul {
 
 class Interpreter;

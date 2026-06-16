@@ -146,6 +146,8 @@ println("扁平化后:", flatData);
 let sumAll = flatData.reduce([](acc, x) { return acc + x; }, 0);
 println("求和:", sumAll);
 
+
+
 // 场景3: 数组对比找差异
 let oldList = ["item1", "item2", "item3", "item4"];
 let newList = ["item2", "item3", "item5", "item6"];

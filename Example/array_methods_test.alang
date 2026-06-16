@@ -1,4 +1,6 @@
 // 数组方法测试：map / filter / reduce / find / some / every / includes
+import std.array;
+import std.io;
 
 println("=== 数组方法测试 (基础 + 扩展) ===");
 
@@ -12,6 +14,7 @@ let doubled = numbers.map([](x) { return x * 2; });
 println("原数组:", numbers);
 println("翻倍后:", doubled);
 
+println();
 let upperWords = words.map([](w) { return w; }); // 简化版，实际应转大写但我们没有内置大写函数
 println("单词数组:", upperWords);
 

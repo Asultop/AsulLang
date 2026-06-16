@@ -1,0 +1,20 @@
+import std.collections.*;
+class Test{
+    function main(){
+        println("This is Main");
+    }  
+    function test(){
+        let s = set();
+        s.add(1);
+        s.add(2);
+        s.add(2);
+        println("Set size (should be 2):", s.size());
+    }
+    function bark(){
+        println("Woof Woof!");
+    }
+}
+let t = new Test();
+t.main();
+t.test();
+t.bark();

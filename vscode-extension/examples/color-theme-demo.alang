@@ -1,0 +1,134 @@
+// ============================================
+// ALang Color Theme Demonstration
+// ============================================
+// This file demonstrates the special operator colors
+// in the ALang Default Dark theme
+
+// --------------------------------------------
+// 1. Interface Match Operator (=~=) - PINK
+// --------------------------------------------
+interface Drawable {
+    function draw();
+}
+
+class Circle <- (Drawable) {
+    function draw() {
+        println("Drawing circle");
+    }
+}
+
+let obj = new Circle();
+if (obj =~= Drawable) {  // =~= highlighted in PINK
+    obj.draw();
+}
+
+// --------------------------------------------
+// 2. Arrow Operators (<- -> =>) - RED
+// --------------------------------------------
+// Inheritance operator (<-)
+class Animal {
+    function speak() {
+        println("Animal sound");
+    }
+}
+
+class Dog <- (Animal) {  // <- highlighted in RED
+    function speak() {
+        println("Woof!");
+    }
+}
+
+// Lambda arrow (=>)
+let square = [](x) => x * x;  // => highlighted in RED
+
+// Arrow operator (->)
+let transform = (x) -> {  // -> highlighted in RED (if used)
+    return x * 2;
+};
+
+// --------------------------------------------
+// 3. Nullish Operators (?. ??) - GOLD
+// --------------------------------------------
+// Optional chaining
+let user = { profile: { name: "Alice" } };
+let userName = user?.profile?.name;  // ?. highlighted in GOLD
+
+// Nullish coalescing
+let value = null;
+let defaultValue = value ?? 42;  // ?? highlighted in GOLD
+let assigned = value ??= 100;  // ??= highlighted in GOLD
+
+// --------------------------------------------
+// 4. Spread Operator (...) - BLUE
+// --------------------------------------------
+// Rest parameters
+function sum(...numbers) {  // ... highlighted in BLUE
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total;
+}
+
+// Spread in arrays
+let arr1 = [1, 2, 3];
+let arr2 = [4, 5, 6];
+let combined = [...arr1, ...arr2];  // ... highlighted in BLUE
+
+// --------------------------------------------
+// 5. Decorator Operator (@) - YELLOW
+// --------------------------------------------
+@logged  // @ highlighted in YELLOW
+@cached  // @ highlighted in YELLOW
+class DataService {
+    @validate  // @ highlighted in YELLOW
+    function fetchData(id) {
+        return `Data for ${id}`;
+    }
+}
+
+// --------------------------------------------
+// 6. Special Brackets - GOLD
+// --------------------------------------------
+let array = [1, 2, 3];  // [ ] in GOLD
+let object = { key: "value" };  // { } in GOLD
+function test(a, b) {  // ( ) in GOLD
+    return a + b;
+}
+
+// --------------------------------------------
+// 7. All Features Combined
+// --------------------------------------------
+@component
+class SmartCalculator <- (BaseCalculator) {
+    function compute(...values) {
+        // Check if implements interface
+        if (this =~= Calculable) {
+            // Use optional chaining
+            let config = this?.settings?.mode;
+            
+            // Nullish coalescing
+            let mode = config ?? "default";
+            
+            // Spread operator
+            let result = this.process([...values]);
+            
+            return result;
+        }
+        return null;
+    }
+}
+
+// Lambda with arrow
+let processor = [](data) => {
+    return data?.map([](x) => x * 2) ?? [];
+};
+
+// Go to Definition Test
+// Press F12 on any of these symbols to jump to definition:
+let calc = new SmartCalculator();  // F12 on SmartCalculator
+let res = processor([1, 2, 3]);    // F12 on processor
+let s = sum(1, 2, 3, 4, 5);       // F12 on sum
+
+println("Color theme demonstration complete!");
+println(`Result: ${s}`);

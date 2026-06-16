@@ -24,6 +24,8 @@ struct Expr { virtual ~Expr() = default; };
 struct LiteralExpr : Expr { Value value; explicit LiteralExpr(Value v): value(std::move(v)){} };
 struct VariableExpr : Expr { std::string name; int line{0}; int column{1}; int length{1}; VariableExpr(std::string n, int l, int c, int len): name(std::move(n)), line(l), column(c), length(len){} };
 struct AssignExpr : Expr { std::string name; ExprPtr value; int line{0}; AssignExpr(std::string n, ExprPtr v, int l): name(std::move(n)), value(std::move(v)), line(l){} };
+struct DestructuringPattern; using PatternPtr = std::shared_ptr<DestructuringPattern>;
+struct DestructuringAssignExpr : Expr { PatternPtr pattern; ExprPtr value; int line{0}; DestructuringAssignExpr(PatternPtr p, ExprPtr v, int l): pattern(std::move(p)), value(std::move(v)), line(l){} };
 struct UnaryExpr : Expr { Token op; ExprPtr right; UnaryExpr(Token o, ExprPtr r): op(std::move(o)), right(std::move(r)){} };
 struct UpdateExpr : Expr { Token op; ExprPtr operand; bool isPrefix; int line{0}, column{1}, length{1}; UpdateExpr(Token o, ExprPtr e, bool pre, int l, int c, int len): op(std::move(o)), operand(std::move(e)), isPrefix(pre), line(l), column(c), length(len){} };
 struct BinaryExpr : Expr { ExprPtr left; Token op; ExprPtr right; BinaryExpr(ExprPtr l, Token o, ExprPtr r): left(std::move(l)), op(std::move(o)), right(std::move(r)){} };
@@ -50,7 +52,6 @@ struct YieldExpr : Expr { ExprPtr value; bool isDelegate{false}; int line{0}, co
 struct DestructuringPattern {
 	virtual ~DestructuringPattern() = default;
 };
-using PatternPtr = std::shared_ptr<DestructuringPattern>;
 
 struct IdentifierPattern : DestructuringPattern {
 	std::string name;
@@ -90,16 +91,16 @@ struct Param {
 struct FunctionExpr : Expr { std::vector<Param> params; StmtPtr body; bool isGenerator{false}; FunctionExpr(std::vector<Param> p, StmtPtr b, bool g=false): params(std::move(p)), body(std::move(b)), isGenerator(g){} };
 
 // ----------- Statements -----------
-struct Stmt { virtual ~Stmt() = default; };
+struct Stmt { virtual ~Stmt() = default; int line{0}; int column{1}; int length{1}; };
 struct ExprStmt : Stmt { ExprPtr expr; explicit ExprStmt(ExprPtr e): expr(std::move(e)){} };
-struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; bool isExported{false}; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i, bool exported=false): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)), isExported(exported){} };
-struct VarDeclDestructuring : Stmt { PatternPtr pattern; ExprPtr init; bool isExported{false}; VarDeclDestructuring(PatternPtr p, ExprPtr i, bool exported=false): pattern(std::move(p)), init(std::move(i)), isExported(exported){} };
-struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s): statements(std::move(s)){} };
-struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){} };
-struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
-struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b): cond(std::move(c)), body(std::move(b)){} };
-struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v): keyword(std::move(k)), value(std::move(v)){} };
-struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; bool isGenerator{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, bool g=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), isGenerator(g), returnType(std::move(r)), isStatic(s), isExported(exported){} };
+struct VarDecl : Stmt { std::string name; std::optional<std::string> type; ExprPtr typeExpr; ExprPtr init; bool isExported{false}; VarDecl(std::string n, std::optional<std::string> t, ExprPtr te, ExprPtr i, bool exported=false, int l=0, int c=1, int len=1): name(std::move(n)), type(std::move(t)), typeExpr(std::move(te)), init(std::move(i)), isExported(exported){ line=l; column=c; length=len; } };
+struct VarDeclDestructuring : Stmt { PatternPtr pattern; ExprPtr init; bool isExported{false}; VarDeclDestructuring(PatternPtr p, ExprPtr i, bool exported=false, int l=0, int c=1, int len=1): pattern(std::move(p)), init(std::move(i)), isExported(exported){ line=l; column=c; length=len; } };
+struct BlockStmt : Stmt { std::vector<StmtPtr> statements; explicit BlockStmt(std::vector<StmtPtr> s, int l=0, int c=1, int len=1): statements(std::move(s)){ line=l; column=c; length=len; } };
+struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPtr c, StmtPtr t, StmtPtr e, int l=0, int col=1, int len=1): cond(std::move(c)), thenB(std::move(t)), elseB(std::move(e)){ line=l; column=col; length=len; } };
+struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b, int l=0, int col=1, int len=1): cond(std::move(c)), body(std::move(b)){ line=l; column=col; length=len; } };
+struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b, int l=0, int col=1, int len=1): cond(std::move(c)), body(std::move(b)){ line=l; column=col; length=len; } };
+struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v, int l=0, int c=1, int len=1): keyword(std::move(k)), value(std::move(v)){ line=l; column=c; length=len; } };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; bool isGenerator{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; std::vector<ExprPtr> decorators; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, bool g=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false, int l=0, int c=1, int len=1, std::vector<ExprPtr> decs = {}): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), isGenerator(g), returnType(std::move(r)), isStatic(s), isExported(exported), decorators(std::move(decs)){ line=l; column=c; length=len; } };
 struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; bool isExported{false}; };

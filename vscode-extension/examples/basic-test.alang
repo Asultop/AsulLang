@@ -1,0 +1,19 @@
+// eval(string) 示例：展示多种执行与作用域行为
+println("== eval(string) 示例 ==");
+
+// 1) 单表达式：直接返回该值
+println("1) 单表达式: ", eval("1+2"));
+
+// 2) 多语句（最后是表达式）——无尾分号也能正确识别并返回最后表达式
+println("2) 多语句最后表达式: ", eval("let x = 5; x + 10"));
+println("3) 多语句最后表达式: ", eval("let a = 1; let b = 2; a + b"));
+println("4) 赋值后表达式: ", eval("let a = 1; let b = 2; a = 3; a + b"));
+
+// 3) 多语句（最后不是表达式）：返回 null
+println("5) 多语句尾部非表达式: ", eval("let y = 1;"));
+
+// 4) 作用域隔离：eval 内部变量不泄漏
+println("6) eval 内部变量访问: ", eval("let t = 42; t"));
+println("7) 外部访问 t.type(): ", t.type());
+
+println("== eval 示例结束 ==");

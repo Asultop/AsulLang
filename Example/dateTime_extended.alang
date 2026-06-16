@@ -1,12 +1,10 @@
-import std.io;
-import std.time;
-
-var println = std.io.println;
+import std.io.*;
+import std.time.*;
 
 println("=== Date and Time Extended Features Test ===");
 
 // 1. Test Date.format
-var now = std.time.now();
+var now = now();
 println("Current time: " + now);
 var fmt = "%Y-%m-%d %H:%M:%S";
 var formatted = now.format(fmt);
@@ -14,7 +12,7 @@ println("Formatted (" + fmt + "): " + formatted);
 
 // 2. Test std.time.parse
 var dateStr = "2023-12-25 10:30:00";
-var parsedDate = std.time.parse(dateStr, fmt);
+var parsedDate = parse(dateStr, fmt);
 println("Parsed '" + dateStr + "': " + parsedDate);
 if (parsedDate.format(fmt) == dateStr) {
     println("Parse verification: SUCCESS");
@@ -23,10 +21,10 @@ if (parsedDate.format(fmt) == dateStr) {
 }
 
 // 3. Test Duration class
-var d1 = new std.time.Duration(1000); // 1000 ms = 1 second
+var d1 = new Duration(1000); // 1000 ms = 1 second
 println("Duration d1: " + d1 + " (" + d1.milliseconds + " ms)");
 
-var d2 = new std.time.Duration(60000); // 1 minute
+var d2 = new Duration(60000); // 1 minute
 println("Duration d2: " + d2 + " (" + d2.milliseconds + " ms)");
 
 // 4. Test Date + Duration

@@ -1,0 +1,428 @@
+// ============================================
+// ALang Syntax Highlighting Demonstration
+// ============================================
+// This file demonstrates all the syntax highlighting features
+// of the ALang VSCode extension
+
+// --------------------------------------------
+// 1. Comments
+// --------------------------------------------
+// Single-line comment
+/* 
+ * Multi-line comment
+ * Block comment support
+ */
+
+// --------------------------------------------
+// 2. Imports
+// --------------------------------------------
+import std.io.*;
+import std.math.(pi, abs, sqrt);
+from std.string import split, join;
+
+// --------------------------------------------
+// 3. Variables and Constants
+// --------------------------------------------
+let variable1 = 42;
+var variable2 = "Hello, ALang!";
+const CONSTANT = 3.14159;
+
+// --------------------------------------------
+// 4. Data Types and Literals
+// --------------------------------------------
+// Numbers
+let integer = 100;
+let float = 3.14;
+let scientific = 1.5e-10;
+let hexadecimal = 0xFF;
+let binary = 0b1010;
+let octal = 0o777;
+
+// Strings
+let singleQuote = 'single quote string';
+let doubleQuote = "double quote string";
+let templateString = `Template with ${variable1} interpolation`;
+
+// Booleans and null
+let trueValue = true;
+let falseValue = false;
+let nullValue = null;
+
+// Arrays
+let array = [1, 2, 3, 4, 5];
+let mixedArray = [42, "string", true, null, [1, 2, 3]];
+
+// Objects
+let object = {
+    name: "ALang",
+    version: 1.0,
+    features: ["async", "oop", "metaprogramming"]
+};
+
+// Computed properties
+let key = "dynamicKey";
+let computedObj = {
+    [key]: "value",
+    [1 + 2]: "computed"
+};
+
+// --------------------------------------------
+// 5. Operators
+// --------------------------------------------
+// Arithmetic
+let sum = 10 + 20;
+let difference = 50 - 30;
+let product = 5 * 4;
+let quotient = 100 / 5;
+let remainder = 17 % 5;
+
+// Comparison
+let equal = a === b;
+let strictEqual = a === b;
+let notEqual = a !== b;
+let strictNotEqual = a !== b;
+let lessThan = a < b;
+let lessOrEqual = a <= b;
+let greaterThan = a > b;
+let greaterOrEqual = a >= b;
+
+// Logical
+let andResult = true && false;
+let orResult = true || false;
+let notResult = !true;
+
+// Bitwise
+let bitwiseAnd = 5 & 3;
+let bitwiseOr = 5 | 3;
+let bitwiseXor = 5 ^ 3;
+let bitwiseNot = ~5;
+let leftShift = 5 << 2;
+let rightShift = 20 >> 2;
+
+// Special operators
+let nullishCoalescing = value ?? defaultValue;
+let optionalChaining = obj?.property?.nestedProperty;
+let interfaceMatch = obj =~= Interface;
+
+// Assignment operators
+let x = 10;
+x += 5;
+x -= 3;
+x *= 2;
+x /= 4;
+x %= 3;
+
+// Increment/Decrement
+let counter = 0;
+counter++;
+++counter;
+counter--;
+--counter;
+
+// Spread/Rest
+let spreadArray = [...array1, ...array2];
+function restParams(...args) {
+    return args;
+}
+
+// --------------------------------------------
+// 6. Control Flow
+// --------------------------------------------
+// If-Else
+if (condition) {
+    println("condition is true");
+} else if (anotherCondition) {
+    println("another condition is true");
+} else {
+    println("all conditions are false");
+}
+
+// Ternary operator
+let result = condition ? "true" : "false";
+
+// Switch-Case
+switch (value) {
+    case 1:
+        println("one");
+        break;
+    case 2:
+        println("two");
+        break;
+    default:
+        println("other");
+}
+
+// While loop
+let i = 0;
+while (i < 10) {
+    println(i);
+    i++;
+}
+
+// Do-While loop
+do {
+    println("at least once");
+    i--;
+} while (i > 0);
+
+// For loop
+for (let j = 0; j < 10; j++) {
+    println(j);
+}
+
+// Foreach loop
+foreach (item in array) {
+    println(item);
+}
+
+foreach (key in object) {
+    println(key, object[key]);
+}
+
+// Break and continue
+for (let k = 0; k < 10; k++) {
+    if (k === 5) continue;
+    if (k === 8) break;
+    println(k);
+}
+
+// --------------------------------------------
+// 7. Functions
+// --------------------------------------------
+// Named function
+function add(a, b) {
+    return a + b;
+}
+
+// Function with default parameters
+function greet(name, greeting = "Hello") {
+    return `${greeting}, ${name}!`;
+}
+
+// Function with rest parameters
+function sum(...numbers) {
+    let total = 0;
+    foreach (num in numbers) {
+        total += num;
+    }
+    return total;
+}
+
+// Anonymous function / Lambda
+let multiply = [](a, b) { return a * b; };
+
+// Arrow function
+let square = [](x) => x * x;
+
+// --------------------------------------------
+// 8. Object-Oriented Programming
+// --------------------------------------------
+// Class definition
+class Animal {
+    function constructor(name) {
+        this.name = name;
+    }
+    
+    function speak() {
+        println(`${this.name} makes a sound`);
+    }
+}
+
+// Inheritance
+class Dog <- (Animal) {
+    function constructor(name, breed) {
+        this.name = name;
+        this.breed = breed;
+    }
+    
+    function speak() {
+        println(`${this.name} barks!`);
+    }
+    
+    function wagTail() {
+        println(`${this.name} wags tail`);
+    }
+}
+
+// Multiple inheritance
+class Mixin {
+    function mixinMethod() {
+        println("From mixin");
+    }
+}
+
+class MultiInherit <- (Animal, Mixin) {
+    function constructor(name) {
+        this.name = name;
+    }
+}
+
+// Interface
+interface Drawable {
+    function draw();
+}
+
+class Shape <- (Drawable) {
+    function draw() {
+        println("Drawing shape");
+    }
+}
+
+// Static members
+class MathHelper {
+    static function abs(x) {
+        return x < 0 ? -x : x;
+    }
+}
+
+// Creating instances
+let animal = new Animal("Generic");
+let dog = new Dog("Buddy", "Golden Retriever");
+let shape = new Shape();
+
+// Interface matching
+if (shape =~= Drawable) {
+    shape.draw();
+}
+
+// --------------------------------------------
+// 9. Async Programming
+// --------------------------------------------
+// Async function
+async function fetchData(url) {
+    println("Fetching data...");
+    await sleep(1000);
+    return "data fetched";
+}
+
+// Promise
+let promise = Promise.resolve(42);
+promise
+    .then([](value) { 
+        println("Value:", value);
+        return value * 2;
+    })
+    .then([](doubled) {
+        println("Doubled:", doubled);
+    })
+    .catch([](error) {
+        println("Error:", error);
+    });
+
+// Async task with go
+go fetchData("https://example.com")
+    .then([](data) {
+        println("Data:", data);
+    });
+
+// Await in async function
+async function processData() {
+    let data = await fetchData("https://api.example.com");
+    println("Processing:", data);
+    return data;
+}
+
+// --------------------------------------------
+// 10. Metaprogramming
+// --------------------------------------------
+// Eval - dynamic code execution
+let evalResult = eval("10 + 20 * 2");
+println("Eval result:", evalResult);
+
+// Quote - token manipulation
+let quoted = quote("let x = 1 + 2;");
+foreach (token in quoted.tokens) {
+    if (token.token === "Number" && token.lexeme === "1") {
+        token.lexeme = "10";
+    }
+}
+quoted.apply();
+
+// --------------------------------------------
+// 11. Error Handling
+// --------------------------------------------
+try {
+    throw "An error occurred";
+} catch (error) {
+    println("Caught error:", error);
+} finally {
+    println("Cleanup code");
+}
+
+// --------------------------------------------
+// 12. Array Methods
+// --------------------------------------------
+let numbers = [1, 2, 3, 4, 5];
+
+// Map
+let doubled = numbers.map([](x) { return x * 2; });
+
+// Filter
+let evens = numbers.filter([](x) { return x % 2 === 0; });
+
+// Reduce
+let sumAll = numbers.reduce([](acc, x) { return acc + x; }, 0);
+
+// Method chaining
+let complexResult = numbers
+    .filter([](x) { return x > 2; })
+    .map([](x) { return x * x; })
+    .reduce([](acc, x) { return acc + x; }, 0);
+
+// --------------------------------------------
+// 13. String Methods
+// --------------------------------------------
+let text = "Hello World";
+let parts = text.split(" ");
+let substring = text.substring(0, 5);
+let replaced = text.replace("World", "ALang");
+
+// --------------------------------------------
+// 14. Decorators
+// --------------------------------------------
+@decorator
+class DecoratedClass {
+    @logMethod
+    function method() {
+        return "decorated";
+    }
+}
+
+// --------------------------------------------
+// 15. Match Expression
+// --------------------------------------------
+let matchResult = match (value) {
+    case 1 => "one",
+    case 2 => "two",
+    default => "other"
+};
+
+// --------------------------------------------
+// 16. Yield (Generator-like)
+// --------------------------------------------
+function* generator() {
+    yield 1;
+    yield 2;
+    yield 3;
+}
+
+// --------------------------------------------
+// Main execution
+// --------------------------------------------
+function main() {
+    println("=================================");
+    println("ALang Syntax Highlighting Demo");
+    println("=================================");
+    
+    // All the features above are highlighted!
+    let demo = new Dog("Max", "Labrador");
+    demo.speak();
+    
+    go processData()
+        .then([](result) {
+            println("Final result:", result);
+        });
+}
+
+// Start the program
+main();

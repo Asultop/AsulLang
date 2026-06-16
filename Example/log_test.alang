@@ -29,12 +29,12 @@ warn("Warn - 应该显示");
 // 4. 颜色控制
 println("\n== 颜色控制 ==");
 println("禁用颜色...");
-setColors(false);
+std.log.setColors(false);
 info("无颜色的info消息");
 warn("无颜色的warn消息");
 
 println("\n启用颜色...");
-setColors(true);
+std.log.setColors(true);
 info("有颜色的info消息");
 warn("有颜色的warn消息");
 

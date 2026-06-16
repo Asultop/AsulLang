@@ -1,0 +1,351 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ALang",
+  "scopeName": "source.alang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#variables" },
+    { "include": "#functions" },
+    { "include": "#classes" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "interpolation": {
+      "patterns": [
+        {
+          "name": "meta.embedded.line.alang",
+          "begin": "(\\$)(\\{)",
+          "end": "(\\})",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.template-expression.begin.alang" },
+            "2": { "name": "punctuation.definition.template-expression.begin.alang" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.template-expression.end.alang" }
+          },
+          "patterns": [
+            { "include": "#interpolation-curly" },
+            { "include": "$self" }
+          ]
+        }
+      ]
+    },
+    "interpolation-curly": {
+      "patterns": [
+        {
+          "name": "meta.block.alang",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.section.block.begin.alang" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.section.block.end.alang" }
+          },
+          "patterns": [
+            { "include": "#interpolation-curly" },
+            { "include": "$self" }
+          ]
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.alang",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.number-sign.alang",
+          "match": "#(?!(\"\"\"|'''')).*$"
+        },
+        {
+          "name": "comment.block.alang",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "name": "comment.block.alang",
+              "match": "."
+            }
+          ]
+        },
+        {
+          "name": "comment.block.triple-quote.alang",
+          "begin": "#?\"\"\"",
+          "end": "\"\"\"",
+          "patterns": [
+            {
+              "name": "comment.block.alang",
+              "match": "."
+            }
+          ]
+        },
+        {
+          "name": "comment.block.triple-quote.alang",
+          "begin": "#?'''",
+          "end": "'''",
+          "patterns": [
+            {
+              "name": "comment.block.alang",
+              "match": "."
+            }
+          ]
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.alang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "include": "#interpolation" },
+            {
+              "name": "constant.character.escape.alang",
+              "match": "\\\\([\"\\\\/bfnrt]|u[0-9a-fA-F]{4})"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.alang",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "include": "#interpolation" },
+            {
+              "name": "constant.character.escape.alang",
+              "match": "\\\\(['\\\\/bfnrt]|u[0-9a-fA-F]{4})"
+            }
+          ]
+        },
+        {
+          "name": "string.template.alang",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.alang",
+              "match": "\\\\([`\\\\/bfnrt]|u[0-9a-fA-F]{4})"
+            },
+            { "include": "#interpolation" }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.alang",
+          "match": "\\b([0-9]+\\.?[0-9]*([eE][+-]?[0-9]+)?|0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.alang",
+          "match": "\\b(if|else|while|do|for|foreach|in|break|continue|return|switch|case|default|try|catch|finally|throw|match|yield)\\b"
+        },
+        {
+          "name": "keyword.control.async.alang",
+          "match": "\\b(async|await|go)\\b"
+        },
+        {
+          "name": "storage.type.alang",
+          "match": "\\b(let|var|const)\\b"
+        },
+        {
+          "name": "storage.type.function.alang",
+          "match": "\\b(function|fn)\\b"
+        },
+        {
+          "name": "storage.type.class.alang",
+          "match": "\\b(class|interface|extends|new|static)\\b"
+        },
+        {
+          "name": "keyword.other.alang",
+          "match": "\\b(import|from|as|export)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.alang",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.alang",
+          "match": "\\bnull\\b"
+        },
+        {
+          "name": "variable.language variable.language.this.alang",
+          "match": "\\bthis\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.alang",
+          "match": "\\b(let|var|const)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "storage.type.alang" },
+            "2": { "name": "variable.other.readwrite variable.other.readwrite.alang" }
+          }
+        },
+        {
+          "name": "variable.other.readwrite variable.other.readwrite.alang",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?!\\s*\\()"
+        },
+        {
+          "name": "variable.other.property variable.other.property.alang",
+          "match": "(?<=\\.)([a-zA-Z_][a-zA-Z0-9_]*)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "meta.function.alang",
+          "match": "\\b(function|fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "storage.type.function.alang" },
+            "2": { "name": "entity.name.function.alang" }
+          }
+        },
+        {
+          "name": "entity.name.function.alang",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"
+        }
+      ]
+    },
+    "classes": {
+      "patterns": [
+        {
+          "name": "meta.class.alang",
+          "match": "\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.class.alang" },
+            "2": { "name": "entity.name.type.class.alang" }
+          }
+        },
+        {
+          "name": "meta.interface.alang",
+          "match": "\\b(interface)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.class.alang" },
+            "2": { "name": "entity.name.type.interface.alang" }
+          }
+        },
+        {
+          "name": "meta.new.alang",
+          "match": "\\b(new)\\s+([a-zA-Z_][a-zA-Z0-9_\\.]*)",
+          "captures": {
+            "1": { "name": "keyword.operator.new.alang" },
+            "2": { "name": "entity.name.type.alang" }
+          }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison keyword.operator.interface-match.alang",
+          "match": "=~="
+        },
+        {
+          "name": "keyword.operator.arrow keyword.operator.arrow.alang",
+          "match": "(<-|->|=>)"
+        },
+        {
+          "name": "keyword.operator.logical keyword.operator.nullish.alang",
+          "match": "(\\?\\?=?|\\?\\.|\\?)"
+        },
+        {
+          "name": "keyword.operator.logical keyword.operator.logical.alang",
+          "match": "(&&=?|\\|\\|=?|!==?|===?)"
+        },
+        {
+          "name": "keyword.operator.comparison keyword.operator.comparison.alang",
+          "match": "(<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.assignment keyword.operator.assignment.alang",
+          "match": "(\\+=|-=|\\*=|/=|%=|<<=|>>=|&=|\\|=|\\^=|=)"
+        },
+        {
+          "name": "keyword.operator.increment keyword.operator.increment.alang",
+          "match": "(\\+\\+|--)"
+        },
+        {
+          "name": "keyword.operator.arithmetic keyword.operator.arithmetic.alang",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.bitwise keyword.operator.bitwise.alang",
+          "match": "(<<|>>|&|\\||\\^|~)"
+        },
+        {
+          "name": "keyword.operator.spread keyword.operator.spread.alang",
+          "match": "\\.\\.\\."
+        },
+        {
+          "name": "storage.modifier keyword.operator.decorator.alang",
+          "match": "@"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.alang",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.statement.alang",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.accessor.alang",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.section.block.begin.alang",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.block.end.alang",
+          "match": "\\}"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.alang",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.alang",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.section.parens.begin.alang",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.alang",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.separator.colon.alang",
+          "match": ":"
+        }
+      ]
+    }
+  }
+}

@@ -44,7 +44,18 @@ set(SRCS
   src/AsulPackages/Yaml/Yaml.cpp
   src/AsulPackages/Os/Os.cpp
   src/AsulPackages/Csv/Csv.cpp
+  src/AsulPackages/AsulPackages.cpp
 )
+
+# C++ Language Server (LSP) executable
+add_executable(alang-lsp
+  AlangLsp.cpp
+  src/AsulLexer.cpp
+  src/AsulParser.cpp
+  src/AsulRuntime.cpp
+  src/AsulPackages/AsulPackages.cpp
+)
+target_include_directories(alang-lsp PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
 
@@ -201,6 +212,10 @@ else()
   )
   set_target_properties(test_runner PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  # Place LSP server next to the VS Code extension for easy launching in dev
+  set_target_properties(alang-lsp PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/vscode-extension/bin
   )
 endif()
 

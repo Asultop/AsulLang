@@ -1,0 +1,100 @@
+{
+  "name": "alang-language-support",
+  "displayName": "ALang Language Support",
+  "description": "Syntax highlighting and language support for ALang scripting language",
+  "version": "0.3.1",
+  "publisher": "asultop",
+  "icon": "images/icon.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Asultop/AsulLang"
+  },
+  "main": "./client/out/extension",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
+    "package": "vsce package -o build/",
+    "build": "./build.sh full",
+    "build:quick": "npm run compile && vsce package -o build/"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.60.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "alang",
+        "aliases": [
+          "ALang",
+          "alang"
+        ],
+        "extensions": [
+          ".alang"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "alang",
+        "scopeName": "source.alang",
+        "path": "./syntaxes/alang.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "ALang for Dark+",
+        "uiTheme": "vs-dark",
+        "path": "./themes/alang-dark-plus.json"
+      },
+      {
+        "label": "ALang for Light+",
+        "uiTheme": "vs",
+        "path": "./themes/alang-light-plus.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ALang",
+      "properties": {
+        "alangLanguageServer.serverPath": {
+          "scope": "window",
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the native C++ ALang language server executable (alang-lsp). If empty, the extension will use its bundled binary when available, otherwise it falls back to the Node.js server."
+        },
+        "alangLanguageServer.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "alangLanguageServer.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  }
+}

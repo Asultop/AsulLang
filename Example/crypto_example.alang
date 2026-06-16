@@ -1,26 +1,26 @@
 // std.crypto example
-import std.crypto;
+import std.crypto.*;
 
 println("UUID:");
-println(std.crypto.randomUUID());
+println(randomUUID());
 
 println("Random bytes (10):");
-let bytes = std.crypto.getRandomValues(10);
+let bytes = getRandomValues(10);
 println(bytes);
 
 // Hash stubs (will throw for now)
 try {
-  println(std.crypto.md5("hello"));
+  println(md5("hello"));
 } catch (e) {
   println(e.message);
 }
 try {
-  println(std.crypto.sha1("hello"));
+  println(sha1("hello"));
 } catch (e) {
   println(e.message);
 }
 try {
-  println(std.crypto.sha256("hello"));
+  println(sha256("hello"));
 } catch (e) {
   println(e.message);
 }

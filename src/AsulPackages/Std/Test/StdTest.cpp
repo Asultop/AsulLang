@@ -147,5 +147,4 @@ void registerStdTestPackage(Interpreter& interp) {
 		(*testPkg)["printSummary"] = Value{printSummaryFn};
 	});
 }
-
-} // namespace asul
+}

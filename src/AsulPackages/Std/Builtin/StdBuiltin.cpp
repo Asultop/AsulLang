@@ -37,6 +37,15 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	};
 	globals->define("push", pushFn);
 
+	// deprecated decorator (no-op for now)
+	auto deprecatedFn = std::make_shared<Function>();
+	deprecatedFn->isBuiltin = true;
+	deprecatedFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>) -> Value {
+		if (args.size() != 1) throw std::runtime_error("deprecated expects 1 argument");
+		return args[0];
+	};
+	globals->define("deprecated", deprecatedFn);
+
 	// typeof(x): return a type-name string for x
 	auto typeFn = std::make_shared<Function>();
 	typeFn->isBuiltin = true;

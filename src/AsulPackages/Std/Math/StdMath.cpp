@@ -150,3 +150,14 @@ void registerStdMathPackage(Interpreter& interp) {
 }
 
 } // namespace asul
+
+PackageMeta getStdMathPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.math";
+    pkg.exports = { 
+        "abs", "sin", "cos", "tan", "sqrt", "exp", "log", "pow", 
+        "ceil", "floor", "round", "min", "max", "random", "clamp", 
+        "lerp", "approxEqual", "pi", "e" 
+    };
+    return pkg;
+}
